@@ -37,6 +37,7 @@ public class CiqProcessorMain {
         String outputDir     = null;
         String formatCsv     = null;
         String mopJsonDir    = null;
+        String reportFileName = null;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
@@ -46,7 +47,8 @@ public class CiqProcessorMain {
                 case "--rules":         if (i + 1 < args.length) rulesFilePath = args[++i]; break;
                 case "--output":        if (i + 1 < args.length) outputDir     = args[++i]; break;
                 case "--format":        if (i + 1 < args.length) formatCsv     = args[++i]; break;
-                case "--mop-json-dir":  if (i + 1 < args.length) mopJsonDir    = args[++i]; break;
+                case "--mop-json-dir":  if (i + 1 < args.length) mopJsonDir     = args[++i]; break;
+                case "--report-name":   if (i + 1 < args.length) reportFileName = args[++i]; break;
                 case "--help": case "-h": printUsage(); return 0;
                 default:
                     System.err.println("Unknown argument: " + args[i]);
@@ -71,7 +73,7 @@ public class CiqProcessorMain {
             ValidationReport report = new CiqProcessorImpl().process(
                     ciqFilePath, nodeType, activity,
                     rulesFilePath, outputDir,
-                    formats, mopJsonDir);
+                    formats, mopJsonDir, reportFileName);
 
             System.out.println("Validation " + report.getStatus()
                     + " — " + report.getTotalErrors() + " error(s)");
@@ -96,6 +98,8 @@ public class CiqProcessorMain {
         System.out.println("  --format        <csv>    Report formats: JSON,HTML,MSEXCEL (default: all)");
         System.out.println("  --mop-json-dir  <dir>    Optional: child-order JSON output for MOP generation");
         System.out.println("                           Written only when validation passes.");
+        System.out.println("  --report-name   <name>   Optional: base file name for reports (no extension)");
+        System.out.println("                           Default: <node-type>_<activity>_validation-report");
         System.out.println();
         System.out.println("Exit code: 0=PASSED, 1=FAILED or error");
     }

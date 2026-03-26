@@ -1,0 +1,48 @@
+# =============================================================================
+# Validation Rules: MRF - ANNOUNCEMENT_LOADING
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case: Load announcement audio files (TAR or individual) onto MRF nodes.
+#
+# CIQ Sheet validated: ANNOUNCEMENT_FILES
+#   Columns: Node, Action, VERSION, INPUT_FILE, MRF Destination Path
+#
+# Notes:
+#   - The CIQ does not have an Index sheet; validateIndexSheets is set to false.
+#   - Column B in the CIQ (MRF node identifier e.g. MRF-1, MRF-2) has no header
+#     and is skipped by the processor. Add a header (e.g. MRF_NODE) to validate it.
+#   - Action is optional. If present, only LOAD is an allowed value.
+# =============================================================================
+
+# No Index sheet in this CIQ
+validateIndexSheets: false
+
+# Validate that each Node value exists in the NODE_ID sheet
+validateNodeIds: true
+
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: ANNOUNCEMENT_FILES
+  # One row per announcement file to be loaded onto an MRF node.
+  # ---------------------------------------------------------------------------
+  ANNOUNCEMENT_FILES:
+    columns:
+
+      NODE:
+        required: true
+        
+      VERSION:
+        required: true
+        pattern: "^\\d+\\.\\d+\\.\\d+\\.\\d+$"
+        patternMessage: "VERSION must be in format X.X.X.X (e.g. 17.0.3.7)"
+
+      INPUT_FILE:
+        required: true
+        maxLength: 512
+
+      MRF_DESTINATION_PATH:
+        required: true
+        pattern: "^/.*"
+        patternMessage: "MRF Destination Path must be an absolute Unix path starting with /"
+        maxLength: 1024

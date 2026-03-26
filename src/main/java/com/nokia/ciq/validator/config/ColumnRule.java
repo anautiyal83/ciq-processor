@@ -18,6 +18,9 @@ public class ColumnRule {
     /** Value must match this regex pattern. */
     private String pattern;
 
+    /** Custom message shown when pattern validation fails. Defaults to a generic message if null. */
+    private String patternMessage;
+
     /** Minimum string length (inclusive). */
     private Long minLength;
 
@@ -62,6 +65,9 @@ public class ColumnRule {
 
     public String getPattern() { return pattern; }
     public void setPattern(String pattern) { this.pattern = pattern; }
+
+    public String getPatternMessage() { return patternMessage; }
+    public void setPatternMessage(String patternMessage) { this.patternMessage = patternMessage; }
 
     public Long getMinLength() { return minLength; }
     public void setMinLength(Long minLength) { this.minLength = minLength; }

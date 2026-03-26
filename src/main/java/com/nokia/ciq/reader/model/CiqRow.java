@@ -28,8 +28,18 @@ public class CiqRow {
     public Map<String, String> getData() { return data; }
     public void setData(Map<String, String> data) { this.data = data; }
 
-    /** Convenience: get a single column value (null if blank or column absent). */
+    /**
+     * Get a column value by name. Case-insensitive — "Node", "NODE", and "node" all match.
+     * Returns null if the column is absent or blank.
+     */
     public String get(String column) {
-        return data.get(column);
+        String v = data.get(column);
+        if (v != null) return v;
+        // Case-insensitive fallback
+        String upper = column.toUpperCase();
+        for (Map.Entry<String, String> entry : data.entrySet()) {
+            if (entry.getKey().toUpperCase().equals(upper)) return entry.getValue();
+        }
+        return null;
     }
 }

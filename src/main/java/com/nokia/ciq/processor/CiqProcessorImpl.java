@@ -59,7 +59,8 @@ public class CiqProcessorImpl implements CiqProcessor {
                                     String rulesFilePath,
                                     String outputDir,
                                     List<ReportFormat> formats,
-                                    String mopJsonOutputDir) throws IOException {
+                                    String mopJsonOutputDir,
+                                    String reportFileName) throws IOException {
 
         log.info("=== CIQ Processor ===");
         log.info("CIQ file:  {}", ciqFilePath);
@@ -82,7 +83,9 @@ public class CiqProcessorImpl implements CiqProcessor {
                 new CiqValidationEngine(store, rules).validate(nodeType, activity);
 
         // Step 4: Write reports
-        String baseName = nodeType + "_" + activity + "_validation-report";
+        String baseName = (reportFileName != null && !reportFileName.trim().isEmpty())
+                ? reportFileName.trim()
+                : nodeType + "_" + activity + "_validation-report";
         for (ReportFormat fmt : formats) {
             String path = new File(outDir, baseName + "." + fmt.extension()).getAbsolutePath();
             switch (fmt) {

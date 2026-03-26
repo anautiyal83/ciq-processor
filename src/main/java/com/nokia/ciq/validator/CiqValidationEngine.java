@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -84,8 +85,21 @@ public class CiqValidationEngine {
         // Build valid node set for node-ID validation
         Set<String> validNodes = index.getNiamMapping().keySet();
 
+        // --- Determine which tables to validate ---
+        // When the index has entries, validate exactly the tables listed there.
+        // When the index is empty (e.g. no Index sheet), fall back to the sheets
+        // defined in the rules config so that index-free CIQs are still validated.
+        List<String> tableNames = index.getAllTables();
+        if (tableNames.isEmpty() && rules.getSheets() != null) {
+            tableNames = new ArrayList<>(rules.getSheets().keySet());
+            if (!tableNames.isEmpty()) {
+                log.info("Index is empty — validating {} sheet(s) from rules config: {}",
+                        tableNames.size(), tableNames);
+            }
+        }
+
         // --- Per-sheet validation ---
-        for (String tableName : index.getAllTables()) {
+        for (String tableName : tableNames) {
             CiqSheet sheet = store.getSheet(tableName);
             SheetValidationResult result = new SheetValidationResult();
             result.setSheetName(tableName);

@@ -28,9 +28,11 @@ public class PatternValidator implements CellValidator {
 
         try {
             if (!Pattern.compile(rule.getPattern()).matcher(value).matches()) {
+                String msg = (rule.getPatternMessage() != null && !rule.getPatternMessage().isEmpty())
+                        ? rule.getPatternMessage() + " (got: '" + value + "')"
+                        : "Value '" + value + "' does not match pattern: " + rule.getPattern();
                 return Collections.singletonList(new ValidationError(
-                        row.getRowNumber(), colName, value,
-                        "Value '" + value + "' does not match pattern: " + rule.getPattern()));
+                        row.getRowNumber(), colName, value, msg));
             }
         } catch (PatternSyntaxException e) {
             log.warn("Invalid pattern '{}' in rules for column '{}': {}",

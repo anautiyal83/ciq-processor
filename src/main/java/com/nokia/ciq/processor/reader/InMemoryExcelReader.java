@@ -69,6 +69,20 @@ public class InMemoryExcelReader {
             log.info("Index: {} node entries, {} unique tables",
                     index.getEntries().size(), tables.size());
 
+            // No Index sheet — read all non-metadata sheets directly
+            if (tables.isEmpty()) {
+                tables = new ArrayList<>();
+                for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                    String sName = wb.getSheetName(i);
+                    if (!SHEET_INDEX.equals(sName) && !SHEET_NODE_ID.equals(sName)) {
+                        tables.add(sName);
+                    }
+                }
+                if (!tables.isEmpty()) {
+                    log.info("No Index — reading {} sheet(s) directly: {}", tables.size(), tables);
+                }
+            }
+
             Map<String, CiqSheet> sheets = new LinkedHashMap<>();
             for (String tableName : tables) {
                 Sheet sheet = findSheet(wb, tableName);
@@ -196,7 +210,12 @@ public class InMemoryExcelReader {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
+        // Try to find header row that has both "Node" and "Action" first;
+        // fall back to just "Node" for sheets where Action is absent.
         int headerRowIdx = findHeaderRow(sheet, "Node", "Action");
+        if (headerRowIdx < 0) {
+            headerRowIdx = findHeaderRow(sheet, "Node");
+        }
         if (headerRowIdx < 0) {
             log.warn("Header row not found in sheet '{}' — sheet will have no rows",
                     sheet.getSheetName());
@@ -262,14 +281,14 @@ public class InMemoryExcelReader {
         for (int r = 0; r <= maxScan; r++) {
             Row row = sheet.getRow(r);
             if (row == null) continue;
-            Set<String> cellValues = new HashSet<>();
+            Set<String> cellValuesUpper = new HashSet<>();
             for (Cell cell : row) {
                 String v = getCellString(cell);
-                if (v != null) cellValues.add(v);
+                if (v != null) cellValuesUpper.add(v.toUpperCase());
             }
             boolean allFound = true;
             for (String header : requiredHeaders) {
-                if (!cellValues.contains(header)) { allFound = false; break; }
+                if (!cellValuesUpper.contains(header.toUpperCase())) { allFound = false; break; }
             }
             if (allFound) return r;
         }
