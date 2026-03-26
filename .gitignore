@@ -1,0 +1,7 @@
+/target/
+.classpath
+.project
+.settings
+/json-out/
+/mop-out/
+/reports/
