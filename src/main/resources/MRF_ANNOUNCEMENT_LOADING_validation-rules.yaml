@@ -24,7 +24,7 @@ validateIndexSheets: false
 validateNodeIds: true
 
 # GROUP mode: INDEX sheet uses GROUP|CRGROUP|NODE columns; one MOP folder per CRGROUP
-groupByColumnName: NODE
+groupByColumnName: CRGROUP
 
 # Validate columns in the INDEX sheet (GROUP|CRGROUP|NODE format for MRF)
 indexSheet:
