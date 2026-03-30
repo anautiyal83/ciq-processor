@@ -79,19 +79,28 @@ public class CiqValidationEngine {
 
         CiqIndex index = store.getIndex();
 
-        // --- GROUP mode detection ---
+        // --- GROUP / CRGROUP mode detection ---
         // groupByColumnName in the rules config overrides auto-detection:
-        //   "NODE"  → force node-wise mode (ignore GROUP columns in INDEX)
-        //   "GROUP" → honour GROUP columns (auto-detect still applies)
-        //   null    → auto-detect
-        Map<String, List<String>> groupToNodes;
+        //   "NODE"    → force node-wise mode (ignore GROUP/CRGROUP columns in INDEX)
+        //   "GROUP"   → honour GROUP columns (auto-detect still applies)
+        //   "CRGROUP" → force CRGROUP mode; emit CRGROUP parameters
+        //   null      → auto-detect
         String groupByCol = rules.getGroupByColumnName();
+        boolean forceCRGroup = groupByCol != null && groupByCol.equalsIgnoreCase("CRGROUP");
+        boolean forceGroup   = groupByCol != null && groupByCol.equalsIgnoreCase("GROUP");
+        Map<String, Map<String, List<String>>> crGroupToGroupNodes;
+        Map<String, List<String>> groupToNodes;
         if (groupByCol != null && groupByCol.equalsIgnoreCase("NODE")) {
-            groupToNodes = new java.util.LinkedHashMap<>();   // force node-wise
+            crGroupToGroupNodes = new LinkedHashMap<>();
+            groupToNodes        = new LinkedHashMap<>();   // force node-wise
         } else {
-            groupToNodes = buildGroupToNodesMap();
+            crGroupToGroupNodes = buildCRGroupMap();
+            groupToNodes        = crGroupToGroupNodes.isEmpty() ? buildGroupToNodesMap()
+                                                                : flattenCRGroupToGroupNodes(crGroupToGroupNodes);
         }
-        boolean isGroupMode = !groupToNodes.isEmpty();
+        // forceGroup suppresses CRGROUP auto-detection (mirrors CiqProcessorImpl dispatch logic)
+        boolean isCRGroupMode = !forceGroup && (forceCRGroup || !crGroupToGroupNodes.isEmpty());
+        boolean isGroupMode   = !groupToNodes.isEmpty();
 
         // --- Global checks ---
         if (rules.isValidateIndexSheets()) {
@@ -195,8 +204,49 @@ public class CiqValidationEngine {
                 Map<String, String> params    = new LinkedHashMap<>();
                 Map<String, String> niamMap   = index.getNiamMapping();
 
-                if (isGroupMode) {
-                    // GROUP mode: one entry per node across all groups
+                if (isCRGroupMode) {
+                    // CRGROUP mode: emit CRGROUP_N, GROUP_N, and NODE_N parameters
+                    log.info("CRGROUP_MAP={}", formatCRGroupMap(crGroupToGroupNodes));
+
+                    // CRGROUP-level parameters
+                    int ci = 1;
+                    for (Map.Entry<String, Map<String, List<String>>> cre : crGroupToGroupNodes.entrySet()) {
+                        String crgName = cre.getKey();
+                        List<String> crGroups = new ArrayList<>(cre.getValue().keySet());
+                        List<String> crNodes  = new ArrayList<>();
+                        for (List<String> ns : cre.getValue().values()) crNodes.addAll(ns);
+
+                        params.put("CRGROUP_" + ci,              crgName);
+                        params.put("CRGROUP_" + ci + "_GROUPS",  String.join(",", crGroups));
+                        params.put("CRGROUP_" + ci + "_NODES",   String.join(",", crNodes));
+                        params.put("CRGROUP_" + ci + "_NODES_COUNT", String.valueOf(crNodes.size()));
+                        ci++;
+                    }
+                    params.put("TOTAL_CRGROUPS_COUNT", String.valueOf(crGroupToGroupNodes.size()));
+
+                    // GROUP-level parameters (across all CRGROUPs — unique groups)
+                    int gi = 1;
+                    for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet()) {
+                        params.put("GROUP_" + gi,             ge.getKey());
+                        params.put("GROUP_" + gi + "_VALUES", String.join(",", ge.getValue()));
+                        gi++;
+                    }
+                    params.put("TOTAL_GROUPS_COUNT", String.valueOf(groupToNodes.size()));
+
+                    // NODE-level parameters (all nodes across all groups)
+                    List<String> allNodes = new ArrayList<>();
+                    for (List<String> ns : groupToNodes.values()) allNodes.addAll(ns);
+                    for (int i = 0; i < allNodes.size(); i++) {
+                        String node   = allNodes.get(i);
+                        String niamId = niamMap.get(node);
+                        params.put("NODE_" + (i + 1), node);
+                        if (niamId != null) params.put("NIAM_ID_" + (i + 1), niamId);
+                    }
+                    params.put("TOTAL_NODES_COUNT",  String.valueOf(allNodes.size()));
+                    params.put("CHILD_ORDERS_COUNT", String.valueOf(crGroupToGroupNodes.size()));
+
+                } else if (isGroupMode) {
+                    // GROUP mode (no CRGROUP): one entry per node across all groups
                     log.info("GROUP_MAP={}", formatGroupMap(groupToNodes));
                     List<String> allNodes = new ArrayList<>();
                     for (List<String> ns : groupToNodes.values()) allNodes.addAll(ns);
@@ -216,6 +266,7 @@ public class CiqValidationEngine {
                         params.put("GROUP_" + gi + "_VALUES", String.join(",", ge.getValue()));
                         gi++;
                     }
+                    params.put("TOTAL_GROUPS_COUNT", String.valueOf(groupToNodes.size()));
                 } else {
                     // No-Index NODE mode: derive nodes from INDEX data sheet or NODE_ID sheet
                     Map<String, String> nodeToCrGroup = new LinkedHashMap<>();
@@ -359,6 +410,56 @@ public class CiqValidationEngine {
         return map;
     }
 
+    /**
+     * Reads the INDEX sheet when it has {@code GROUP | CRGROUP | NODE} columns and
+     * builds the CRGROUP → (GROUP → nodes) map.  Returns empty if the sheet is absent
+     * or lacks the CRGROUP column.
+     */
+    private Map<String, Map<String, List<String>>> buildCRGroupMap() {
+        Map<String, Map<String, List<String>>> map = new LinkedHashMap<>();
+        if (!(store instanceof InMemoryCiqDataStore)) return map;
+        InMemoryCiqDataStore imStore = (InMemoryCiqDataStore) store;
+        com.nokia.ciq.reader.model.CiqSheet rawIndex = imStore.getRawIndexSheet();
+        if (rawIndex == null) return map;
+
+        boolean hasGroup = false, hasNode = false, hasCrGroup = false;
+        for (String col : rawIndex.getColumns()) {
+            String norm = col.replace("_", "").toLowerCase();
+            if (norm.equals("group"))   hasGroup   = true;
+            if (norm.equals("node"))    hasNode    = true;
+            if (norm.equals("crgroup")) hasCrGroup = true;
+        }
+        if (!hasGroup || !hasNode || !hasCrGroup) return map;
+
+        for (com.nokia.ciq.reader.model.CiqRow r : rawIndex.getRows()) {
+            String group   = r.get("Group");
+            String node    = r.get("Node");
+            String crGroup = r.get("CRGroup");
+            if (isBlank(group) || isBlank(node) || isBlank(crGroup)) continue;
+            map.computeIfAbsent(crGroup.trim(), k -> new LinkedHashMap<>())
+               .computeIfAbsent(group.trim(),   k -> new ArrayList<>())
+               .add(node.trim());
+        }
+        return map;
+    }
+
+    /** Flattens CRGROUP → (GROUP → nodes) into GROUP → nodes (unique groups only). */
+    private static Map<String, List<String>> flattenCRGroupToGroupNodes(
+            Map<String, Map<String, List<String>>> crGroupToGroupNodes) {
+        Map<String, List<String>> flat = new LinkedHashMap<>();
+        for (Map<String, List<String>> groupMap : crGroupToGroupNodes.values()) {
+            for (Map.Entry<String, List<String>> ge : groupMap.entrySet()) {
+                flat.computeIfAbsent(ge.getKey(), k -> new ArrayList<>());
+                for (String node : ge.getValue()) {
+                    if (!flat.get(ge.getKey()).contains(node)) {
+                        flat.get(ge.getKey()).add(node);
+                    }
+                }
+            }
+        }
+        return flat;
+    }
+
     private static String formatGroupMap(Map<String, List<String>> groupToNodes) {
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, List<String>> e : groupToNodes.entrySet()) {
@@ -366,6 +467,19 @@ public class CiqValidationEngine {
             sb.append(e.getKey()).append(":").append(e.getValue());
         }
         return sb.toString();
+    }
+
+    private static String formatCRGroupMap(Map<String, Map<String, List<String>>> crGroupToGroupNodes) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, Map<String, List<String>>> ce : crGroupToGroupNodes.entrySet()) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append(ce.getKey()).append("=").append(formatGroupMap(ce.getValue()));
+        }
+        return sb.toString();
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
 
     private void checkIndexSheets(CiqIndex index, ValidationReport report) throws IOException {

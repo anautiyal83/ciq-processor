@@ -5,28 +5,33 @@
 # Use-case: Load announcement audio files (TAR or individual) onto MRF nodes.
 #
 # CIQ Sheet validated: ANNOUNCEMENT_FILES
-#   GROUP mode columns: GROUP, Action, VERSION, INPUT_FILE, MRF_DESTINATION_PATH
+#   CRGROUP mode columns: GROUP, Action, VERSION, INPUT_FILE, MRF_DESTINATION_PATH
 #
 # Notes:
-#   - GROUP mode: INDEX sheet has GROUP | NODE columns (no TABLES).
-#     Group-to-node expansion is detected automatically; validateNodeIds checks
-#     all nodes in every group against the NODE_ID sheet.
-#   - ACTION column is validated: only LOAD is an allowed value.
+#   - CRGROUP mode: INDEX sheet has GROUP | CRGROUP | NODE columns (no TABLES).
+#     GROUP drives MOP content — all nodes in the same GROUP get identical rows.
+#     CRGROUP drives execution and approval — nodes in the same CRGROUP are
+#     executed in the same change window (in parallel by NCE).
+#     validateNodeIds checks every node in every GROUP against the NODE_ID sheet.
+#   - ciq-processor writes one sub-folder per CRGROUP value containing a
+#     CRGroupIndex JSON and per-GROUP data files.
 # =============================================================================
 
-# INDEX sheet has GROUP|NODE format (no TABLES column) — no cross-sheet validation
+# INDEX sheet has GROUP|CRGROUP|NODE format (no TABLES column) — no cross-sheet validation
 validateIndexSheets: false
 
 # Validate that each node in the GROUP→NODE index exists in the NODE_ID sheet
 validateNodeIds: true
 
-# GROUP mode: INDEX sheet uses GROUP|NODE columns; one MOP folder per group
-groupByColumnName: GROUP
+# GROUP mode: INDEX sheet uses GROUP|CRGROUP|NODE columns; one MOP folder per CRGROUP
+groupByColumnName: NODE
 
-# Validate columns in the INDEX sheet (GROUP|NODE format for MRF)
+# Validate columns in the INDEX sheet (GROUP|CRGROUP|NODE format for MRF)
 indexSheet:
   columns:
     GROUP:
+      required: true
+    CRGROUP:
       required: true
     NODE:
       required: true

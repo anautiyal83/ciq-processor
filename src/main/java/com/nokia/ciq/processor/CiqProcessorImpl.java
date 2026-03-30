@@ -2,6 +2,7 @@ package com.nokia.ciq.processor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.nokia.ciq.processor.model.CRGroupIndex;
 import com.nokia.ciq.processor.model.GroupIndex;
 import com.nokia.ciq.processor.reader.InMemoryCiqDataStore;
 import com.nokia.ciq.processor.reader.InMemoryExcelReader;
@@ -111,21 +112,32 @@ public class CiqProcessorImpl implements CiqProcessor {
 
         // Step 5: JSON segregation (only on PASSED)
         if ("PASSED".equals(report.getStatus()) && mopJsonOutputDir != null) {
-            String groupByCol = rules.getGroupByColumnName();
-            boolean forceNode  = groupByCol != null && groupByCol.equalsIgnoreCase("NODE");
-            boolean forceGroup = groupByCol != null && groupByCol.equalsIgnoreCase("GROUP");
+            String groupByCol   = rules.getGroupByColumnName();
+            boolean forceNode   = groupByCol != null && groupByCol.equalsIgnoreCase("NODE");
+            boolean forceGroup  = groupByCol != null && groupByCol.equalsIgnoreCase("GROUP");
+            boolean forceCRGroup = groupByCol != null && groupByCol.equalsIgnoreCase("CRGROUP");
 
+            Map<String, Map<String, List<String>>> crGroupData = reader.getCrGroupToGroupNodes();
             Map<String, List<String>> groupToNodes = reader.getGroupToNodes();
-            boolean useGroupMode = forceGroup || (!forceNode && !groupToNodes.isEmpty());
 
-            if (useGroupMode && !groupToNodes.isEmpty()) {
-                log.info("GROUP mode (groupByColumnName={}) — segregating into group folders: {}",
+            if (!forceNode && !forceGroup && (forceCRGroup || !crGroupData.isEmpty())) {
+                // CRGROUP mode: explicitly requested via groupByColumnName=CRGROUP,
+                // or auto-detected because INDEX has GROUP | CRGROUP | NODE columns.
+                // Suppressed when groupByColumnName=GROUP (forceGroup overrides auto-detection).
+                log.info("CRGROUP mode (groupByColumnName={}) — segregating into CRGROUP folders: {}",
                         groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
-                segregateGroupBased(store, groupToNodes, nodeType, activity, mopJsonOutputDir);
+                segregateCRGroupBased(store, crGroupData, nodeType, activity, mopJsonOutputDir);
             } else {
-                log.info("NODE mode (groupByColumnName={}) — segregating by child order into: {}",
-                        groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
-                segregateByChildOrder(store, nodeType, activity, mopJsonOutputDir);
+                boolean useGroupMode = forceGroup || (!forceNode && !groupToNodes.isEmpty());
+                if (useGroupMode && !groupToNodes.isEmpty()) {
+                    log.info("GROUP mode (groupByColumnName={}) — segregating into group folders: {}",
+                            groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
+                    segregateGroupBased(store, groupToNodes, nodeType, activity, mopJsonOutputDir);
+                } else {
+                    log.info("NODE mode (groupByColumnName={}) — segregating by child order into: {}",
+                            groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
+                    segregateByChildOrder(store, nodeType, activity, mopJsonOutputDir);
+                }
             }
         }
 
@@ -171,11 +183,15 @@ public class CiqProcessorImpl implements CiqProcessor {
             if (!childDir.exists()) childDir.mkdirs();
 
             // Filtered index (single entry for this child order)
+            Map<String, String> niamSubset = new LinkedHashMap<>();
+            String niamId = index.getNiamMapping().get(node);
+            if (niamId != null) niamSubset.put(node, niamId);
+
             CiqIndex childIndex = new CiqIndex();
             childIndex.setNodeType(nodeType);
             childIndex.setActivity(activity);
             childIndex.getEntries().add(entry);
-            childIndex.setNiamMapping(index.getNiamMapping());
+            childIndex.setNiamMapping(niamSubset);
 
             String indexFileName = FileNamingUtil.indexFileName(nodeType, activity, childOrder);
             mapper.writeValue(new File(childDir, indexFileName), childIndex);
@@ -206,6 +222,103 @@ public class CiqProcessorImpl implements CiqProcessor {
                 log.info("  [{}] table '{}' ({} rows) → {}",
                         childOrder, tableName, filteredRows.size(), sheetFileName);
             }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // CRGROUP-mode JSON segregation
+    // -------------------------------------------------------------------------
+
+    /**
+     * CRGROUP-mode segregation: for each unique CRGROUP value, writes a subfolder
+     * {@code <mopJsonOutputDir>/<CRGROUP>/} containing:
+     * <ul>
+     *   <li>A {@link CRGroupIndex} JSON with every GROUP that participates in this CR,
+     *       the node list per GROUP, and the NIAM sub-mapping</li>
+     *   <li>Per-GROUP data JSON files (rows filtered by GROUP name, GROUP used as postfix)
+     *       for every data sheet</li>
+     * </ul>
+     *
+     * <p>A GROUP may appear in multiple CRGROUP folders — its data rows are identical
+     * (homogeneous) across all CRs, so the same filtered JSON is written to each.
+     */
+    private void segregateCRGroupBased(InMemoryCiqDataStore store,
+                                       Map<String, Map<String, List<String>>> crGroupToGroupNodes,
+                                       String nodeType,
+                                       String activity,
+                                       String mopJsonOutputDir) throws IOException {
+
+        CiqIndex index = store.getIndex();
+
+        List<String> dataSheets = new ArrayList<>();
+        for (String name : store.getAvailableSheets()) {
+            if (!name.replace("_", "").equalsIgnoreCase("index")) {
+                dataSheets.add(name);
+            }
+        }
+
+        for (Map.Entry<String, Map<String, List<String>>> crEntry : crGroupToGroupNodes.entrySet()) {
+            String crGroup              = crEntry.getKey();
+            Map<String, List<String>> groupToNodes = crEntry.getValue();
+
+            File crGroupDir = new File(mopJsonOutputDir, crGroup);
+            if (!crGroupDir.exists()) crGroupDir.mkdirs();
+
+            // Build CRGroupIndex
+            CRGroupIndex crGroupIndex = new CRGroupIndex();
+            crGroupIndex.setNodeType(nodeType);
+            crGroupIndex.setActivity(activity);
+            crGroupIndex.setCrGroup(crGroup);
+
+            List<CRGroupIndex.GroupEntry> groupEntries = new ArrayList<>();
+
+            for (Map.Entry<String, List<String>> gEntry : groupToNodes.entrySet()) {
+                String group          = gEntry.getKey();
+                List<String> nodeList = gEntry.getValue();
+
+                // NIAM subset for this group's nodes
+                Map<String, String> niamSubset = new LinkedHashMap<>();
+                for (String node : nodeList) {
+                    String neid = index.getNiamMapping().get(node);
+                    if (neid != null) niamSubset.put(node, neid);
+                }
+
+                CRGroupIndex.GroupEntry ge = new CRGroupIndex.GroupEntry();
+                ge.setGroup(group);
+                ge.setNodes(nodeList);
+                ge.setNiamMapping(niamSubset);
+                groupEntries.add(ge);
+
+                // Per-GROUP data files (GROUP used as postfix to match FileNamingUtil convention)
+                for (String tableName : dataSheets) {
+                    CiqSheet sheet = store.getSheet(tableName);
+                    if (sheet == null) {
+                        log.warn("  [{}/{}] table '{}' not found — skipping", crGroup, group, tableName);
+                        continue;
+                    }
+
+                    CiqSheet filtered = new CiqSheet();
+                    filtered.setSheetName(sheet.getSheetName());
+                    filtered.setColumns(sheet.getColumns());
+                    List<CiqRow> filteredRows = new ArrayList<>();
+                    for (CiqRow row : sheet.getRows()) {
+                        if (group.equals(row.get("Group"))) filteredRows.add(row);
+                    }
+                    filtered.setRows(filteredRows);
+
+                    String sheetFileName = FileNamingUtil.sheetFileName(nodeType, activity, tableName, group);
+                    mapper.writeValue(new File(crGroupDir, sheetFileName), filtered);
+                    log.info("  [{}/{}] table '{}' ({} rows) → {}",
+                            crGroup, group, tableName, filteredRows.size(), sheetFileName);
+                }
+            }
+
+            crGroupIndex.setGroups(groupEntries);
+
+            String indexFileName = FileNamingUtil.indexFileName(nodeType, activity, crGroup);
+            mapper.writeValue(new File(crGroupDir, indexFileName), crGroupIndex);
+            log.info("CRGROUP {} → groups {}, {} data sheet(s)",
+                    crGroup, groupToNodes.keySet(), dataSheets.size());
         }
     }
 

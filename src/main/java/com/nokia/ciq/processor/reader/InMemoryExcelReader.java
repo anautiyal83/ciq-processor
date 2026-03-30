@@ -49,11 +49,26 @@ public class InMemoryExcelReader {
     private final Map<String, List<String>> groupToNodes = new LinkedHashMap<>();
 
     /**
+     * Populated by {@link #readGroupIndex} when the INDEX sheet also has a
+     * {@code CRGROUP} column.  Structure: CRGROUP → (GROUP → ordered node list).
+     * Non-empty only when both GROUP and CRGROUP columns are present.
+     */
+    private final Map<String, Map<String, List<String>>> crGroupToGroupNodes = new LinkedHashMap<>();
+
+    /**
      * Returns the GROUP→Nodes map built from the INDEX sheet during {@link #read}.
      * Non-empty only for GROUP-mode CIQ files.
      */
     public Map<String, List<String>> getGroupToNodes() {
         return groupToNodes;
+    }
+
+    /**
+     * Returns the CRGROUP → (GROUP → nodes) map built when the INDEX sheet has
+     * {@code GROUP | CRGROUP | NODE} columns.  Empty when CRGROUP column is absent.
+     */
+    public Map<String, Map<String, List<String>>> getCrGroupToGroupNodes() {
+        return crGroupToGroupNodes;
     }
 
     /**
@@ -85,15 +100,16 @@ public class InMemoryExcelReader {
                     index.getEntries().size(), tables.size());
 
             // No proper Index (no Tables column found) — read all non-NIAM sheets as data sheets.
-            // The Index sheet itself may contain data (e.g. MRF CIQs use Index for CR grouping)
-            // so it is NOT excluded here; only Node_ID (NIAM mapping) is excluded.
+            // In GROUP / CRGROUP mode the Index sheet is grouping metadata only, not a data sheet,
+            // so it is excluded here alongside Node_ID.
             if (tables.isEmpty()) {
+                boolean groupMode = !groupToNodes.isEmpty() || !crGroupToGroupNodes.isEmpty();
                 tables = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) {
                     String sName = wb.getSheetName(i);
-                    if (!sName.equalsIgnoreCase(SHEET_NODE_ID)) {
-                        tables.add(sName);
-                    }
+                    if (sName.equalsIgnoreCase(SHEET_NODE_ID)) continue;
+                    if (groupMode && sName.equalsIgnoreCase(SHEET_INDEX)) continue;
+                    tables.add(sName);
                 }
                 if (!tables.isEmpty()) {
                     log.info("No Index — reading {} sheet(s) directly: {}", tables.size(), tables);
@@ -151,50 +167,55 @@ public class InMemoryExcelReader {
             return index;
         }
 
-        // --- Attempt 1: proper INDEX mode (Node + CRGroup columns required) ---
+        // --- Attempt 1: proper INDEX mode (Node + CRGroup + Tables columns required) ---
         int headerRowIdx = findHeaderRow(sheet, "Node", "CRGroup");
         if (headerRowIdx >= 0) {
             Row headerRow  = sheet.getRow(headerRowIdx);
             int nodeCol    = findColumnIndex(headerRow, "Node");
             int crGroupCol = findColumnIndex(headerRow, "CRGroup");
+            int groupCol   = findColumnIndex(headerRow, "Group");
             // Use only the FIRST "Tables" column — the user-selection column.
             // A second "Tables" column (separated by blank columns) is a dropdown
             // catalog/reference and must not be read as a selection.
             int tablesCol  = findColumnIndex(headerRow, "Tables");
 
-            if (nodeCol < 0 || crGroupCol < 0 || tablesCol < 0) {
+            if (nodeCol >= 0 && crGroupCol >= 0 && tablesCol >= 0) {
+                // Proper NODE | CRGROUP | TABLES index
+                Map<String, NodeEntry> entryMap = new LinkedHashMap<>();
+
+                for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+                    Row row = sheet.getRow(r);
+                    if (row == null) continue;
+
+                    String node    = getCellString(row.getCell(nodeCol));
+                    String crGroup = getCellString(row.getCell(crGroupCol));
+                    if (isBlank(node) && isBlank(crGroup)) continue;
+
+                    String table = getCellString(row.getCell(tablesCol));
+                    if (isBlank(table)) continue;
+
+                    String key = (node == null ? "" : node) + "|" + (crGroup == null ? "" : crGroup);
+                    NodeEntry entry = entryMap.computeIfAbsent(key, k -> {
+                        NodeEntry e = new NodeEntry();
+                        e.setNode(node);
+                        e.setCrGroup(crGroup);
+                        return e;
+                    });
+
+                    if (!entry.getTables().contains(table)) {
+                        entry.getTables().add(table);
+                    }
+                }
+
+                index.setEntries(new ArrayList<>(entryMap.values()));
+                return index;
+            } else if (groupCol < 0) {
+                // No Tables column and no Group column — unrecognised format
                 log.warn("Required columns (Node, CRGroup, Tables) not found in Index sheet");
                 return index;
             }
-
-            Map<String, NodeEntry> entryMap = new LinkedHashMap<>();
-
-            for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
-                Row row = sheet.getRow(r);
-                if (row == null) continue;
-
-                String node    = getCellString(row.getCell(nodeCol));
-                String crGroup = getCellString(row.getCell(crGroupCol));
-                if (isBlank(node) && isBlank(crGroup)) continue;
-
-                String table = getCellString(row.getCell(tablesCol));
-                if (isBlank(table)) continue;
-
-                String key = (node == null ? "" : node) + "|" + (crGroup == null ? "" : crGroup);
-                NodeEntry entry = entryMap.computeIfAbsent(key, k -> {
-                    NodeEntry e = new NodeEntry();
-                    e.setNode(node);
-                    e.setCrGroup(crGroup);
-                    return e;
-                });
-
-                if (!entry.getTables().contains(table)) {
-                    entry.getTables().add(table);
-                }
-            }
-
-            index.setEntries(new ArrayList<>(entryMap.values()));
-            return index;
+            // else: GROUP | CRGROUP | NODE layout — fall through to GROUP mode detection
+            log.debug("Index sheet has GROUP+CRGROUP+NODE but no Tables — treating as GROUP/CRGROUP mode");
         }
 
         // --- Attempt 2: GROUP mode (GROUP + NODE columns, no CRGroup/Tables) ---
@@ -211,24 +232,44 @@ public class InMemoryExcelReader {
     }
 
     /**
-     * Reads the GROUP-mode INDEX sheet (columns: {@code GROUP | NODE}) into
-     * {@link #groupToNodes}.  Called only when GROUP mode is detected.
+     * Reads the GROUP-mode INDEX sheet into {@link #groupToNodes} and, when a
+     * {@code CRGROUP} column is also present, into {@link #crGroupToGroupNodes}.
+     *
+     * <p>Supported column combinations:
+     * <ul>
+     *   <li>{@code GROUP | CRGROUP | NODE} — full CRGROUP mode (new MRF design)</li>
+     *   <li>{@code GROUP | NODE}           — plain GROUP mode (legacy; no CRGROUP)</li>
+     * </ul>
      */
     private void readGroupIndex(Sheet sheet, int headerRowIdx) {
-        Row headerRow = sheet.getRow(headerRowIdx);
-        int groupCol  = findColumnIndex(headerRow, "Group");
-        int nodeCol   = findColumnIndex(headerRow, "Node");
+        Row headerRow  = sheet.getRow(headerRowIdx);
+        int groupCol   = findColumnIndex(headerRow, "Group");
+        int nodeCol    = findColumnIndex(headerRow, "Node");
+        int crGroupCol = findColumnIndex(headerRow, "CRGroup");   // optional
         if (groupCol < 0 || nodeCol < 0) return;
+
+        boolean hasCrGroup = crGroupCol >= 0;
+        if (hasCrGroup) {
+            log.info("CRGROUP column found in INDEX sheet — CRGROUP mode enabled");
+        }
 
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) continue;
-            String group = getCellString(row.getCell(groupCol));
-            String node  = getCellString(row.getCell(nodeCol));
+            String group   = getCellString(row.getCell(groupCol));
+            String node    = getCellString(row.getCell(nodeCol));
+            String crGroup = hasCrGroup ? getCellString(row.getCell(crGroupCol)) : null;
             if (isBlank(group) && isBlank(node)) continue;
-            if (!isBlank(group) && !isBlank(node)) {
-                groupToNodes.computeIfAbsent(group.trim(), k -> new ArrayList<>())
-                            .add(node.trim());
+            if (isBlank(group) || isBlank(node)) continue;
+
+            groupToNodes.computeIfAbsent(group.trim(), k -> new ArrayList<>())
+                        .add(node.trim());
+
+            if (!isBlank(crGroup)) {
+                crGroupToGroupNodes
+                    .computeIfAbsent(crGroup.trim(), k -> new LinkedHashMap<>())
+                    .computeIfAbsent(group.trim(),   k -> new ArrayList<>())
+                    .add(node.trim());
             }
         }
     }
