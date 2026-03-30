@@ -10,6 +10,27 @@ validateIndexSheets: true
 # Validate Node column values exist in Node_ID sheet
 validateNodeIds: true
 
+# NODE mode: INDEX sheet uses Node|CRGroup|Tables columns; one MOP folder per node
+groupByColumnName: NODE
+
+# Validate columns in the INDEX sheet (Node|CRGroup|Tables format for SBC)
+indexSheet:
+  columns:
+    Node:
+      required: true
+    CRGroup:
+      required: true
+    Tables:
+      required: true
+
+# Validate columns in the NODE_ID sheet
+nodeIdSheet:
+  columns:
+    Node:
+      required: true
+    NIAM:
+      required: true
+
 sheets:
 
 ########### CRFTargetList ##############

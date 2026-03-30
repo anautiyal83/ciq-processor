@@ -79,6 +79,10 @@ public class CiqProcessorMain {
                     + " — " + report.getTotalErrors() + " error(s)");
             System.out.println("Reports written to: " + outputDir);
 
+            if ("PASSED".equals(report.getStatus())) {
+                report.getParameters().forEach((k, v) -> System.out.println(k + "=" + v));
+            }
+
             return "PASSED".equals(report.getStatus()) ? 0 : 1;
 
         } catch (IOException e) {

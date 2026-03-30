@@ -42,6 +42,21 @@ public class InMemoryExcelReader {
     private static final String SHEET_NODE_ID = "Node_ID";
 
     /**
+     * Populated by {@link #readGroupIndex} when a GROUP-mode INDEX sheet is detected
+     * ({@code GROUP | NODE} columns present, no {@code TABLES} column).
+     * Empty in all other modes.
+     */
+    private final Map<String, List<String>> groupToNodes = new LinkedHashMap<>();
+
+    /**
+     * Returns the GROUP→Nodes map built from the INDEX sheet during {@link #read}.
+     * Non-empty only for GROUP-mode CIQ files.
+     */
+    public Map<String, List<String>> getGroupToNodes() {
+        return groupToNodes;
+    }
+
+    /**
      * Read the given CIQ Excel file into an {@link InMemoryCiqDataStore}.
      *
      * @param ciqFilePath absolute path to the .xlsx CIQ workbook
@@ -69,12 +84,14 @@ public class InMemoryExcelReader {
             log.info("Index: {} node entries, {} unique tables",
                     index.getEntries().size(), tables.size());
 
-            // No Index sheet — read all non-metadata sheets directly
+            // No proper Index (no Tables column found) — read all non-NIAM sheets as data sheets.
+            // The Index sheet itself may contain data (e.g. MRF CIQs use Index for CR grouping)
+            // so it is NOT excluded here; only Node_ID (NIAM mapping) is excluded.
             if (tables.isEmpty()) {
                 tables = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) {
                     String sName = wb.getSheetName(i);
-                    if (!SHEET_INDEX.equals(sName) && !SHEET_NODE_ID.equals(sName)) {
+                    if (!sName.equalsIgnoreCase(SHEET_NODE_ID)) {
                         tables.add(sName);
                     }
                 }
@@ -95,7 +112,25 @@ public class InMemoryExcelReader {
                 log.info("Loaded table '{}': {} rows", tableName, ciqSheet.getRows().size());
             }
 
-            return new InMemoryCiqDataStore(index, sheets);
+            InMemoryCiqDataStore store = new InMemoryCiqDataStore(index, sheets);
+
+            // Capture INDEX and NODE_ID sheets as CiqSheet objects for column-rule validation.
+            // These are stored separately so they do not appear in getAvailableSheets() and
+            // cannot interfere with the validateIndexSheets cross-check.
+            Sheet rawIndex = wb.getSheet(SHEET_INDEX);
+            if (rawIndex != null) {
+                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX));
+                log.debug("Captured raw Index sheet ({} rows)",
+                        store.getRawIndexSheet().getRows().size());
+            }
+            Sheet rawNodeId = wb.getSheet(SHEET_NODE_ID);
+            if (rawNodeId != null) {
+                store.setRawNodeIdSheet(readSheet(rawNodeId, SHEET_NODE_ID));
+                log.debug("Captured raw Node_ID sheet ({} rows)",
+                        store.getRawNodeIdSheet().getRows().size());
+            }
+
+            return store;
         }
     }
 
@@ -116,53 +151,86 @@ public class InMemoryExcelReader {
             return index;
         }
 
+        // --- Attempt 1: proper INDEX mode (Node + CRGroup columns required) ---
         int headerRowIdx = findHeaderRow(sheet, "Node", "CRGroup");
-        if (headerRowIdx < 0) {
-            log.warn("Header row not found in Index sheet");
+        if (headerRowIdx >= 0) {
+            Row headerRow  = sheet.getRow(headerRowIdx);
+            int nodeCol    = findColumnIndex(headerRow, "Node");
+            int crGroupCol = findColumnIndex(headerRow, "CRGroup");
+            // Use only the FIRST "Tables" column — the user-selection column.
+            // A second "Tables" column (separated by blank columns) is a dropdown
+            // catalog/reference and must not be read as a selection.
+            int tablesCol  = findColumnIndex(headerRow, "Tables");
+
+            if (nodeCol < 0 || crGroupCol < 0 || tablesCol < 0) {
+                log.warn("Required columns (Node, CRGroup, Tables) not found in Index sheet");
+                return index;
+            }
+
+            Map<String, NodeEntry> entryMap = new LinkedHashMap<>();
+
+            for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+
+                String node    = getCellString(row.getCell(nodeCol));
+                String crGroup = getCellString(row.getCell(crGroupCol));
+                if (isBlank(node) && isBlank(crGroup)) continue;
+
+                String table = getCellString(row.getCell(tablesCol));
+                if (isBlank(table)) continue;
+
+                String key = (node == null ? "" : node) + "|" + (crGroup == null ? "" : crGroup);
+                NodeEntry entry = entryMap.computeIfAbsent(key, k -> {
+                    NodeEntry e = new NodeEntry();
+                    e.setNode(node);
+                    e.setCrGroup(crGroup);
+                    return e;
+                });
+
+                if (!entry.getTables().contains(table)) {
+                    entry.getTables().add(table);
+                }
+            }
+
+            index.setEntries(new ArrayList<>(entryMap.values()));
             return index;
         }
 
-        Row headerRow  = sheet.getRow(headerRowIdx);
-        int nodeCol    = findColumnIndex(headerRow, "Node");
-        int crGroupCol = findColumnIndex(headerRow, "CRGroup");
-        // Use only the FIRST "Tables" column — the user-selection column.
-        // A second "Tables" column (separated by blank columns) is a dropdown
-        // catalog/reference and must not be read as a selection.
-        int tablesCol  = findColumnIndex(headerRow, "Tables");
-
-        if (nodeCol < 0 || crGroupCol < 0 || tablesCol < 0) {
-            log.warn("Required columns (Node, CRGroup, Tables) not found in Index sheet");
-            return index;
+        // --- Attempt 2: GROUP mode (GROUP + NODE columns, no CRGroup/Tables) ---
+        headerRowIdx = findHeaderRow(sheet, "Group", "Node");
+        if (headerRowIdx >= 0) {
+            readGroupIndex(sheet, headerRowIdx);
+            log.info("GROUP mode detected in Index sheet — {} group(s): {}",
+                    groupToNodes.size(), groupToNodes.keySet());
+            return index;   // CiqIndex intentionally empty for GROUP mode
         }
 
-        Map<String, NodeEntry> entryMap = new LinkedHashMap<>();
+        log.warn("Header row not found in Index sheet (no Node+CRGroup and no Group+Node columns)");
+        return index;
+    }
+
+    /**
+     * Reads the GROUP-mode INDEX sheet (columns: {@code GROUP | NODE}) into
+     * {@link #groupToNodes}.  Called only when GROUP mode is detected.
+     */
+    private void readGroupIndex(Sheet sheet, int headerRowIdx) {
+        Row headerRow = sheet.getRow(headerRowIdx);
+        int groupCol  = findColumnIndex(headerRow, "Group");
+        int nodeCol   = findColumnIndex(headerRow, "Node");
+        if (groupCol < 0 || nodeCol < 0) return;
 
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) continue;
-
-            String node    = getCellString(row.getCell(nodeCol));
-            String crGroup = getCellString(row.getCell(crGroupCol));
-            if (isBlank(node) && isBlank(crGroup)) continue;
-
-            String table = getCellString(row.getCell(tablesCol));
-            if (isBlank(table)) continue;
-
-            String key = (node == null ? "" : node) + "|" + (crGroup == null ? "" : crGroup);
-            NodeEntry entry = entryMap.computeIfAbsent(key, k -> {
-                NodeEntry e = new NodeEntry();
-                e.setNode(node);
-                e.setCrGroup(crGroup);
-                return e;
-            });
-
-            if (!entry.getTables().contains(table)) {
-                entry.getTables().add(table);
+            String group = getCellString(row.getCell(groupCol));
+            String node  = getCellString(row.getCell(nodeCol));
+            if (isBlank(group) && isBlank(node)) continue;
+            if (!isBlank(group) && !isBlank(node)) {
+                groupToNodes.computeIfAbsent(group.trim(), k -> new ArrayList<>())
+                            .add(node.trim());
             }
         }
-
-        index.setEntries(new ArrayList<>(entryMap.values()));
-        return index;
     }
 
     // -------------------------------------------------------------------------
@@ -178,7 +246,11 @@ public class InMemoryExcelReader {
             return map;
         }
 
+        // Accept both "NIAM" and "NIAM_ID" as the second column header
         int headerRowIdx = findHeaderRow(sheet, "Node", "NIAM");
+        if (headerRowIdx < 0) {
+            headerRowIdx = findHeaderRow(sheet, "Node", "NIAM_ID");
+        }
         if (headerRowIdx < 0) {
             log.warn("Header row not found in Node_ID sheet");
             return map;
@@ -187,6 +259,7 @@ public class InMemoryExcelReader {
         Row headerRow = sheet.getRow(headerRowIdx);
         int nodeCol   = findColumnIndex(headerRow, "Node");
         int niamCol   = findColumnIndex(headerRow, "NIAM");
+        if (niamCol < 0) niamCol = findColumnIndex(headerRow, "NIAM_ID");
 
         if (nodeCol < 0 || niamCol < 0) return map;
 
@@ -210,11 +283,17 @@ public class InMemoryExcelReader {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
-        // Try to find header row that has both "Node" and "Action" first;
-        // fall back to just "Node" for sheets where Action is absent.
+        // Try to find header row: Node+Action (normal), then Group+Action (GROUP mode),
+        // then just Node, then just Group (for sheets where Action column is absent).
         int headerRowIdx = findHeaderRow(sheet, "Node", "Action");
         if (headerRowIdx < 0) {
+            headerRowIdx = findHeaderRow(sheet, "Group", "Action");
+        }
+        if (headerRowIdx < 0) {
             headerRowIdx = findHeaderRow(sheet, "Node");
+        }
+        if (headerRowIdx < 0) {
+            headerRowIdx = findHeaderRow(sheet, "Group");
         }
         if (headerRowIdx < 0) {
             log.warn("Header row not found in sheet '{}' — sheet will have no rows",
@@ -281,25 +360,35 @@ public class InMemoryExcelReader {
         for (int r = 0; r <= maxScan; r++) {
             Row row = sheet.getRow(r);
             if (row == null) continue;
-            Set<String> cellValuesUpper = new HashSet<>();
+            Set<String> normalizedCells = new HashSet<>();
             for (Cell cell : row) {
                 String v = getCellString(cell);
-                if (v != null) cellValuesUpper.add(v.toUpperCase());
+                if (v != null) normalizedCells.add(normalize(v));
             }
             boolean allFound = true;
             for (String header : requiredHeaders) {
-                if (!cellValuesUpper.contains(header.toUpperCase())) { allFound = false; break; }
+                if (!normalizedCells.contains(normalize(header))) { allFound = false; break; }
             }
             if (allFound) return r;
         }
         return -1;
     }
 
+    /**
+     * Finds a column by name. Matching is case-insensitive and underscore-insensitive,
+     * so "CRGroup", "CR_GROUP", and "crgroup" all resolve to the same column.
+     */
     private int findColumnIndex(Row headerRow, String columnName) {
+        String target = normalize(columnName);
         for (Cell cell : headerRow) {
-            if (columnName.equals(getCellString(cell))) return cell.getColumnIndex();
+            String v = getCellString(cell);
+            if (v != null && normalize(v).equals(target)) return cell.getColumnIndex();
         }
         return -1;
+    }
+
+    private static String normalize(String s) {
+        return s.replace("_", "").toLowerCase();
     }
 
     // -------------------------------------------------------------------------

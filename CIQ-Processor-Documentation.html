@@ -356,7 +356,7 @@ mop-json/&lt;Node_CRGroup&gt;/&lt;TableName&gt;.json</div>
     <div class="card-row"><span class="card-key">Method</span><span class="card-val"><code>read(path, nodeType, activity)</code></span></div>
     <div class="card-row"><span class="card-key">Returns</span><span class="card-val"><code>InMemoryCiqDataStore</code></span></div>
     <hr class="divider">
-    <div class="card-desc">Reads the CIQ Excel workbook using Apache POI and stores all data in JVM heap. Three-phase read: Node_ID sheet → NIAM mapping; Index sheet → CiqIndex (node/CRGroup/tables); each table sheet → CiqSheet with rows and column names. No files are written to disk during this step.</div>
+    <div class="card-desc">Reads the CIQ Excel workbook using Apache POI and stores all data in JVM heap. Three-phase read: Node_ID sheet → NIAM mapping; Index sheet → CiqIndex (node/CRGroup/tables); each table sheet → CiqSheet with rows and column names. When no Index sheet is present, all non-metadata sheets are read directly. Header detection is case-insensitive. No files are written to disk.</div>
     <div class="badges"><span class="badge b-poi">Apache POI</span></div>
   </div>
 
@@ -498,59 +498,62 @@ mop-json/&lt;Node_CRGroup&gt;/&lt;TableName&gt;.json</div>
     </div>
     <div class="yaml-body">
 
-<div class="y-line s0"><span class="y-num">1</span><div class="y-bar" style="background:transparent"></div><span class="y-code"><span class="yc"># Top-level: list of sheet rule groups</span></span></div>
-<div class="y-line s1"><span class="y-num">2</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code"><span class="yk">sheets</span>:</span></div>
-<div class="y-line s1"><span class="y-num">3</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code">  <span class="ym">-</span> <span class="ys">sheetName</span>: <span class="yv">"SBC_SUBSCRIBER_DATA"</span></span></div>
-<div class="y-line s1"><span class="y-num">4</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code">    <span class="ys">columns</span>:</span></div>
-<div class="y-line s1"><span class="y-num">5</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">name</span>:     <span class="yv">"Node"</span></span></div>
-<div class="y-line s1"><span class="y-num">6</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code">        <span class="ys">required</span>: <span class="yn">true</span></span></div>
-<div class="y-line s0"><span class="y-num">7</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
-<div class="y-line s2"><span class="y-num">8</span><div class="y-bar" style="background:#aa7a00"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">name</span>:          <span class="yv">"Action"</span></span></div>
-<div class="y-line s2"><span class="y-num">9</span><div class="y-bar" style="background:#aa7a00"></div><span class="y-code">        <span class="ys">required</span>:      <span class="yn">true</span></span></div>
-<div class="y-line s2"><span class="y-num">10</span><div class="y-bar" style="background:#aa7a00"></div><span class="y-code">        <span class="ys">allowedValues</span>: [<span class="yv">"CREATE"</span>, <span class="yv">"MODIFY"</span>, <span class="yv">"DELETE"</span>]</span></div>
+<div class="y-line s0"><span class="y-num">1</span><div class="y-bar" style="background:transparent"></div><span class="y-code"><span class="yc"># Global flags</span></span></div>
+<div class="y-line s0"><span class="y-num">2</span><div class="y-bar" style="background:transparent"></div><span class="y-code"><span class="yk">validateIndexSheets</span>: <span class="yn">true</span>   <span class="yc"># false for CIQs with no Index sheet</span></span></div>
+<div class="y-line s0"><span class="y-num">3</span><div class="y-bar" style="background:transparent"></div><span class="y-code"><span class="yk">validateNodeIds</span>: <span class="yn">true</span></span></div>
+<div class="y-line s0"><span class="y-num">4</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
+<div class="y-line s0"><span class="y-num">5</span><div class="y-bar" style="background:transparent"></div><span class="y-code"><span class="yc"># sheets: map keyed by sheet name → column rules map</span></span></div>
+<div class="y-line s0"><span class="y-num">6</span><div class="y-bar" style="background:transparent"></div><span class="y-code"><span class="yk">sheets</span>:</span></div>
+<div class="y-line s0"><span class="y-num">7</span><div class="y-bar" style="background:transparent"></div><span class="y-code">  <span class="yk">SBC_SUBSCRIBER_DATA</span>:</span></div>
+<div class="y-line s0"><span class="y-num">8</span><div class="y-bar" style="background:transparent"></div><span class="y-code">    <span class="ys">columns</span>:</span></div>
+<div class="y-line s1"><span class="y-num">9</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code">      <span class="yk">Node</span>:               <span class="yc"># column name is the map key (case-insensitive match)</span></span></div>
+<div class="y-line s1"><span class="y-num">10</span><div class="y-bar" style="background:#1e5aaa"></div><span class="y-code">        <span class="ys">required</span>: <span class="yn">true</span></span></div>
 <div class="y-line s0"><span class="y-num">11</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
-<div class="y-line s3"><span class="y-num">12</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">name</span>:       <span class="yv">"MaxSubscribers"</span></span></div>
-<div class="y-line s3"><span class="y-num">13</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">        <span class="ys">integer</span>:    <span class="yn">true</span></span></div>
-<div class="y-line s3"><span class="y-num">14</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">        <span class="ys">allowedRanges</span>:</span></div>
-<div class="y-line s3"><span class="y-num">15</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">          <span class="ym">-</span> <span class="ys">min</span>: <span class="yn">1</span></span></div>
-<div class="y-line s3"><span class="y-num">16</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">            <span class="ys">max</span>: <span class="yn">99999</span></span></div>
-<div class="y-line s0"><span class="y-num">17</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
-<div class="y-line s4"><span class="y-num">18</span><div class="y-bar" style="background:#7a22aa"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">name</span>:    <span class="yv">"IPAddress"</span></span></div>
-<div class="y-line s4"><span class="y-num">19</span><div class="y-bar" style="background:#7a22aa"></div><span class="y-code">        <span class="ys">pattern</span>: <span class="yv">"^(\\d{1,3}\\.){3}\\d{1,3}$"</span></span></div>
-<div class="y-line s4"><span class="y-num">20</span><div class="y-bar" style="background:#7a22aa"></div><span class="y-code">        <span class="ys">patternMessage</span>: <span class="yv">"Must be a valid IP address"</span></span></div>
+<div class="y-line s2"><span class="y-num">12</span><div class="y-bar" style="background:#aa7a00"></div><span class="y-code">      <span class="yk">Action</span>:</span></div>
+<div class="y-line s2"><span class="y-num">13</span><div class="y-bar" style="background:#aa7a00"></div><span class="y-code">        <span class="ys">required</span>:      <span class="yn">true</span></span></div>
+<div class="y-line s2"><span class="y-num">14</span><div class="y-bar" style="background:#aa7a00"></div><span class="y-code">        <span class="ys">allowedValues</span>: [<span class="yv">CREATE</span>, <span class="yv">MODIFY</span>, <span class="yv">DELETE</span>]</span></div>
+<div class="y-line s0"><span class="y-num">15</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
+<div class="y-line s3"><span class="y-num">16</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">      <span class="yk">MaxSubscribers</span>:</span></div>
+<div class="y-line s3"><span class="y-num">17</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">        <span class="ys">integer</span>:      <span class="yn">true</span></span></div>
+<div class="y-line s3"><span class="y-num">18</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">        <span class="ys">allowedRanges</span>:</span></div>
+<div class="y-line s3"><span class="y-num">19</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">          <span class="ym">-</span> <span class="ys">min</span>: <span class="yn">1</span></span></div>
+<div class="y-line s3"><span class="y-num">20</span><div class="y-bar" style="background:#1a7a44"></div><span class="y-code">            <span class="ys">max</span>: <span class="yn">99999</span></span></div>
 <div class="y-line s0"><span class="y-num">21</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
-<div class="y-line s5"><span class="y-num">22</span><div class="y-bar" style="background:#1a8a8a"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">name</span>:       <span class="yv">"ProfileName"</span></span></div>
-<div class="y-line s5"><span class="y-num">23</span><div class="y-bar" style="background:#1a8a8a"></div><span class="y-code">        <span class="ys">maxLength</span>:   <span class="yn">32</span></span></div>
-<div class="y-line s0"><span class="y-num">24</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
-<div class="y-line s6"><span class="y-num">25</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">name</span>:       <span class="yv">"ProfileRef"</span></span></div>
-<div class="y-line s6"><span class="y-num">26</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">        <span class="ys">crossRef</span>:</span></div>
-<div class="y-line s6"><span class="y-num">27</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">          <span class="ys">sheet</span>:  <span class="yv">"SBC_SUBSCRIBER_PROFILE"</span></span></div>
-<div class="y-line s6"><span class="y-num">28</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">          <span class="ys">column</span>: <span class="yv">"ProfileName"</span></span></div>
-<div class="y-line s0"><span class="y-num">29</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
-<div class="y-line s0"><span class="y-num">30</span><div class="y-bar" style="background:transparent"></div><span class="y-code">    <span class="yc"># Conditional required — some columns required only</span></span></div>
-<div class="y-line s0"><span class="y-num">31</span><div class="y-bar" style="background:transparent"></div><span class="y-code">    <span class="yc"># when another column has a specific value</span></span></div>
-<div class="y-line s0"><span class="y-num">32</span><div class="y-bar" style="background:transparent"></div><span class="y-code">    <span class="ys">conditionalRequired</span>:</span></div>
-<div class="y-line s0"><span class="y-num">33</span><div class="y-bar" style="background:transparent"></div><span class="y-code">      <span class="ym">-</span> <span class="ys">whenColumn</span>:  <span class="yv">"Action"</span></span></div>
-<div class="y-line s0"><span class="y-num">34</span><div class="y-bar" style="background:transparent"></div><span class="y-code">        <span class="ys">whenValue</span>:   <span class="yv">"CREATE"</span></span></div>
-<div class="y-line s0"><span class="y-num">35</span><div class="y-bar" style="background:transparent"></div><span class="y-code">        <span class="ys">thenRequired</span>: [<span class="yv">"IPAddress"</span>, <span class="yv">"ProfileRef"</span>]</span></div>
+<div class="y-line s4"><span class="y-num">22</span><div class="y-bar" style="background:#7a22aa"></div><span class="y-code">      <span class="yk">IPAddress</span>:</span></div>
+<div class="y-line s4"><span class="y-num">23</span><div class="y-bar" style="background:#7a22aa"></div><span class="y-code">        <span class="ys">pattern</span>: <span class="yv">"^(\\d{1,3}\\.){3}\\d{1,3}$"</span></span></div>
+<div class="y-line s4"><span class="y-num">24</span><div class="y-bar" style="background:#7a22aa"></div><span class="y-code">        <span class="ys">patternMessage</span>: <span class="yv">"Must be a valid IP address"</span></span></div>
+<div class="y-line s0"><span class="y-num">25</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
+<div class="y-line s5"><span class="y-num">26</span><div class="y-bar" style="background:#1a8a8a"></div><span class="y-code">      <span class="yk">ProfileName</span>:</span></div>
+<div class="y-line s5"><span class="y-num">27</span><div class="y-bar" style="background:#1a8a8a"></div><span class="y-code">        <span class="ys">maxLength</span>: <span class="yn">32</span></span></div>
+<div class="y-line s0"><span class="y-num">28</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
+<div class="y-line s6"><span class="y-num">29</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">      <span class="yk">ProfileRef</span>:</span></div>
+<div class="y-line s6"><span class="y-num">30</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">        <span class="ys">crossRef</span>:</span></div>
+<div class="y-line s6"><span class="y-num">31</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">          <span class="ys">sheet</span>:  <span class="yv">"SBC_SUBSCRIBER_PROFILE"</span></span></div>
+<div class="y-line s6"><span class="y-num">32</span><div class="y-bar" style="background:#aa1a1a"></div><span class="y-code">          <span class="ys">column</span>: <span class="yv">"ProfileName"</span></span></div>
+<div class="y-line s0"><span class="y-num">33</span><div class="y-bar" style="background:transparent"></div><span class="y-code"></span></div>
+<div class="y-line s0"><span class="y-num">34</span><div class="y-bar" style="background:transparent"></div><span class="y-code">      <span class="yk">ActionKey</span>:</span></div>
+<div class="y-line s0"><span class="y-num">35</span><div class="y-bar" style="background:transparent"></div><span class="y-code">        <span class="ys">requiredWhen</span>:            <span class="yc"># conditional required</span></span></div>
+<div class="y-line s0"><span class="y-num">36</span><div class="y-bar" style="background:transparent"></div><span class="y-code">          <span class="ys">column</span>: <span class="yv">Action</span></span></div>
+<div class="y-line s0"><span class="y-num">37</span><div class="y-bar" style="background:transparent"></div><span class="y-code">          <span class="ys">value</span>:  <span class="yv">MODIFY</span></span></div>
 
     </div>
   </div>
 
   <div class="yaml-legend">
     <div class="yaml-legend-title">YAML Rule Keys</div>
-    <div class="leg-item"><div class="leg-swatch" style="background:#1e5aaa"></div><div><div class="leg-name">required</div><div class="leg-sub">Line 6 · blank value = validation error</div><div class="leg-key">required: true</div></div></div>
-    <div class="leg-item"><div class="leg-swatch" style="background:#aa7a00"></div><div><div class="leg-name">allowedValues</div><div class="leg-sub">Lines 8–10 · enumeration list</div><div class="leg-key">allowedValues: [A, B]</div></div></div>
-    <div class="leg-item"><div class="leg-swatch" style="background:#1a7a44"></div><div><div class="leg-name">integer + allowedRanges</div><div class="leg-sub">Lines 12–16 · numeric range check</div><div class="leg-key">integer: true · min/max</div></div></div>
-    <div class="leg-item"><div class="leg-swatch" style="background:#7a22aa"></div><div><div class="leg-name">pattern</div><div class="leg-sub">Lines 18–20 · Java regex format check</div><div class="leg-key">pattern: "regex"</div></div></div>
-    <div class="leg-item"><div class="leg-swatch" style="background:#1a8a8a"></div><div><div class="leg-name">maxLength</div><div class="leg-sub">Line 23 · string length cap</div><div class="leg-key">maxLength: N</div></div></div>
-    <div class="leg-item"><div class="leg-swatch" style="background:#aa1a1a"></div><div><div class="leg-name">crossRef</div><div class="leg-sub">Lines 25–28 · foreign-key check</div><div class="leg-key">crossRef: sheet + column</div></div></div>
+    <div class="leg-item"><div class="leg-swatch" style="background:#1e5aaa"></div><div><div class="leg-name">required</div><div class="leg-sub">Line 10 · blank value = validation error</div><div class="leg-key">required: true</div></div></div>
+    <div class="leg-item"><div class="leg-swatch" style="background:#aa7a00"></div><div><div class="leg-name">allowedValues</div><div class="leg-sub">Lines 12–14 · enumeration list</div><div class="leg-key">allowedValues: [A, B]</div></div></div>
+    <div class="leg-item"><div class="leg-swatch" style="background:#1a7a44"></div><div><div class="leg-name">integer + allowedRanges</div><div class="leg-sub">Lines 16–20 · numeric range check</div><div class="leg-key">integer: true · min/max</div></div></div>
+    <div class="leg-item"><div class="leg-swatch" style="background:#7a22aa"></div><div><div class="leg-name">pattern + patternMessage</div><div class="leg-sub">Lines 22–24 · Java regex + custom error text</div><div class="leg-key">pattern: "regex"</div></div></div>
+    <div class="leg-item"><div class="leg-swatch" style="background:#1a8a8a"></div><div><div class="leg-name">maxLength</div><div class="leg-sub">Line 27 · string length cap</div><div class="leg-key">maxLength: N</div></div></div>
+    <div class="leg-item"><div class="leg-swatch" style="background:#aa1a1a"></div><div><div class="leg-name">crossRef</div><div class="leg-sub">Lines 29–32 · foreign-key check</div><div class="leg-key">crossRef: sheet + column</div></div></div>
     <hr style="border-color:#2a3a4a;margin:14px 0">
     <div style="font-size:10px;color:#4a6a7a;line-height:1.9">
-      <b style="color:#6a8aaa">File naming convention:</b><br>
-      <code style="color:#79b8ff;font-size:10px">{NodeType}_{ACTIVITY}_validation-rules.yaml</code><br><br>
-      <b style="color:#6a8aaa">Bundled example:</b><br>
-      <code style="color:#79b8ff;font-size:10px">src/main/resources/<br>SBC_FIXED_LINE_CONFIGURATION_<br>validation-rules.yaml</code>
+      <b style="color:#6a8aaa">Format:</b> map-keyed (sheet name → column name → rules)<br><br>
+      <b style="color:#6a8aaa">Column names:</b> matched case-insensitively<br>
+      against actual CIQ header cells<br><br>
+      <b style="color:#6a8aaa">File naming:</b><br>
+      <code style="color:#79b8ff;font-size:10px">{NodeType}_{ACTIVITY}_validation-rules.yaml</code>
     </div>
   </div>
 </div>
@@ -650,9 +653,9 @@ ValidationReport report = new CiqProcessorImpl().process(
   <div class="card t-green">
     <div class="card-header"><span class="card-num n-green">3</span><span class="card-title">Data Sheets</span></div>
     <div class="card-row"><span class="card-key">Purpose</span><span class="card-val">Reads each table's row data</span></div>
-    <div class="card-row"><span class="card-key">Header detection</span><span class="card-val">Scans first 10 rows for "Node" + "Action"</span></div>
+    <div class="card-row"><span class="card-key">Header detection</span><span class="card-val">Scans first 10 rows, case-insensitive</span></div>
     <hr class="divider">
-    <div class="card-desc">For each table name in the Index, finds the corresponding sheet (with 31-char truncation prefix-match fallback). Reads the header row for column names. Skips blank rows (all-null data cells). Each data row becomes a CiqRow with its Excel row number and a column-to-value map.</div>
+    <div class="card-desc">For each table (from Index, or all non-metadata sheets when Index is absent), finds the corresponding sheet via exact match then 31-char prefix-match fallback. Header row detection is case-insensitive — tries "Node"+"Action" first, then falls back to "Node" alone for sheets without an Action column. Each data row becomes a CiqRow with its Excel row number and a column-to-value map. Column lookups are case-insensitive at validation time.</div>
   </div>
 </div>
 
@@ -829,12 +832,12 @@ java -jar ciq-processor-1.0.0-cli.jar \
 
 # Step 2: Generate MOP from child-order JSON (run only if Step 1 exits 0)
 java -jar mop-generator-utility-1.0.0-cli.jar \
-  --json-dir     mop-json/Nokia-SBC-1_CRG001/ \
-  --node-type    SBC \
-  --activity     FIXED_LINE_CONFIGURATION \
-  --template     SBC_FIXED_LINE_CONFIGURATION_MOP-Template.yaml \
-  --output       Nokia-SBC-1_FIXED_LINE_CONFIGURATION_MOP.txt \
-  --child-order  SBC_FIXED_LINE_CONFIGURATION_child-order.yaml</div>
+  --json-dir      mop-json/Nokia-SBC-1_CRG001/ \
+  --node-type     SBC \
+  --activity      FIXED_LINE_CONFIGURATION \
+  --template      SBC_FIXED_LINE_CONFIGURATION_MOP-Template.yaml \
+  --output-dir    mop-output/ \
+  --mop-file-name Nokia-SBC-1_FIXED_LINE_CONFIGURATION_MOP.txt</div>
   </div>
 </div>
 
@@ -1037,8 +1040,12 @@ if (formats.contains(ReportFormat.CSV)) {
         <div class="cmd-block" style="margin-top:4px"># File name follows the convention:
 # {NodeType}_{ACTIVITY}_validation-rules.yaml
 # Example:
-MSS_SUBSCRIBER_MIGRATION_validation-rules.yaml</div>
-        <div style="font-size:10px;color:#5a8aaa;margin-top:6px">Add a <code style="color:#ce9178">sheets:</code> entry for every CIQ table that should be validated. Tables without an entry in the rules file are still read but not validated.</div>
+MSS_SUBSCRIBER_MIGRATION_validation-rules.yaml
+
+# For CIQs that have no Index sheet (e.g. MRF):
+validateIndexSheets: false
+validateNodeIds: true</div>
+        <div style="font-size:10px;color:#5a8aaa;margin-top:6px">Add a <code style="color:#ce9178">sheets:</code> entry for every CIQ table to validate. When <code style="color:#ce9178">validateIndexSheets: false</code>, the processor reads all non-metadata workbook sheets directly and validates them against the rules config — no Index sheet required.</div>
       </div>
       <div class="card t-blue" style="padding:12px">
         <div style="font-size:11px;font-weight:700;color:#fff;margin-bottom:6px">2 — Run with the new parameters</div>
@@ -1064,13 +1071,14 @@ MSS_SUBSCRIBER_MIGRATION_validation-rules.yaml</div>
   <div class="card t-blue">
     <div class="card-header"><span class="card-num n-blue">TEST</span><span class="card-title">CiqProcessorTest</span></div>
     <div class="card-row"><span class="card-key">Location</span><span class="card-val"><code>src/test/java/.../CiqProcessorTest.java</code></span></div>
-    <div class="card-row"><span class="card-key">Type</span><span class="card-val">Integration test — requires a real CIQ file</span></div>
+    <div class="card-row"><span class="card-key">Type</span><span class="card-val">Integration test — requires real CIQ files</span></div>
     <hr class="divider">
-    <div class="card-desc">Four test methods. All are guarded with <code style="color:#79b8ff">Assume.assumeTrue()</code> — if the CIQ file or rules file is not present at the configured path, the tests are skipped (not failed). Update the <code style="color:#79b8ff">CIQ_FILE</code> and <code style="color:#79b8ff">RULES_FILE</code> constants at the top of the class before running locally.</div>
-    <div class="cmd-block">private static final String CIQ_FILE =
-  "C:/path/to/your/SBC_CIQ.xlsx";
-private static final String RULES_FILE =
-  "path/to/SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml";</div>
+    <div class="card-desc">SBC tests are guarded by <code style="color:#79b8ff">@BeforeClass Assume</code> — the class is skipped entirely if the SBC CIQ/rules files are absent. MRF tests are guarded individually with <code style="color:#79b8ff">Assume.assumeTrue()</code> inside each method, so missing MRF files skip only those tests without affecting the SBC tests. Update path constants at the top of the class before running locally.</div>
+    <div class="cmd-block"># Run all tests
+mvn test -Dtest=CiqProcessorTest
+
+# Run only MRF tests
+mvn test -Dtest="CiqProcessorTest#testMrfValidation+testMrfCliMain"</div>
   </div>
 
   <div class="card t-amber">
@@ -1078,10 +1086,12 @@ private static final String RULES_FILE =
     <table class="pkg-table" style="margin-top:0">
       <thead><tr><th>Test Method</th><th>Verifies</th></tr></thead>
       <tbody>
-        <tr><td>testProcessAllFormats</td><td>All 3 report files written, report has status + sheets</td></tr>
+        <tr><td>testProcessAllFormats</td><td>All 3 report files written, report has status + sheets (SBC)</td></tr>
         <tr><td>testChildOrderSegregation</td><td>Child-order subfolders created with index JSON (PASSED only)</td></tr>
-        <tr><td>testCliMain</td><td>CLI runs end-to-end, exits 0 or 1</td></tr>
+        <tr><td>testCliMain</td><td>SBC CLI runs end-to-end, exits 0 or 1</td></tr>
         <tr><td>testMissingRequiredArgExitsWithError</td><td>Missing args returns exit code 1</td></tr>
+        <tr><td>testMrfValidation</td><td>MRF CIQ validated; all 3 reports written; per-sheet errors printed</td></tr>
+        <tr><td>testMrfCliMain</td><td>MRF CLI runs end-to-end, exits 0 or 1</td></tr>
       </tbody>
     </table>
   </div>
@@ -1133,8 +1143,10 @@ public void testPatternValidator_fail() {
         <tr><td>INFO</td><td>Reading CIQ into memory: &lt;path&gt;</td><td>InMemoryExcelReader</td></tr>
         <tr><td>INFO</td><td>NIAM mapping: N entries</td><td>InMemoryExcelReader</td></tr>
         <tr><td>INFO</td><td>Index: N node entries, N unique tables</td><td>InMemoryExcelReader</td></tr>
+        <tr><td>INFO</td><td>No Index — reading N sheet(s) directly: [...]</td><td>InMemoryExcelReader</td></tr>
         <tr><td>INFO</td><td>Loaded table 'X': N rows</td><td>InMemoryExcelReader</td></tr>
         <tr><td>WARN</td><td>Sheet not found for table 'X' — skipping</td><td>InMemoryExcelReader</td></tr>
+        <tr><td>INFO</td><td>Index is empty — validating N sheet(s) from rules config</td><td>CiqValidationEngine</td></tr>
         <tr><td>INFO</td><td>Validation PASSED/FAILED — N error(s)</td><td>CiqProcessorImpl</td></tr>
         <tr><td>INFO</td><td>Writing child-order JSON to: &lt;dir&gt;</td><td>CiqProcessorImpl</td></tr>
       </tbody>
@@ -1155,16 +1167,16 @@ public void testPatternValidator_fail() {
 
   <div class="card t-red">
     <div class="card-header"><span class="card-num n-red">ERR</span><span class="card-title">Index sheet produces empty results</span></div>
-    <div class="card-row"><span class="card-key">Cause</span><span class="card-val">Header row not found in Index sheet</span></div>
+    <div class="card-row"><span class="card-key">Cause</span><span class="card-val">No Index sheet, or header row not found</span></div>
     <hr class="divider">
-    <div class="card-desc">The reader scans only the first 10 rows for the header. If the header row is below row 10, or the column names differ from "Node", "CRGroup", "Tables", the index will be empty. Check the Excel file for merged cells or extra header rows above the column names.</div>
+    <div class="card-desc">The reader scans only the first 10 rows of the Index sheet for "Node", "CRGroup", "Tables" columns (case-insensitive). If the Index sheet is absent, all non-metadata workbook sheets are read directly. The validation engine then uses the <code style="color:#79b8ff">sheets:</code> keys from the rules config to determine which sheets to validate — set <code style="color:#79b8ff">validateIndexSheets: false</code> in the rules YAML for CIQs that have no Index sheet.</div>
   </div>
 
   <div class="card t-red">
-    <div class="card-header"><span class="card-num n-red">ERR</span><span class="card-title">All rows report "required field missing"</span></div>
+    <div class="card-header"><span class="card-num n-red">ERR</span><span class="card-title">Data sheet loaded with 0 rows</span></div>
     <div class="card-row"><span class="card-key">Cause</span><span class="card-val">Header row not found in data sheet</span></div>
     <hr class="divider">
-    <div class="card-desc">The data sheet reader scans the first 10 rows for both "Node" and "Action" columns. If the CIQ data sheet uses different column names or has extra rows above the header, the header detection will fail and no rows will be read. Use WARN log output to diagnose: "Header row not found in sheet 'X'".</div>
+    <div class="card-desc">The reader first tries to locate a header row containing both "Node" and "Action" (case-insensitive), then falls back to "Node" alone. If neither is found within the first 10 rows, the sheet is loaded with 0 rows. Check the WARN log: "Header row not found in sheet 'X'". Common causes: merged cells above the header, the column labelled "NODE" instead of "Node" (handled automatically), or the header sitting below row 10.</div>
   </div>
 </div>
 

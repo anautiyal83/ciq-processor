@@ -144,6 +144,7 @@ public class CiqProcessorTest {
                 new File(MRF_RULES_FILE).exists());
 
         new File(MRF_OUTPUT_DIR).mkdirs();
+        new File(MRF_MOP_JSON_DIR).mkdirs();
 
         List<ReportFormat> formats = Arrays.asList(
                 ReportFormat.JSON, ReportFormat.HTML, ReportFormat.MSEXCEL);
@@ -168,6 +169,7 @@ public class CiqProcessorTest {
         System.out.println("Status:       " + report.getStatus());
         System.out.println("Total errors: " + report.getTotalErrors());
         System.out.println("Sheets:       " + report.getSheets().size());
+        System.out.println("Parameters:   " + report.getParameters());
         report.getSheets().forEach(s -> {
             System.out.println("  Sheet: " + s.getSheetName()
                     + "  rows=" + s.getRowsChecked()
@@ -175,6 +177,28 @@ public class CiqProcessorTest {
             s.getErrors().forEach(e -> System.out.println("    [row " + e.getRowNumber() + ":"
                     + e.getColumn() + "] " + e.getMessage()));
         });
+
+        // GROUP mode verification: if PASSED, verify group folder output
+        if ("PASSED".equals(report.getStatus())) {
+            File mopRoot = new File(MRF_MOP_JSON_DIR);
+            String[] subDirs = mopRoot.list((d, n) -> new File(d, n).isDirectory());
+            if (subDirs != null && subDirs.length > 0) {
+                System.out.println("GROUP mode folders: " + java.util.Arrays.toString(subDirs));
+                for (String subDir : subDirs) {
+                    File folder = new File(mopRoot, subDir);
+                    String[] jsonFiles = folder.list((d, n) -> n.endsWith(".json"));
+                    assertNotNull(jsonFiles);
+                    assertTrue("Group folder '" + subDir + "' should contain JSON files",
+                            jsonFiles.length > 0);
+                    // Check for GroupIndex file
+                    boolean hasIndex = false;
+                    for (String f : jsonFiles) {
+                        if (f.contains("index")) { hasIndex = true; break; }
+                    }
+                    assertTrue("Group folder '" + subDir + "' should contain an index JSON", hasIndex);
+                }
+            }
+        }
     }
 
     @Test

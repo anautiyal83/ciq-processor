@@ -5,33 +5,50 @@
 # Use-case: Load announcement audio files (TAR or individual) onto MRF nodes.
 #
 # CIQ Sheet validated: ANNOUNCEMENT_FILES
-#   Columns: Node, Action, VERSION, INPUT_FILE, MRF Destination Path
+#   GROUP mode columns: GROUP, Action, VERSION, INPUT_FILE, MRF_DESTINATION_PATH
 #
 # Notes:
-#   - The CIQ does not have an Index sheet; validateIndexSheets is set to false.
-#   - Column B in the CIQ (MRF node identifier e.g. MRF-1, MRF-2) has no header
-#     and is skipped by the processor. Add a header (e.g. MRF_NODE) to validate it.
-#   - Action is optional. If present, only LOAD is an allowed value.
+#   - GROUP mode: INDEX sheet has GROUP | NODE columns (no TABLES).
+#     Group-to-node expansion is detected automatically; validateNodeIds checks
+#     all nodes in every group against the NODE_ID sheet.
+#   - ACTION column is validated: only LOAD is an allowed value.
 # =============================================================================
 
-# No Index sheet in this CIQ
+# INDEX sheet has GROUP|NODE format (no TABLES column) — no cross-sheet validation
 validateIndexSheets: false
 
-# Validate that each Node value exists in the NODE_ID sheet
+# Validate that each node in the GROUP→NODE index exists in the NODE_ID sheet
 validateNodeIds: true
+
+# GROUP mode: INDEX sheet uses GROUP|NODE columns; one MOP folder per group
+groupByColumnName: GROUP
+
+# Validate columns in the INDEX sheet (GROUP|NODE format for MRF)
+indexSheet:
+  columns:
+    GROUP:
+      required: true
+    NODE:
+      required: true
+
+# Validate columns in the NODE_ID sheet
+nodeIdSheet:
+  columns:
+    NODE:
+      required: true
+    NIAM_ID:
+      required: true
 
 sheets:
 
   # ---------------------------------------------------------------------------
   # Sheet: ANNOUNCEMENT_FILES
-  # One row per announcement file to be loaded onto an MRF node.
+  # One row per announcement file to be loaded onto MRF nodes.
   # ---------------------------------------------------------------------------
   ANNOUNCEMENT_FILES:
     columns:
-
-      NODE:
+      GROUP:
         required: true
-        
       VERSION:
         required: true
         pattern: "^\\d+\\.\\d+\\.\\d+\\.\\d+$"

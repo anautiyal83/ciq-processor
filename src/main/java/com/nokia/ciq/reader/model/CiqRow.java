@@ -29,17 +29,21 @@ public class CiqRow {
     public void setData(Map<String, String> data) { this.data = data; }
 
     /**
-     * Get a column value by name. Case-insensitive — "Node", "NODE", and "node" all match.
+     * Get a column value by name. Matching is case-insensitive and underscore-insensitive,
+     * so "CRGroup", "CR_GROUP", and "crgroup" all resolve to the same column.
      * Returns null if the column is absent or blank.
      */
     public String get(String column) {
         String v = data.get(column);
         if (v != null) return v;
-        // Case-insensitive fallback
-        String upper = column.toUpperCase();
+        String target = normalize(column);
         for (Map.Entry<String, String> entry : data.entrySet()) {
-            if (entry.getKey().toUpperCase().equals(upper)) return entry.getValue();
+            if (normalize(entry.getKey()).equals(target)) return entry.getValue();
         }
         return null;
+    }
+
+    private static String normalize(String s) {
+        return s.replace("_", "").toLowerCase();
     }
 }
