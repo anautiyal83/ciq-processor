@@ -28,8 +28,22 @@ public class CiqRow {
     public Map<String, String> getData() { return data; }
     public void setData(Map<String, String> data) { this.data = data; }
 
-    /** Convenience: get a single column value (null if blank or column absent). */
+    /**
+     * Get a column value by name. Matching is case-insensitive and underscore-insensitive,
+     * so "CRGroup", "CR_GROUP", and "crgroup" all resolve to the same column.
+     * Returns null if the column is absent or blank.
+     */
     public String get(String column) {
-        return data.get(column);
+        String v = data.get(column);
+        if (v != null) return v;
+        String target = normalize(column);
+        for (Map.Entry<String, String> entry : data.entrySet()) {
+            if (normalize(entry.getKey()).equals(target)) return entry.getValue();
+        }
+        return null;
+    }
+
+    private static String normalize(String s) {
+        return s.replace("_", "").toLowerCase();
     }
 }

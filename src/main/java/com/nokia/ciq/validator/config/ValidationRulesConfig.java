@@ -17,6 +17,10 @@ import java.util.Map;
  * # Validate that all nodes in data sheets exist in Node_ID sheet
  * validateNodeIds: true
  *
+ * # Column name that drives grouping: GROUP (group-based MOP generation) or NODE (node-wise).
+ * # Omit to auto-detect from the INDEX sheet column layout.
+ * groupByColumnName: NODE
+ *
  * sheets:
  *   CRFTargetList:
  *     columns:
@@ -51,6 +55,30 @@ public class ValidationRulesConfig {
     /** Whether to validate that every Node value in data sheets exists in niamMapping. */
     private boolean validateNodeIds = true;
 
+    /**
+     * Column name that drives grouping for MOP generation.
+     * <ul>
+     *   <li>{@code "GROUP"} — GROUP mode: INDEX sheet has GROUP|NODE columns; one MOP folder per group.</li>
+     *   <li>{@code "NODE"}  — node-wise mode: INDEX sheet has Node|CRGroup|Tables columns.</li>
+     *   <li>{@code null}    — auto-detect from INDEX sheet column layout (default).</li>
+     * </ul>
+     */
+    private String groupByColumnName;
+
+    /**
+     * Optional column-level validation rules for the INDEX sheet.
+     * When present, every row in the Index sheet is validated against these rules
+     * using the same cell-validator chain as data sheets.
+     */
+    private SheetRules indexSheet;
+
+    /**
+     * Optional column-level validation rules for the NODE_ID sheet.
+     * When present, every row in the Node_ID sheet is validated against these rules
+     * using the same cell-validator chain as data sheets.
+     */
+    private SheetRules nodeIdSheet;
+
     /** Per-sheet column rules. Key = sheet name (e.g. "CRFTargetList"). */
     private Map<String, SheetRules> sheets = new LinkedHashMap<>();
 
@@ -59,6 +87,15 @@ public class ValidationRulesConfig {
 
     public boolean isValidateNodeIds() { return validateNodeIds; }
     public void setValidateNodeIds(boolean validateNodeIds) { this.validateNodeIds = validateNodeIds; }
+
+    public String getGroupByColumnName() { return groupByColumnName; }
+    public void setGroupByColumnName(String groupByColumnName) { this.groupByColumnName = groupByColumnName; }
+
+    public SheetRules getIndexSheet() { return indexSheet; }
+    public void setIndexSheet(SheetRules indexSheet) { this.indexSheet = indexSheet; }
+
+    public SheetRules getNodeIdSheet() { return nodeIdSheet; }
+    public void setNodeIdSheet(SheetRules nodeIdSheet) { this.nodeIdSheet = nodeIdSheet; }
 
     public Map<String, SheetRules> getSheets() { return sheets; }
     public void setSheets(Map<String, SheetRules> sheets) { this.sheets = sheets; }

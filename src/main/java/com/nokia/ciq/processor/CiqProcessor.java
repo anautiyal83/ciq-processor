@@ -22,14 +22,17 @@ public interface CiqProcessor {
     /**
      * Process a CIQ Excel file end-to-end.
      *
-     * @param ciqFilePath    absolute path to the .xlsx CIQ workbook
-     * @param nodeType       node type, e.g. {@code "SBC"}
-     * @param activity       activity name, e.g. {@code "FIXED_LINE_CONFIGURATION"}
-     * @param rulesFilePath  absolute path to the YAML validation-rules file
-     * @param outputDir      directory where validation reports are written
-     * @param formats        report formats to produce (JSON, HTML, MSEXCEL)
+     * @param ciqFilePath      absolute path to the .xlsx CIQ workbook
+     * @param nodeType         node type, e.g. {@code "SBC"}
+     * @param activity         activity name, e.g. {@code "FIXED_LINE_CONFIGURATION"}
+     * @param rulesFilePath    absolute path to the YAML validation-rules file
+     * @param outputDir        directory where validation reports are written
+     * @param formats          report formats to produce (JSON, HTML, MSEXCEL)
      * @param mopJsonOutputDir optional directory for child-order–segregated JSON files;
      *                         written only when validation passes; {@code null} = skip
+     * @param reportFileName   base name (without extension) for the report files, e.g.
+     *                         {@code "my-validation-report"}; {@code null} defaults to
+     *                         {@code "<nodeType>_<activity>_validation-report"}
      * @return the completed {@link ValidationReport}
      * @throws IOException if the Excel file or rules file cannot be read,
      *                     or if any report file cannot be written
@@ -40,5 +43,6 @@ public interface CiqProcessor {
                              String rulesFilePath,
                              String outputDir,
                              List<ReportFormat> formats,
-                             String mopJsonOutputDir) throws IOException;
+                             String mopJsonOutputDir,
+                             String reportFileName) throws IOException;
 }

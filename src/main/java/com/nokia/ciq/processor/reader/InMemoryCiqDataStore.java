@@ -20,10 +20,23 @@ public class InMemoryCiqDataStore implements CiqDataStore {
     private final CiqIndex              index;
     private final Map<String, CiqSheet> sheets;
 
+    /** Raw INDEX sheet rows — available for column-rule validation, not a data table. */
+    private CiqSheet rawIndexSheet;
+
+    /** Raw NODE_ID sheet rows — available for column-rule validation, not a data table. */
+    private CiqSheet rawNodeIdSheet;
+
     InMemoryCiqDataStore(CiqIndex index, Map<String, CiqSheet> sheets) {
         this.index  = index;
         this.sheets = sheets;
     }
+
+    public CiqSheet getRawIndexSheet()  { return rawIndexSheet; }
+    public void     setRawIndexSheet(CiqSheet s)  { this.rawIndexSheet  = s; }
+
+    public CiqSheet getRawNodeIdSheet() { return rawNodeIdSheet; }
+    public void     setRawNodeIdSheet(CiqSheet s) { this.rawNodeIdSheet = s; }
+
 
     @Override
     public CiqIndex getIndex() {

@@ -4,21 +4,25 @@ import com.nokia.ciq.reader.model.CiqIndex;
 import com.nokia.ciq.reader.model.NodeEntry;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * Top-level validation report for a full CIQ run.
  * Written to {NODE_TYPE}_{ACTIVITY}_validation-report.json.
  *
- * <p>When validation passes (status=PASSED) the following grouping summary
- * fields are also populated, one per MOP that will be generated downstream:
+ * <p>When validation passes (status=PASSED), {@code parameters} is populated with
+ * all output key-value pairs:
  * <ul>
- *   <li>{@code nodeNames}        — distinct node names (e.g. SBC1,SBC2,SBC3)</li>
- *   <li>{@code totalNodesCount}  — number of distinct nodes</li>
- *   <li>{@code childOrders}      — all Node-CRGroup combinations (one MOP each)</li>
- *   <li>{@code childOrdersCount} — total number of MOPs to be generated</li>
+ *   <li>{@code TOTAL_NODES_COUNT}   — total number of nodes</li>
+ *   <li>{@code CHILD_ORDERS_COUNT}  — total number of MOPs to be generated (= TOTAL_NODES_COUNT)</li>
+ *   <li>{@code NODE_N}              — node name at position N (1-based)</li>
+ *   <li>{@code NIAM_ID_N}           — NIAM ID for node N (1-based, omitted when not present)</li>
+ *   <li>{@code GROUP_N}             — group name at position N (GROUP mode only)</li>
+ *   <li>{@code GROUP_N_VALUES}      — comma-separated nodes in group N (GROUP mode only)</li>
  * </ul>
  */
 public class ValidationReport {
@@ -30,11 +34,12 @@ public class ValidationReport {
     private List<String> globalErrors = new ArrayList<>();   // index-level errors
     private List<SheetValidationResult> sheets = new ArrayList<>();
 
-    // Grouping summary — populated only when status=PASSED
-    private List<String> nodeNames        = new ArrayList<>();
-    private int          totalNodesCount  = 0;
-    private List<String> childOrders      = new ArrayList<>();
-    private int          childOrdersCount = 0;
+    /**
+     * All output parameters — populated only when status=PASSED.
+     * Contains NODE_N, NIAM_ID_N, TOTAL_NODES_COUNT, CHILD_ORDERS_COUNT,
+     * and (in GROUP mode) GROUP_N, GROUP_N_VALUES.
+     */
+    private Map<String, String> parameters = new LinkedHashMap<>();
 
     public String getNodeType() { return nodeType; }
     public void setNodeType(String nodeType) { this.nodeType = nodeType; }
@@ -54,17 +59,8 @@ public class ValidationReport {
     public List<SheetValidationResult> getSheets() { return sheets; }
     public void setSheets(List<SheetValidationResult> sheets) { this.sheets = sheets; }
 
-    public List<String> getNodeNames()        { return nodeNames; }
-    public void setNodeNames(List<String> v)  { this.nodeNames = v; }
-
-    public int getTotalNodesCount()            { return totalNodesCount; }
-    public void setTotalNodesCount(int v)      { this.totalNodesCount = v; }
-
-    public List<String> getChildOrders()       { return childOrders; }
-    public void setChildOrders(List<String> v) { this.childOrders = v; }
-
-    public int getChildOrdersCount()           { return childOrdersCount; }
-    public void setChildOrdersCount(int v)     { this.childOrdersCount = v; }
+    public Map<String, String> getParameters()              { return parameters; }
+    public void setParameters(Map<String, String> v)        { this.parameters = v; }
 
     /** Recompute status and totalErrors from sheet results. */
     public void finalise() {
@@ -80,33 +76,37 @@ public class ValidationReport {
     }
 
     /**
-     * Populate grouping summary fields from the CIQ index.
+     * Populate {@code parameters} from a proper CIQ index (Node+CRGroup+Tables format).
      * Must be called only after {@link #finalise()} confirms status=PASSED.
      *
-     * <p>NODE_NAMES        — distinct node names in index order
-     * <p>TOTAL_NODES_COUNT — count of distinct nodes
-     * <p>CHILD_ORDERS      — each entry as "{node}-{crGroup}" (one per MOP)
-     * <p>CHILD_ORDERS_COUNT — total number of MOPs
+     * <p>Populates: NODE_N, NIAM_ID_N, TOTAL_NODES_COUNT, CHILD_ORDERS_COUNT.
      */
     public void populateGroupingSummary(CiqIndex index) {
         if (index == null || index.getEntries() == null) return;
 
-        Set<String> nodes = new LinkedHashSet<>();
+        Set<String> nodes  = new LinkedHashSet<>();
         List<String> orders = new ArrayList<>();
 
         for (NodeEntry entry : index.getEntries()) {
             String node    = entry.getNode()    != null ? entry.getNode().trim()    : "";
             String crGroup = entry.getCrGroup() != null ? entry.getCrGroup().trim() : "";
-
             if (!node.isEmpty()) nodes.add(node);
-
             String childOrder = crGroup.isEmpty() ? node : node + "_" + crGroup;
             if (!childOrder.isEmpty()) orders.add(childOrder);
         }
 
-        this.nodeNames        = new ArrayList<>(nodes);
-        this.totalNodesCount  = nodes.size();
-        this.childOrders      = orders;
-        this.childOrdersCount = orders.size();
+        if (nodes.isEmpty()) return;   // GROUP mode or empty index — let fallback handle it
+
+        Map<String, String> params = new LinkedHashMap<>();
+        int i = 1;
+        for (String node : nodes) {
+            params.put("NODE_" + i, node);
+            String niamId = index.getNiamMapping().get(node);
+            if (niamId != null) params.put("NIAM_ID_" + i, niamId);
+            i++;
+        }
+        params.put("TOTAL_NODES_COUNT",  String.valueOf(nodes.size()));
+        params.put("CHILD_ORDERS_COUNT", String.valueOf(orders.size()));
+        this.parameters = params;
     }
 }
