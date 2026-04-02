@@ -301,6 +301,7 @@ footer {
 
     <li class="nav-section">Configuration</li>
     <li><a href="#ciq-structure">CIQ Workbook Structure</a></li>
+    <li class="nav-sub"><a href="#ciq-as-variables">CIQ Columns as Variables</a></li>
     <li><a href="#rules-yaml">Validation Rules YAML</a></li>
     <li class="nav-sub"><a href="#top-level">Top-level Settings</a></li>
     <li class="nav-sub"><a href="#index-sheet-rules">Index Sheet Rules</a></li>
@@ -696,6 +697,31 @@ Override with <code>--report-name</code>.</p>
   <tr><td><code>DELETE</code></td><td>Delete an existing record</td><td><code>xc:operation="delete"</code></td></tr>
   <tr><td><code>MODIFY</code></td><td>Modify an existing record</td><td><code>xc:operation="merge"</code></td></tr>
 </table>
+
+<h3 id="ciq-as-variables">CIQ Columns as MOP Template Variables</h3>
+
+<p>After segregation, the per-group JSON files are consumed by <strong>mop-generator-utility</strong>.
+Any data sheet column becomes a <code>${COLUMN_NAME}</code> variable that can be referenced in
+the MOP template YAML commands. Two resolution strategies apply:</p>
+
+<table>
+  <tr><th>Column characteristic</th><th>Resolved as</th><th>Example</th></tr>
+  <tr>
+    <td>Same value across <em>all</em> rows in the sheet (e.g. <code>CIRCLE</code>, <code>VERSION</code>)</td>
+    <td>Group-level variable — substituted once, globally</td>
+    <td><code>${CIRCLE}</code> → <code>RJ</code></td>
+  </tr>
+  <tr>
+    <td>Different value per row (e.g. <code>INPUT_FILE</code>, <code>MRF_DESTINATION_PATH</code>)</td>
+    <td>Per-row expansion — command is written once per CIQ row with the row's value</td>
+    <td><code>${INPUT_FILE}</code> → one command per file in the CIQ table</td>
+  </tr>
+</table>
+
+<p>Built-in variables always available regardless of CIQ data:
+<code>${NODE}</code> (node name from the GroupIndex) and <code>${NEID}</code> (NE identifier from the NIAM mapping).</p>
+
+<p>Column names in the CIQ data sheet must match <code>${COLUMN_NAME}</code> references in the MOP template exactly (case-sensitive). Use <code>Record.</code>-prefixed columns (<code>Record.INPUT_FILE</code>) without the prefix in the template reference (<code>${INPUT_FILE}</code>).</p>
 
 <p>For <code>MODIFY</code> rows, <code>ActionKey</code> (which field to match on) and
 <code>SubAction</code> (<code>ADD</code>/<code>DEL</code>/<code>MOD</code> for sub-table

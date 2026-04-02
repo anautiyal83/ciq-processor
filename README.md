@@ -311,6 +311,17 @@ Default base name: `<node-type>_<activity>_validation-report`
 
 For `MODIFY` rows, `ActionKey` (which field to match) and `SubAction` (`ADD`/`DEL`/`MOD` for sub-table entries) may also be required depending on the rules.
 
+### CIQ columns as MOP template variables
+
+Data sheet columns are available as `${COLUMN_NAME}` variables in the mop-generator-utility YAML template commands. The column name is used as-is; `Record.`-prefixed columns (e.g. `Record.INPUT_FILE`) are referenced without the prefix (`${INPUT_FILE}`).
+
+| Column characteristic | How resolved in MOP |
+|---|---|
+| Same value across all rows (e.g. `CIRCLE`, `VERSION`) | Group-level variable — substituted once |
+| Different value per row (e.g. `INPUT_FILE`, `MRF_DESTINATION_PATH`) | Per-row expansion — command written once per CIQ row |
+
+Built-in variables always available: `${NODE}` (node name) and `${NEID}` (NE identifier from NIAM mapping).
+
 ---
 
 ## Validation Rules YAML
