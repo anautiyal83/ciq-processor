@@ -46,10 +46,10 @@ public class FileNamingUtil {
 
     /**
      * Index file name for a specific child order.
-     * Example: {@code SBC_FIXED_LINE_CONFIGURATION_index_SBC-1_CR1.json}
+     * Example: {@code SBC_FIXED_LINE_CONFIGURATION_SBC-1_CR1.json}
      */
     public static String indexFileName(String nodeType, String activity, String childOrder) {
-        return prefix(nodeType, activity) + "index_" + childOrder + ".json";
+        return prefix(nodeType, activity) + childOrder + ".json";
     }
 
     /**

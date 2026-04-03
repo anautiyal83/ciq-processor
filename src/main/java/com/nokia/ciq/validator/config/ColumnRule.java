@@ -30,6 +30,9 @@ public class ColumnRule {
     /** Value must be parseable as an integer. */
     private boolean integer;
 
+    /** Value must be a valid email address (RFC 5322 local@domain format). */
+    private boolean email;
+
     /** Minimum value (inclusive). Only checked when integer=true. */
     private Long minValue;
 
@@ -55,6 +58,9 @@ public class ColumnRule {
      */
     private CrossRef crossRef;
 
+    /** Optional human-readable description of this column, shown in the Column_Guide sheet. */
+    private String description;
+
     // Getters and setters
 
     public boolean isRequired() { return required; }
@@ -78,6 +84,9 @@ public class ColumnRule {
     public boolean isInteger() { return integer; }
     public void setInteger(boolean integer) { this.integer = integer; }
 
+    public boolean isEmail() { return email; }
+    public void setEmail(boolean email) { this.email = email; }
+
     public Long getMinValue() { return minValue; }
     public void setMinValue(Long minValue) { this.minValue = minValue; }
 
@@ -92,4 +101,7 @@ public class ColumnRule {
 
     public CrossRef getCrossRef() { return crossRef; }
     public void setCrossRef(CrossRef crossRef) { this.crossRef = crossRef; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
 }

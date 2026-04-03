@@ -33,16 +33,37 @@ indexSheet:
       required: true
     CRGROUP:
       required: true
+      description: "CR Number"
     NODE:
       required: true
+      description: "MRF Hostname"
 
-# Validate columns in the NODE_ID sheet
+# NODE_ID sheet: name, key column names, and column-level validation rules
 nodeIdSheet:
+  name:       Node_Details
+  nodeColumn: Node_Name
+  niamColumn: "NIAM NAME"
   columns:
-    NODE:
+    Node_Name:
       required: true
-    NIAM_ID:
+      description: "MRF Hostname"
+    "NIAM NAME":
       required: true
+      description: "NIAM ID for the hostname"
+
+# USER_ID sheet: maps each CRGROUP to the responsible user's email address
+userIdSheet:
+  name:          User_ID
+  crGroupColumn: CRGROUP
+  emailColumn:   EMAIL
+  columns:
+    CRGROUP:
+      required: true
+      description: "CR Number. Should match Index sheet"
+    EMAIL:
+      required: true
+      email:    true
+      description: "Email address(es) of the user(s) responsible for executing the CR, used for sending notifications related to execution status, reports, and alerts. Can hold a comma-separated list"
 
 sheets:
 
@@ -54,15 +75,9 @@ sheets:
     columns:
       GROUP:
         required: true
-      VERSION:
-        required: true
-        pattern: "^\\d+\\.\\d+\\.\\d+\\.\\d+$"
-        patternMessage: "VERSION must be in format X.X.X.X (e.g. 17.0.3.7)"
-
       INPUT_FILE:
         required: true
         maxLength: 512
-
       MRF_DESTINATION_PATH:
         required: true
         pattern: "^/.*"

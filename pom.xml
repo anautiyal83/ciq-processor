@@ -56,6 +56,12 @@
             <artifactId>logback-classic</artifactId>
             <version>1.2.13</version>
         </dependency>
+        <!-- Bridge POI's internal log4j2 API calls to SLF4J (avoids "log4j-core not found" error) -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-to-slf4j</artifactId>
+            <version>2.17.2</version>
+        </dependency>
 
         <!-- Test -->
         <dependency>
@@ -96,15 +102,35 @@
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>com.nokia.ciq.processor.CiqProcessorMain</mainClass>
                                 </transformer>
+                                <!-- Merge META-INF/services/* entries (required for POI OOXML providers) -->
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
+                            <!--
+                                Relocate POI and its XML stack so that this fat JAR is completely
+                                isolated from any poi.jar that may be present on the host/server
+                                classpath (older version → NoSuchMethodError for IOUtils.toByteArray).
+                            -->
+                            <!--<relocations>
+                                <relocation>
+                                    <pattern>org.apache.poi</pattern>
+                                    <shadedPattern>com.nokia.shaded.poi</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.apache.xmlbeans</pattern>
+                                    <shadedPattern>com.nokia.shaded.xmlbeans</shadedPattern>
+                                </relocation>
+                            </relocations>-->
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
                                     <excludes>
+                                        <!-- Signature files — prevent "Invalid signature file" errors -->
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
+                                        <!-- Java 9+ module descriptors — incompatible in a Java 8 fat jar -->
+                                        <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/versions/**</exclude>
                                     </excludes>
                                 </filter>
                             </filters>

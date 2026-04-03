@@ -15,6 +15,7 @@ import com.nokia.ciq.validator.validator.AllowedRangesValidator;
 import com.nokia.ciq.validator.validator.AllowedValuesValidator;
 import com.nokia.ciq.validator.validator.CellValidator;
 import com.nokia.ciq.validator.validator.CrossRefValidator;
+import com.nokia.ciq.validator.validator.EmailValidator;
 import com.nokia.ciq.validator.validator.IntegerValidator;
 import com.nokia.ciq.validator.validator.LengthValidator;
 import com.nokia.ciq.validator.validator.PatternValidator;
@@ -68,6 +69,7 @@ public class CiqValidationEngine {
                 new IntegerValidator(),
                 new AllowedRangesValidator(),
                 new PatternValidator(),
+                new EmailValidator(),
                 new CrossRefValidator(store)
         );
     }
@@ -107,14 +109,16 @@ public class CiqValidationEngine {
             checkIndexSheets(index, report);
         }
 
-        // Build valid node set for node-ID validation
+        // Build valid node set for node-ID validation (case-insensitive lookup)
         Set<String> validNodes = index.getNiamMapping().keySet();
+        Set<String> validNodesLower = new java.util.HashSet<>();
+        for (String n : validNodes) validNodesLower.add(n.toLowerCase());
 
         // In GROUP mode: validate all group nodes against NODE_ID sheet (global check)
         if (isGroupMode && rules.isValidateNodeIds()) {
             for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet()) {
                 for (String node : ge.getValue()) {
-                    if (!validNodes.isEmpty() && !validNodes.contains(node)) {
+                    if (!validNodes.isEmpty() && !validNodesLower.contains(node.toLowerCase())) {
                         report.getGlobalErrors().add(
                                 "Node '" + node + "' in group '" + ge.getKey() +
                                 "' not found in Node_ID sheet. Valid nodes: " + validNodes);
@@ -161,7 +165,8 @@ public class CiqValidationEngine {
                 // Node-ID check (global, no YAML rule needed)
                 if (rules.isValidateNodeIds()) {
                     String node = row.get("Node");
-                    if (node != null && !validNodes.isEmpty() && !validNodes.contains(node)) {
+                    if (node != null && !validNodes.isEmpty()
+                            && !validNodesLower.contains(node.toLowerCase())) {
                         result.addError(new ValidationError(row.getRowNumber(), "Node", node,
                                 "Node '" + node + "' not found in Node_ID sheet. Valid nodes: " + validNodes));
                     }
@@ -188,121 +193,30 @@ public class CiqValidationEngine {
                         rules.getIndexSheet(), index, report);
             }
             if (rules.getNodeIdSheet() != null) {
-                validateSpecialSheet(imStore.getRawNodeIdSheet(), "Node_ID",
+                validateSpecialSheet(imStore.getRawNodeIdSheet(),
+                        rules.getNodeIdSheet().getName(),
                         rules.getNodeIdSheet(), index, report);
+            }
+            if (rules.getUserIdSheet() != null) {
+                validateSpecialSheet(imStore.getRawUserIdSheet(),
+                        rules.getUserIdSheet().getName(),
+                        rules.getUserIdSheet(), index, report);
             }
         }
 
         report.finalise();
         if ("PASSED".equals(report.getStatus())) {
-            // populateGroupingSummary handles proper INDEX mode (Node+CRGroup+Tables).
-            // For GROUP mode and no-Index mode the parameters map will be empty after this call
-            // and the fallback block below takes over.
-            report.populateGroupingSummary(index);
-
-            if (report.getParameters().isEmpty()) {
-                Map<String, String> params    = new LinkedHashMap<>();
-                Map<String, String> niamMap   = index.getNiamMapping();
-
-                if (isCRGroupMode) {
-                    // CRGROUP mode: emit CRGROUP_N, GROUP_N, and NODE_N parameters
-                    log.info("CRGROUP_MAP={}", formatCRGroupMap(crGroupToGroupNodes));
-
-                    // CRGROUP-level parameters
-                    int ci = 1;
-                    for (Map.Entry<String, Map<String, List<String>>> cre : crGroupToGroupNodes.entrySet()) {
-                        String crgName = cre.getKey();
-                        List<String> crGroups = new ArrayList<>(cre.getValue().keySet());
-                        List<String> crNodes  = new ArrayList<>();
-                        for (List<String> ns : cre.getValue().values()) crNodes.addAll(ns);
-
-                        params.put("CRGROUP_" + ci,              crgName);
-                        params.put("CRGROUP_" + ci + "_GROUPS",  String.join(",", crGroups));
-                        params.put("CRGROUP_" + ci + "_NODES",   String.join(",", crNodes));
-                        params.put("CRGROUP_" + ci + "_NODES_COUNT", String.valueOf(crNodes.size()));
-                        ci++;
-                    }
-                    params.put("TOTAL_CRGROUPS_COUNT", String.valueOf(crGroupToGroupNodes.size()));
-
-                    // GROUP-level parameters (across all CRGROUPs — unique groups)
-                    int gi = 1;
-                    for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet()) {
-                        params.put("GROUP_" + gi,             ge.getKey());
-                        params.put("GROUP_" + gi + "_VALUES", String.join(",", ge.getValue()));
-                        gi++;
-                    }
-                    params.put("TOTAL_GROUPS_COUNT", String.valueOf(groupToNodes.size()));
-
-                    // NODE-level parameters (all nodes across all groups)
-                    List<String> allNodes = new ArrayList<>();
-                    for (List<String> ns : groupToNodes.values()) allNodes.addAll(ns);
-                    for (int i = 0; i < allNodes.size(); i++) {
-                        String node   = allNodes.get(i);
-                        String niamId = niamMap.get(node);
-                        params.put("NODE_" + (i + 1), node);
-                        if (niamId != null) params.put("NIAM_ID_" + (i + 1), niamId);
-                    }
-                    params.put("TOTAL_NODES_COUNT",  String.valueOf(allNodes.size()));
-                    params.put("CHILD_ORDERS_COUNT", String.valueOf(crGroupToGroupNodes.size()));
-
-                } else if (isGroupMode) {
-                    // GROUP mode (no CRGROUP): one entry per node across all groups
-                    log.info("GROUP_MAP={}", formatGroupMap(groupToNodes));
-                    List<String> allNodes = new ArrayList<>();
-                    for (List<String> ns : groupToNodes.values()) allNodes.addAll(ns);
-
-                    for (int i = 0; i < allNodes.size(); i++) {
-                        String node   = allNodes.get(i);
-                        String niamId = niamMap.get(node);
-                        params.put("NODE_" + (i + 1), node);
-                        if (niamId != null) params.put("NIAM_ID_" + (i + 1), niamId);
-                    }
-                    params.put("TOTAL_NODES_COUNT",  String.valueOf(allNodes.size()));
-                    params.put("CHILD_ORDERS_COUNT", String.valueOf(allNodes.size()));
-
-                    int gi = 1;
-                    for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet()) {
-                        params.put("GROUP_" + gi,            ge.getKey());
-                        params.put("GROUP_" + gi + "_VALUES", String.join(",", ge.getValue()));
-                        gi++;
-                    }
-                    params.put("TOTAL_GROUPS_COUNT", String.valueOf(groupToNodes.size()));
-                } else {
-                    // No-Index NODE mode: derive nodes from INDEX data sheet or NODE_ID sheet
-                    Map<String, String> nodeToCrGroup = new LinkedHashMap<>();
-                    for (String sheetName : store.getAvailableSheets()) {
-                        if (sheetName.replace("_", "").equalsIgnoreCase("index")) {
-                            com.nokia.ciq.reader.model.CiqSheet idxSheet = store.getSheet(sheetName);
-                            if (idxSheet != null) {
-                                for (com.nokia.ciq.reader.model.CiqRow r : idxSheet.getRows()) {
-                                    String n  = r.get("Node");
-                                    String cg = r.get("CRGroup");
-                                    if (n != null && !n.trim().isEmpty()) {
-                                        nodeToCrGroup.put(n.trim(), cg != null ? cg.trim() : "");
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                    }
-
-                    Set<String> nodes = !nodeToCrGroup.isEmpty()
-                            ? new java.util.LinkedHashSet<>(nodeToCrGroup.keySet())
-                            : new java.util.LinkedHashSet<>(niamMap.keySet());
-
-                    int ni = 1;
-                    int childCount = 0;
-                    for (String node : nodes) {
-                        String niamId = niamMap.get(node);
-                        params.put("NODE_" + ni, node);
-                        if (niamId != null) params.put("NIAM_ID_" + ni, niamId);
-                        ni++;
-                        childCount++;
-                    }
-                    params.put("TOTAL_NODES_COUNT",  String.valueOf(nodes.size()));
-                    params.put("CHILD_ORDERS_COUNT", String.valueOf(childCount));
-                }
+            if (isCRGroupMode) {
+                // CRGROUP mode: CR_LIST and CR_COUNT only — email is embedded per CR in the JSON
+                log.info("CRGROUP_MAP={}", formatCRGroupMap(crGroupToGroupNodes));
+                Map<String, String> params = new LinkedHashMap<>();
+                List<String> crList = new ArrayList<>(crGroupToGroupNodes.keySet());
+                params.put("CR_LIST",  String.join(",", crList));
+                params.put("CR_COUNT", String.valueOf(crList.size()));
                 report.setParameters(params);
+            } else {
+                // NODE / GROUP mode: populate from index entries
+                report.populateGroupingSummary(index);
             }
 
             // Log every parameter
