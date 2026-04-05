@@ -26,6 +26,9 @@ public class InMemoryCiqDataStore implements CiqDataStore {
     /** Raw NODE_ID sheet rows — available for column-rule validation, not a data table. */
     private CiqSheet rawNodeIdSheet;
 
+    /** Raw USER_ID sheet rows — available for column-rule validation and CR_EMAIL_ID_LIST. */
+    private CiqSheet rawUserIdSheet;
+
     InMemoryCiqDataStore(CiqIndex index, Map<String, CiqSheet> sheets) {
         this.index  = index;
         this.sheets = sheets;
@@ -36,6 +39,9 @@ public class InMemoryCiqDataStore implements CiqDataStore {
 
     public CiqSheet getRawNodeIdSheet() { return rawNodeIdSheet; }
     public void     setRawNodeIdSheet(CiqSheet s) { this.rawNodeIdSheet = s; }
+
+    public CiqSheet getRawUserIdSheet() { return rawUserIdSheet; }
+    public void     setRawUserIdSheet(CiqSheet s) { this.rawUserIdSheet = s; }
 
 
     @Override

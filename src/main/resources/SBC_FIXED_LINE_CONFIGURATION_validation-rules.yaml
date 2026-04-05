@@ -23,8 +23,11 @@ indexSheet:
     Tables:
       required: true
 
-# Validate columns in the NODE_ID sheet
+# NODE_ID sheet: name, key column names, and column-level validation rules
 nodeIdSheet:
+  name:       Node_ID
+  nodeColumn: Node
+  niamColumn: NIAM
   columns:
     Node:
       required: true

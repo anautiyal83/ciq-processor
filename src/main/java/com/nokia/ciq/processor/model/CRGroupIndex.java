@@ -29,6 +29,8 @@ public class CRGroupIndex {
     private String nodeType;
     private String activity;
     private String crGroup;
+    /** Email address of the user responsible for this CR (from User_ID sheet). */
+    private String email;
     private List<GroupEntry> groups = new ArrayList<>();
 
     // -------------------------------------------------------------------------
@@ -40,6 +42,8 @@ public class CRGroupIndex {
         private String group;
         private List<String> nodes       = new ArrayList<>();
         private Map<String, String> niamMapping = new LinkedHashMap<>();
+        /** Table name → list of row data maps (all rows belonging to this group). */
+        private Map<String, List<Map<String, String>>> tableData = new LinkedHashMap<>();
 
         public String getGroup()                          { return group; }
         public void   setGroup(String group)              { this.group = group; }
@@ -49,6 +53,9 @@ public class CRGroupIndex {
 
         public Map<String, String> getNiamMapping()                      { return niamMapping; }
         public void                setNiamMapping(Map<String, String> m) { this.niamMapping = m; }
+
+        public Map<String, List<Map<String, String>>> getTableData()                                       { return tableData; }
+        public void                                   setTableData(Map<String, List<Map<String, String>>> d) { this.tableData = d; }
     }
 
     // -------------------------------------------------------------------------
@@ -63,6 +70,9 @@ public class CRGroupIndex {
 
     public String getCrGroup()                        { return crGroup; }
     public void   setCrGroup(String crGroup)          { this.crGroup = crGroup; }
+
+    public String getEmail()                          { return email; }
+    public void   setEmail(String email)              { this.email = email; }
 
     public List<GroupEntry> getGroups()               { return groups; }
     public void             setGroups(List<GroupEntry> groups) { this.groups = groups; }

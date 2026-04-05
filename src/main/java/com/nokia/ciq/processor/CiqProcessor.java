@@ -1,10 +1,8 @@
 package com.nokia.ciq.processor;
 
 import com.nokia.ciq.validator.model.ValidationReport;
-import com.nokia.ciq.validator.report.ReportFormat;
 
 import java.io.IOException;
-import java.util.List;
 
 /**
  * Contract for the CIQ Processor.
@@ -27,12 +25,10 @@ public interface CiqProcessor {
      * @param activity         activity name, e.g. {@code "FIXED_LINE_CONFIGURATION"}
      * @param rulesFilePath    absolute path to the YAML validation-rules file
      * @param outputDir        directory where validation reports are written
-     * @param formats          report formats to produce (JSON, HTML, MSEXCEL)
+     * @param formatCsv        comma-separated report formats (JSON, HTML, MSEXCEL);
+     *                         {@code null} defaults to all three
      * @param mopJsonOutputDir optional directory for child-order–segregated JSON files;
      *                         written only when validation passes; {@code null} = skip
-     * @param reportFileName   base name (without extension) for the report files, e.g.
-     *                         {@code "my-validation-report"}; {@code null} defaults to
-     *                         {@code "<nodeType>_<activity>_validation-report"}
      * @return the completed {@link ValidationReport}
      * @throws IOException if the Excel file or rules file cannot be read,
      *                     or if any report file cannot be written
@@ -42,7 +38,6 @@ public interface CiqProcessor {
                              String activity,
                              String rulesFilePath,
                              String outputDir,
-                             List<ReportFormat> formats,
-                             String mopJsonOutputDir,
-                             String reportFileName) throws IOException;
+                             String formatCsv,
+                             String mopJsonOutputDir) throws IOException;
 }

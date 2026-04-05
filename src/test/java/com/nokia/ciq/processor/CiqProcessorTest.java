@@ -1,14 +1,17 @@
 package com.nokia.ciq.processor;
 
 import com.nokia.ciq.validator.model.ValidationReport;
-import com.nokia.ciq.validator.report.ReportFormat;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.junit.Assume;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -35,12 +38,9 @@ public class CiqProcessorTest {
     public void testProcessAllFormats() throws Exception {
         new File(OUTPUT_DIR).mkdirs();
 
-        List<ReportFormat> formats = Arrays.asList(
-                ReportFormat.JSON, ReportFormat.HTML, ReportFormat.MSEXCEL);
-
         ValidationReport report = new CiqProcessorImpl().process(
                 CIQ_FILE, NODE_TYPE, ACTIVITY, RULES_FILE,
-                OUTPUT_DIR, formats, MOP_JSON_DIR, null);
+                OUTPUT_DIR, "JSON,HTML,MSEXCEL", MOP_JSON_DIR);
 
         assertNotNull("Report must not be null", report);
         assertNotNull("Status must not be null", report.getStatus());
@@ -69,7 +69,7 @@ public class CiqProcessorTest {
 
         ValidationReport report = new CiqProcessorImpl().process(
                 CIQ_FILE, NODE_TYPE, ACTIVITY, RULES_FILE,
-                OUTPUT_DIR, Arrays.asList(ReportFormat.JSON), MOP_JSON_DIR, null);
+                OUTPUT_DIR, "JSON", MOP_JSON_DIR);
 
         if (!"PASSED".equals(report.getStatus())) {
             System.out.println("Validation did not pass — child-order segregation skipped by processor");
@@ -82,19 +82,13 @@ public class CiqProcessorTest {
         assertNotNull("mop-json-dir should exist", subDirs);
         assertTrue("At least one child-order subfolder expected", subDirs.length > 0);
 
-        // Each subfolder must contain an index JSON
+        // Each subfolder must contain at least one JSON
         for (String subDir : subDirs) {
             File folder = new File(mopRoot, subDir);
             String[] jsonFiles = folder.list((d, n) -> n.endsWith(".json"));
             assertNotNull(jsonFiles);
             assertTrue("Child-order folder '" + subDir + "' should contain JSON files",
                     jsonFiles.length > 0);
-
-            boolean hasIndex = false;
-            for (String f : jsonFiles) {
-                if (f.contains("index")) { hasIndex = true; break; }
-            }
-            assertTrue("Child-order folder '" + subDir + "' should contain an index JSON", hasIndex);
         }
 
         System.out.println("Child-order folders: " + Arrays.toString(subDirs));
@@ -132,7 +126,7 @@ public class CiqProcessorTest {
     private static final String MRF_RULES_FILE =
             "src/main/resources/MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml";
     private static final String MRF_OUTPUT_DIR   = "target/mrf-processor-output";
-    private static final String MRF_MOP_JSON_DIR = "target/mrf-processor-mop-json";
+    private static final String MRF_MOP_JSON_DIR = "../mop-generator-utility/target/mrf-mop-json";
     private static final String MRF_NODE_TYPE    = "MRF";
     private static final String MRF_ACTIVITY     = "ANNOUNCEMENT_LOADING";
 
@@ -146,12 +140,9 @@ public class CiqProcessorTest {
         new File(MRF_OUTPUT_DIR).mkdirs();
         new File(MRF_MOP_JSON_DIR).mkdirs();
 
-        List<ReportFormat> formats = Arrays.asList(
-                ReportFormat.JSON, ReportFormat.HTML, ReportFormat.MSEXCEL);
-
         ValidationReport report = new CiqProcessorImpl().process(
                 MRF_CIQ_FILE, MRF_NODE_TYPE, MRF_ACTIVITY, MRF_RULES_FILE,
-                MRF_OUTPUT_DIR, formats, MRF_MOP_JSON_DIR, null);
+                MRF_OUTPUT_DIR, "JSON,HTML,MSEXCEL", MRF_MOP_JSON_DIR);
 
         assertNotNull("Report must not be null", report);
         assertNotNull("Status must not be null", report.getStatus());
@@ -188,17 +179,75 @@ public class CiqProcessorTest {
                     File folder = new File(mopRoot, subDir);
                     String[] jsonFiles = folder.list((d, n) -> n.endsWith(".json"));
                     assertNotNull(jsonFiles);
-                    assertTrue("Group folder '" + subDir + "' should contain JSON files",
-                            jsonFiles.length > 0);
-                    // Check for GroupIndex file
-                    boolean hasIndex = false;
-                    for (String f : jsonFiles) {
-                        if (f.contains("index")) { hasIndex = true; break; }
-                    }
-                    assertTrue("Group folder '" + subDir + "' should contain an index JSON", hasIndex);
+                    // Each CRGROUP folder contains exactly one JSON (the CRGroupIndex with embedded data)
+                    assertEquals("Group folder '" + subDir + "' should contain exactly one JSON",
+                            1, jsonFiles.length);
                 }
             }
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // ciq-generate mode
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testCiqGenerate() throws Exception {
+        Assume.assumeTrue("MRF rules file not found — skipping generate test",
+                new File(MRF_RULES_FILE).exists());
+
+        String outputDir = "target/ciq-generate-test";
+        new File(outputDir).mkdirs();
+        String expectedFile = outputDir + "/" + MRF_NODE_TYPE + "_" + MRF_ACTIVITY + "_CIQ.xlsx";
+
+        // Generate via CLI entry point
+        int rc = CiqProcessorMain.run(new String[]{
+                "--mode",      "ciq-generate",
+                "--node-type", MRF_NODE_TYPE,
+                "--activity",  MRF_ACTIVITY,
+                "--rules",     MRF_RULES_FILE,
+                "--output",    outputDir
+        });
+        assertEquals("ciq-generate should return 0", 0, rc);
+
+        File generated = new File(expectedFile);
+        assertTrue("Template file must be created", generated.exists());
+        assertTrue("Template file must not be empty", generated.length() > 0);
+
+        // Open the workbook and verify sheet names + header rows
+        try (FileInputStream fis = new FileInputStream(generated);
+             Workbook wb = WorkbookFactory.create(fis)) {
+
+            // Expect at least: Index, ANNOUNCEMENT_FILES, Node_ID/Node_Details, User_ID
+            assertTrue("Expected at least 3 sheets", wb.getNumberOfSheets() >= 3);
+
+            // Every sheet must have a header row (row 0) with at least one cell
+            for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                Sheet sheet = wb.getSheetAt(i);
+                Row header = sheet.getRow(0);
+                assertNotNull("Sheet '" + sheet.getSheetName() + "' must have a header row", header);
+                assertTrue("Header row must have at least one cell",
+                        header.getLastCellNum() > 0);
+                System.out.println("  Sheet '" + sheet.getSheetName()
+                        + "' headers: " + header.getLastCellNum() + " column(s)");
+            }
+
+            // Index sheet must be first
+            assertEquals("First sheet must be 'Index'", "Index", wb.getSheetAt(0).getSheetName());
+        }
+
+        System.out.println("Template generated: " + generated.getAbsolutePath()
+                + " (" + generated.length() + " bytes)");
+    }
+
+    @Test
+    public void testCiqGenerateMissingArgs() {
+        int rc = CiqProcessorMain.run(new String[]{
+                "--mode",      "ciq-generate",
+                "--node-type", MRF_NODE_TYPE
+                // missing --activity and --rules
+        });
+        assertEquals("Missing required args should return exit code 1", 1, rc);
     }
 
     @Test

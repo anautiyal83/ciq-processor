@@ -12,6 +12,7 @@ import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.model.NodeEntry;
 import com.nokia.ciq.reader.util.FileNamingUtil;
 import com.nokia.ciq.validator.CiqValidationEngine;
+import com.nokia.ciq.validator.config.UserIdSheetConfig;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.ValidationRulesLoader;
 import com.nokia.ciq.validator.model.ValidationReport;
@@ -35,9 +36,10 @@ import java.util.Set;
  *
  * <p>Pipeline:
  * <ol>
+ *   <li>{@link ValidationRulesLoader} loads YAML validation rules (first, so that the
+ *       NODE_ID sheet name and column names are available for the reader).</li>
  *   <li>{@link InMemoryExcelReader} reads the CIQ Excel workbook into an
- *       {@link InMemoryCiqDataStore} — no JSON files written.</li>
- *   <li>{@link ValidationRulesLoader} loads YAML validation rules.</li>
+ *       {@link InMemoryCiqDataStore} using the configured NODE_ID sheet settings — no JSON files written.</li>
  *   <li>{@link CiqValidationEngine} validates the in-memory data.</li>
  *   <li>Reports are written in the requested formats (JSON, HTML, Excel).</li>
  *   <li>If validation passed and {@code mopJsonOutputDir} is provided, child-order–
@@ -64,9 +66,11 @@ public class CiqProcessorImpl implements CiqProcessor {
                                     String activity,
                                     String rulesFilePath,
                                     String outputDir,
-                                    List<ReportFormat> formats,
-                                    String mopJsonOutputDir,
-                                    String reportFileName) throws IOException {
+                                    String formatCsv,
+                                    String mopJsonOutputDir) throws IOException {
+
+        List<ReportFormat> formats = ReportFormat.parseList(
+                formatCsv != null ? formatCsv : "JSON,HTML,MSEXCEL");
 
         log.info("=== CIQ Processor ===");
         log.info("CIQ file:  {}", ciqFilePath);
@@ -77,21 +81,20 @@ public class CiqProcessorImpl implements CiqProcessor {
         File outDir = new File(outputDir);
         if (!outDir.exists()) outDir.mkdirs();
 
-        // Step 1: Read Excel into memory
-        InMemoryExcelReader reader = new InMemoryExcelReader();
-        InMemoryCiqDataStore store = reader.read(ciqFilePath, nodeType, activity);
-
-        // Step 2: Load validation rules
+        // Step 1: Load validation rules (needed first to configure NODE_ID sheet reading)
         ValidationRulesConfig rules = new ValidationRulesLoader().load(rulesFilePath);
+
+        // Step 2: Read Excel into memory using configured NODE_ID sheet name and columns
+        InMemoryExcelReader reader = new InMemoryExcelReader();
+        InMemoryCiqDataStore store = reader.read(ciqFilePath, nodeType, activity, rules);
 
         // Step 3: Validate
         ValidationReport report =
                 new CiqValidationEngine(store, rules).validate(nodeType, activity);
 
         // Step 4: Write reports
-        String baseName = (reportFileName != null && !reportFileName.trim().isEmpty())
-                ? reportFileName.trim()
-                : nodeType + "_" + activity + "_validation-report";
+        String baseName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + "_VALIDATION_REPORT";
+        report.getParameters().put("REPORT_FILENAME", outputDir + "/" + baseName);
         for (ReportFormat fmt : formats) {
             String path = new File(outDir, baseName + "." + fmt.extension()).getAbsolutePath();
             switch (fmt) {
@@ -126,7 +129,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                 // Suppressed when groupByColumnName=GROUP (forceGroup overrides auto-detection).
                 log.info("CRGROUP mode (groupByColumnName={}) — segregating into CRGROUP folders: {}",
                         groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
-                segregateCRGroupBased(store, crGroupData, nodeType, activity, mopJsonOutputDir);
+                segregateCRGroupBased(store, crGroupData, nodeType, activity, mopJsonOutputDir, rules);
             } else {
                 boolean useGroupMode = forceGroup || (!forceNode && !groupToNodes.isEmpty());
                 if (useGroupMode && !groupToNodes.isEmpty()) {
@@ -246,7 +249,8 @@ public class CiqProcessorImpl implements CiqProcessor {
                                        Map<String, Map<String, List<String>>> crGroupToGroupNodes,
                                        String nodeType,
                                        String activity,
-                                       String mopJsonOutputDir) throws IOException {
+                                       String mopJsonOutputDir,
+                                       ValidationRulesConfig rules) throws IOException {
 
         CiqIndex index = store.getIndex();
 
@@ -254,6 +258,19 @@ public class CiqProcessorImpl implements CiqProcessor {
         for (String name : store.getAvailableSheets()) {
             if (!name.replace("_", "").equalsIgnoreCase("index")) {
                 dataSheets.add(name);
+            }
+        }
+
+        // Build CRGROUP → email map from User_ID sheet
+        Map<String, String> crGroupToEmail = new LinkedHashMap<>();
+        UserIdSheetConfig userIdCfg = rules != null ? rules.getUserIdSheet() : null;
+        if (userIdCfg != null && store.getRawUserIdSheet() != null) {
+            for (CiqRow row : store.getRawUserIdSheet().getRows()) {
+                String crg   = row.get(userIdCfg.getCrGroupColumn());
+                String email = row.get(userIdCfg.getEmailColumn());
+                if (crg != null && !crg.trim().isEmpty() && email != null && !email.trim().isEmpty()) {
+                    crGroupToEmail.put(crg.trim(), email.trim());
+                }
             }
         }
 
@@ -269,6 +286,7 @@ public class CiqProcessorImpl implements CiqProcessor {
             crGroupIndex.setNodeType(nodeType);
             crGroupIndex.setActivity(activity);
             crGroupIndex.setCrGroup(crGroup);
+            crGroupIndex.setEmail(crGroupToEmail.get(crGroup));
 
             List<CRGroupIndex.GroupEntry> groupEntries = new ArrayList<>();
 
@@ -283,34 +301,28 @@ public class CiqProcessorImpl implements CiqProcessor {
                     if (neid != null) niamSubset.put(node, neid);
                 }
 
-                CRGroupIndex.GroupEntry ge = new CRGroupIndex.GroupEntry();
-                ge.setGroup(group);
-                ge.setNodes(nodeList);
-                ge.setNiamMapping(niamSubset);
-                groupEntries.add(ge);
-
-                // Per-GROUP data files (GROUP used as postfix to match FileNamingUtil convention)
+                // Collect table rows for this group directly into tableData (no separate files)
+                Map<String, List<Map<String, String>>> tableData = new LinkedHashMap<>();
                 for (String tableName : dataSheets) {
                     CiqSheet sheet = store.getSheet(tableName);
                     if (sheet == null) {
                         log.warn("  [{}/{}] table '{}' not found — skipping", crGroup, group, tableName);
                         continue;
                     }
-
-                    CiqSheet filtered = new CiqSheet();
-                    filtered.setSheetName(sheet.getSheetName());
-                    filtered.setColumns(sheet.getColumns());
-                    List<CiqRow> filteredRows = new ArrayList<>();
+                    List<Map<String, String>> rows = new ArrayList<>();
                     for (CiqRow row : sheet.getRows()) {
-                        if (group.equals(row.get("Group"))) filteredRows.add(row);
+                        if (group.equals(row.get("Group"))) rows.add(row.getData());
                     }
-                    filtered.setRows(filteredRows);
-
-                    String sheetFileName = FileNamingUtil.sheetFileName(nodeType, activity, tableName, group);
-                    mapper.writeValue(new File(crGroupDir, sheetFileName), filtered);
-                    log.info("  [{}/{}] table '{}' ({} rows) → {}",
-                            crGroup, group, tableName, filteredRows.size(), sheetFileName);
+                    tableData.put(tableName, rows);
+                    log.info("  [{}/{}] table '{}' — {} row(s) embedded", crGroup, group, tableName, rows.size());
                 }
+
+                CRGroupIndex.GroupEntry ge = new CRGroupIndex.GroupEntry();
+                ge.setGroup(group);
+                ge.setNodes(nodeList);
+                ge.setNiamMapping(niamSubset);
+                ge.setTableData(tableData);
+                groupEntries.add(ge);
             }
 
             crGroupIndex.setGroups(groupEntries);

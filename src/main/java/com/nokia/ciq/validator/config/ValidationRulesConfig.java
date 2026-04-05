@@ -73,11 +73,20 @@ public class ValidationRulesConfig {
     private SheetRules indexSheet;
 
     /**
-     * Optional column-level validation rules for the NODE_ID sheet.
-     * When present, every row in the Node_ID sheet is validated against these rules
-     * using the same cell-validator chain as data sheets.
+     * Configuration for the NODE_ID sheet: sheet name, key column names, and
+     * optional column-level validation rules.
+     * When present, every row in the Node_ID sheet is validated against the column
+     * rules using the same cell-validator chain as data sheets.
      */
-    private SheetRules nodeIdSheet;
+    private NodeIdSheetConfig nodeIdSheet;
+
+    /**
+     * Configuration for the USER_ID sheet: sheet name, CRGROUP column name, EMAIL column name,
+     * and optional column-level validation rules.
+     * Maps each CRGROUP to the responsible user's email address.
+     * When present, every row is validated and the EMAIL values are used for CR_EMAIL_ID_LIST.
+     */
+    private UserIdSheetConfig userIdSheet;
 
     /** Per-sheet column rules. Key = sheet name (e.g. "CRFTargetList"). */
     private Map<String, SheetRules> sheets = new LinkedHashMap<>();
@@ -94,8 +103,11 @@ public class ValidationRulesConfig {
     public SheetRules getIndexSheet() { return indexSheet; }
     public void setIndexSheet(SheetRules indexSheet) { this.indexSheet = indexSheet; }
 
-    public SheetRules getNodeIdSheet() { return nodeIdSheet; }
-    public void setNodeIdSheet(SheetRules nodeIdSheet) { this.nodeIdSheet = nodeIdSheet; }
+    public NodeIdSheetConfig getNodeIdSheet() { return nodeIdSheet; }
+    public void setNodeIdSheet(NodeIdSheetConfig nodeIdSheet) { this.nodeIdSheet = nodeIdSheet; }
+
+    public UserIdSheetConfig getUserIdSheet() { return userIdSheet; }
+    public void setUserIdSheet(UserIdSheetConfig userIdSheet) { this.userIdSheet = userIdSheet; }
 
     public Map<String, SheetRules> getSheets() { return sheets; }
     public void setSheets(Map<String, SheetRules> sheets) { this.sheets = sheets; }
