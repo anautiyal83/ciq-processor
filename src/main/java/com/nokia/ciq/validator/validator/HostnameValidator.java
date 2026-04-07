@@ -10,9 +10,10 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Validates {@code type: hostname} columns (RFC 1123).
+ * Validates {@code type: hostname} (RFC 1123) and {@code type: fqdn} columns
+ * (merged from FqdnValidator).
  *
- * <p>Rules:
+ * <p>Hostname rules:
  * <ul>
  *   <li>Each label: letters, digits, and hyphens; cannot start or end with a hyphen</li>
  *   <li>Each label: max 63 characters</li>
@@ -20,8 +21,11 @@ import java.util.regex.Pattern;
  *   <li>Labels separated by dots; must have at least one label</li>
  * </ul>
  *
- * <p>If {@code pattern} is set on the rule the built-in check is skipped —
- * {@link PatternValidator} handles the custom pattern instead.
+ * <p>FQDN rules (same per-label constraints plus):
+ * <ul>
+ *   <li>Must contain at least one dot and end with a recognised TLD (2+ alpha chars)</li>
+ *   <li>Optional trailing dot is accepted (absolute FQDN)</li>
+ * </ul>
  *
  * <p>Blank values are silently skipped.
  *
@@ -29,6 +33,9 @@ import java.util.regex.Pattern;
  * <pre>
  * NODE_HOSTNAME:
  *   type: hostname
+ *
+ * REMOTE_FQDN:
+ *   type: fqdn
  * </pre>
  */
 public class HostnameValidator implements CellValidator {
@@ -36,21 +43,45 @@ public class HostnameValidator implements CellValidator {
     // Each label: 1 char OR starts/ends with alnum, middle may have hyphens; max 63
     private static final Pattern HOSTNAME = Pattern.compile(
             "^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?)"
-            + "(?:\\.(?:[a-zA-Z0-9](?:[a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?))* $"
-                    .trim());
+            + "(?:\\.(?:[a-zA-Z0-9](?:[a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?))*$");
+
+    // Must have at least one label + dot + TLD (>=2 alpha), optional trailing dot
+    private static final Pattern FQDN = Pattern.compile(
+            "^(?:[a-zA-Z0-9](?:[a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)"
+            + "+[a-zA-Z]{2,}\\.?$");
 
     @Override
     public List<ValidationError> validate(CiqRow row, String colName, String value,
                                           ColumnRule rule, CiqIndex index) {
-        if (!rule.isHostnameType()) return Collections.emptyList();
+        if (!rule.isHostnameType() && !rule.isFqdnType()) return Collections.emptyList();
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
-        if (rule.getPattern() != null) return Collections.emptyList();
 
         String v = value.trim();
+
+        // --- FQDN type ---
+        if (rule.isFqdnType()) {
+            if (v.length() > 253) {
+                return Collections.singletonList(new ValidationError(
+                        row.getRowNumber(), colName, value,
+                        CellValidator.msg(rule.getMessages(), "type",
+                            "FQDN '" + value + "' exceeds maximum length of 253 characters")));
+            }
+            if (FQDN.matcher(v).matches()) {
+                return Collections.emptyList();
+            }
+            return Collections.singletonList(new ValidationError(
+                    row.getRowNumber(), colName, value,
+                    CellValidator.msg(rule.getMessages(), "type",
+                        "Value '" + value + "' is not a valid FQDN; "
+                        + "expected format: host.domain.tld (e.g. router.corp.nokia.com)")));
+        }
+
+        // --- Hostname type ---
         if (v.length() > 253) {
             return Collections.singletonList(new ValidationError(
                     row.getRowNumber(), colName, value,
-                    "Hostname '" + value + "' exceeds maximum length of 253 characters"));
+                    CellValidator.msg(rule.getMessages(), "type",
+                        "Hostname '" + value + "' exceeds maximum length of 253 characters")));
         }
         if (HOSTNAME.matcher(v).matches()) {
             return Collections.emptyList();
@@ -58,7 +89,8 @@ public class HostnameValidator implements CellValidator {
 
         return Collections.singletonList(new ValidationError(
                 row.getRowNumber(), colName, value,
-                "Value '" + value + "' is not a valid hostname (RFC 1123): "
-                + "use letters, digits, and hyphens; labels max 63 chars; no leading/trailing hyphen"));
+                CellValidator.msg(rule.getMessages(), "type",
+                    "Value '" + value + "' is not a valid hostname (RFC 1123): "
+                    + "use letters, digits, and hyphens; labels max 63 chars; no leading/trailing hyphen")));
     }
 }

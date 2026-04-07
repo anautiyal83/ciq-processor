@@ -32,6 +32,9 @@ public class ColumnMessages {
     /** Message when decimal precision exceeds the configured limit. */
     private String precision;
 
+    /** Generic message when value fails type validation (invalid_type, invalid_format, etc.). */
+    private String type;
+
     public String getRequired() { return required; }
     public void setRequired(String required) { this.required = required; }
 
@@ -55,4 +58,7 @@ public class ColumnMessages {
 
     public String getPrecision() { return precision; }
     public void setPrecision(String precision) { this.precision = precision; }
+
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 }

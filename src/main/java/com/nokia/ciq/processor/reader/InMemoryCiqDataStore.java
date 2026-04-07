@@ -26,8 +26,14 @@ public class InMemoryCiqDataStore implements CiqDataStore {
     /** Raw NODE_ID sheet rows — available for column-rule validation, not a data table. */
     private CiqSheet rawNodeIdSheet;
 
-    /** Raw USER_ID sheet rows — available for column-rule validation and CR_EMAIL_ID_LIST. */
-    private CiqSheet rawUserIdSheet;
+    /**
+     * All sheet names present in the original Excel workbook, in workbook order.
+     * Used by {@link com.nokia.ciq.validator.validator.SheetRefValidator} so that
+     * {@code sheetRef: true} validates against the full workbook contents rather than
+     * just the subset of sheets that were loaded as data tables.
+     */
+    private List<String> allWorkbookSheetNames = new ArrayList<>();
+
 
     InMemoryCiqDataStore(CiqIndex index, Map<String, CiqSheet> sheets) {
         this.index  = index;
@@ -40,8 +46,9 @@ public class InMemoryCiqDataStore implements CiqDataStore {
     public CiqSheet getRawNodeIdSheet() { return rawNodeIdSheet; }
     public void     setRawNodeIdSheet(CiqSheet s) { this.rawNodeIdSheet = s; }
 
-    public CiqSheet getRawUserIdSheet() { return rawUserIdSheet; }
-    public void     setRawUserIdSheet(CiqSheet s) { this.rawUserIdSheet = s; }
+    public List<String> getAllWorkbookSheetNames() { return allWorkbookSheetNames; }
+    public void setAllWorkbookSheetNames(List<String> names) { this.allWorkbookSheetNames = names; }
+
 
 
     @Override
@@ -49,10 +56,20 @@ public class InMemoryCiqDataStore implements CiqDataStore {
         return index;
     }
 
-    /** Returns the in-memory sheet, or {@code null} if the table was not found in the workbook. */
+    /**
+     * Returns the in-memory sheet, or {@code null} if the table was not found in the workbook.
+     *
+     * <p>When {@code sheetName} is not in the main data-sheets map, falls back to the raw
+     * special sheets (Index, Node_ID) so that workbook_rules and crossRef validators can
+     * reference those sheets by name (e.g. {@code Index.CRGroup}).
+     */
     @Override
     public CiqSheet getSheet(String sheetName) {
-        return sheets.get(sheetName);
+        CiqSheet s = sheets.get(sheetName);
+        if (s != null) return s;
+        if ("Index".equalsIgnoreCase(sheetName) && rawIndexSheet != null)  return rawIndexSheet;
+        if ("Node_ID".equalsIgnoreCase(sheetName) && rawNodeIdSheet != null) return rawNodeIdSheet;
+        return null;
     }
 
     @Override

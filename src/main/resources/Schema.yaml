@@ -4,37 +4,39 @@ version: "1.0"
 # Global settings
 # ---------------------------------------------------------------------------
 settings:
-  headerRow: 0
-  dataStartRow: 1
-  trimCellValues: true
-  ignoreBlankRows: true
+  headerRow: 0              # 0-based row index of the header row
+  dataStartRow: 1           # 0-based row index where data rows begin
+  trimCellValues: true      # strip leading/trailing whitespace from each cell
+  ignoreBlankRows: true     # skip rows where every cell is blank
   caseSensitiveHeaders: false
   caseSensitiveValues: true
 
+
 # ---------------------------------------------------------------------------
-# Cross-sheet rules
+# Cross-sheet (workbook-level) rules
 # ---------------------------------------------------------------------------
 workbook_rules:
 
-  # every value in source must exist in target
+  # every value in source must exist in target (subset)
   - subset:
       from: <SheetName>.<ColumnName>
-      to: <SheetName>.<ColumnName>
+      to:   <SheetName>.<ColumnName>
 
-  # source must contain all values from target
+  # source must contain all values from target (superset)
   - superset:
       from: <SheetName>.<ColumnName>
-      to: <SheetName>.<ColumnName>
+      to:   <SheetName>.<ColumnName>
 
-  # value must not exist in both columns
+  # values must not appear in both columns simultaneously
   - unique:
       columns: [<SheetName>.<ColumnName>, <SheetName>.<ColumnName>]
 
   # every row in source must match a row in target
   - match:
       from: <SheetName>.<ColumnName>
-      to: <SheetName>.<ColumnName>
-      
+      to:   <SheetName>.<ColumnName>
+
+
 # ---------------------------------------------------------------------------
 # Custom validator registry
 # ---------------------------------------------------------------------------
@@ -50,168 +52,144 @@ sheets:
 
   <SheetName>:
     required: true
-    aliases: []
+    aliases: []               # alternative sheet names accepted during validation
     settings:
-      headerRow: 0          # override any global setting here
+      headerRow: 0            # override any global setting for this sheet only
+      ignoreBlankRows: false  # include blank rows in the middle of data
 
     columns:
 
-      # string column
+      # ── string column ────────────────────────────────────────────────────
       <ColumnName>:
         required: true
         type: string
         aliases: []
         unique: false
+        ignoreCase: false     # case-insensitive comparison for allowedValues / values
         minLength: 1
         maxLength: 100
         pattern: "<regex>"
-        ignoreCase: false
+        allowedValues: [<value>, <value>]    # enforced set of allowed strings
         ref: <SheetName>.<ColumnName>
         validator: <validatorName>
         messages:
-          required: "<message>"
-          minLength: "<message>"
-          maxLength: "<message>"
-          pattern: "<message>"
+          required:  "<custom message>"
+          minLength: "<custom message>"
+          maxLength: "<custom message>"
+          pattern:   "<custom message>"
+          type:      "<custom message>"      # generic type/format error fallback
 
-      # integer column
+      # ── integer column ───────────────────────────────────────────────────
       <ColumnName>:
         required: true
         type: integer
-        min: 1
-        max: 100
-        values: []
-        ranges:
-          - [<min>, <max>]
+        minValue: 1           # inclusive lower bound
+        maxValue: 100         # inclusive upper bound
+        allowedRanges:        # value must fall within at least one band (OR logic)
+          - { min: <min>, max: <max> }
+          - { min: <min>, max: <max> }
         messages:
-          min: "<message>"
-          max: "<message>"
+          min:  "<custom message>"
+          max:  "<custom message>"
+          type: "<custom message>"
 
-      # decimal column
+      # ── decimal column ───────────────────────────────────────────────────
       <ColumnName>:
         required: true
         type: decimal
-        min: 0.00
-        max: 9999.99
-        precision: 2
+        minDecimal: 0.00
+        maxDecimal: 9999.99
+        precision: 2          # maximum number of decimal places allowed
         messages:
-          precision: "<message>"
+          precision: "<custom message>"
+          type:      "<custom message>"
 
-      # date column
-      <ColumnName>:
-        required: true
-        type: date
-        format: "yyyy-MM-dd"
-        min: "<date>"
-        max: $today
-        messages:
-          format: "<message>"
-          min: "<message>"
-          max: "<message>"
-
-      # time column
-      <ColumnName>:
-        required: false
-        type: time
-        format: "HH:mm:ss"
-        min: "<time>"
-        max: "<time>"
-
-      # datetime column
+      # ── datetime column ──────────────────────────────────────────────────
       <ColumnName>:
         required: false
         type: datetime
-        format: "yyyy-MM-dd HH:mm:ss"
-        min: "<datetime>"
-        max: $now
+        format: "yyyy-MM-dd'T'HH:mm:ss"   # default: yyyy-MM-dd'T'HH:mm:ss
+        messages:
+          format: "<custom message>"
 
-      # boolean column
-      <ColumnName>:
-        required: true
-        type: boolean
-        accept: [true/false]
-
-      # email column
+      # ── email column ─────────────────────────────────────────────────────
       <ColumnName>:
         required: true
         type: email
-        multi: false
+        multi: false          # true = comma-separated list of addresses is allowed
+        messages:
+          type: "<custom message>"
 
-      # phone column
-      <ColumnName>:
-        required: false
-        type: phone
-        pattern: "<regex>"
-
-      # url scheme column
-      <ColumnName>:
-        required: false
-        type: urlScheme
-        values: [http, https]
-
-      # ip column
+      # ── ip column ────────────────────────────────────────────────────────
       <ColumnName>:
         required: false
         type: ip
-        accept: both
+        accepts: both         # ipv4 | ipv6 | both (default: ipv4)
+        messages:
+          type: "<custom message>"
 
-      # mac column
-      <ColumnName>:
-        required: false
-        type: mac
-
-      # cidr column
-      <ColumnName>:
-        required: false
-        type: cidr
-
-      # hostname column
-      <ColumnName>:
-        required: false
-        type: hostname
-
-      # fqdn column
-      <ColumnName>:
-        required: false
-        type: fqdn
-
-      # protocol column
-      <ColumnName>:
-        required: false
-        type: protocol
-        values: [http, https, ssh, ftp]
-
-      # enum column
+      # ── sheetRef column ──────────────────────────────────────────────────
+      # Value must match an existing sheet name in the workbook.
+      # Useful for Index sheets where a column lists table/sheet names.
       <ColumnName>:
         required: true
-        type: enum
-        values: [<value>, <value>, <value>]
+        sheetRef: true
+        sheetRefIgnoreCase: false   # true = "announcement_files" matches "ANNOUNCEMENT_FILES"
+        messages:
+          type: "<custom message>"
 
-      # custom validator column
+      # ── custom validator column ──────────────────────────────────────────
       <ColumnName>:
         required: false
         type: custom
         validator: <validatorName>
 
+
     # -------------------------------------------------------------------------
-    # Row rules
+    # Row rules — applied to every data row in the sheet
+    # -------------------------------------------------------------------------
+    #
+    # Column reference convention (applies to ALL rule types):
+    #   ColumnName              → column in the current sheet (default)
+    #   SheetName.ColumnName    → column in the named sheet
+    #
+    # This notation is valid everywhere a column name appears:
+    # require, forbid, when.column, compare, one_of, only_one, all_or_none, sum, equals.
     # -------------------------------------------------------------------------
     rules:
 
-      # require column when condition is met
+      # require — with when condition
       - require: <ColumnName>
         when:
-          column: <ColumnName>
-          operator: equals
-          value: <value>
+          column: <ColumnName>                   # same sheet
+          operator: equals                       # equals | notEquals | blank | notBlank | contains
+          value: <value>                         # (not used for blank / notBlank)
 
-      # forbid column when condition is met
+      - require: <SheetName>.<ColumnName>
+        when:
+          column: <SheetName>.<ColumnName>       # cross-sheet column in when condition
+          operator: notBlank
+
+
+      # forbid — with when condition
       - forbid: <ColumnName>
         when:
           column: <ColumnName>
           operator: notBlank
 
-      # require with compound condition
+      - forbid: <SheetName>.<ColumnName>
+        when:
+          column: <ColumnName>
+          operator: notBlank
+
+      # require with a numeric comparison condition
+      - require: <ColumnName>
+        when:
+          column: <SheetName>.<ColumnName>       # SheetName optional; defaults to current sheet
+          operator: greaterThan                  # greaterThan | greaterThanOrEquals | lessThan | lessThanOrEquals
+          value: <value>
+
+      # require with compound condition (AND / OR nesting)
       - require: <ColumnName>
         when:
           all:
@@ -219,24 +197,77 @@ sheets:
               operator: equals
               value: <value>
             - any:
-                - column: <ColumnName>
+                - column: <SheetName>.<ColumnName>
                   operator: greaterThan
                   value: <value>
                 - column: <ColumnName>
                   operator: blank
 
-      # cross-column comparison
-      - compare: <ColumnA> >= <ColumnB>
+      # cross-sheet existence check in when (sheet: field)
+      - require: <ColumnName>
+        when:
+          sheet: <SheetName>                     # look up current row's <column> value in this sheet
+          column: <ColumnName>
+          operator: exists                       # exists | notExists
 
-      # at least one of these columns must have a value
-      - one_of: [<ColumnA>, <ColumnB>, <ColumnC>]
+      # cross-column comparison — SheetName optional on both sides
+      # Supported operators: equals, notEquals, greaterThan, greaterThanOrEquals, lessThan, lessThanOrEquals
+      - compare: "<ColumnA> lessThanOrEquals <ColumnB>"
+      - compare: "<SheetA>.<ColumnA> greaterThan <SheetB>.<ColumnB>"
 
-      # exactly one of these columns must have a value
-      - only_one: [<ColumnA>, <ColumnB>]
+      # group presence — SheetName optional in any element
+      - one_of:    [<ColumnA>, <SheetName>.<ColumnB>]
+      - only_one:  [<ColumnA>, <ColumnB>]
+      - all_or_none: [<ColumnA>, <SheetName>.<ColumnB>, <ColumnC>]
 
-      # all columns have a value or none do
-      - all_or_none: [<ColumnA>, <ColumnB>, <ColumnC>]
-
-      # sum of columns must equal target
-      - sum: [<ColumnA>, <ColumnB>]
+      # sum — SheetName optional in any element
+      - sum: [<ColumnA>, <SheetName>.<ColumnB>]
         equals: <ColumnC>
+
+
+# ---------------------------------------------------------------------------
+# Post-validation outputs
+# ---------------------------------------------------------------------------
+# Computed only when validation PASSES.
+# Each entry is added to ValidationReport.parameters and printed to stdout
+# as KEY=VALUE.  The YAML map key is used as the parameter name unless the
+# optional 'name' field overrides it.
+#
+# Supported aggregates:
+#   distinct  — sorted, deduplicated non-blank values joined by 'separator' (default ",")
+#   count     — number of non-blank rows for 'column'; total row count when 'column' is omitted
+#   sum       — numeric sum of 'column' values (non-numeric cells silently ignored)
+# ---------------------------------------------------------------------------
+outputs:
+
+  # Distinct values from a column (comma-separated)
+  <PARAM_NAME>:
+    sheet: <SheetName>
+    column: <ColumnName>
+    aggregate: distinct
+    separator: ","              # optional — defaults to ","
+
+  # Count of non-blank values in a column
+  <PARAM_NAME>:
+    sheet: <SheetName>
+    column: <ColumnName>
+    aggregate: count
+
+  # Total row count for a sheet (column omitted)
+  <PARAM_NAME>:
+    sheet: <SheetName>
+    aggregate: count
+
+  # Numeric sum of a column
+  <PARAM_NAME>:
+    sheet: <SheetName>
+    column: <ColumnName>
+    aggregate: sum
+
+  # Override the parameter name stored in the report
+  <yaml_key>:
+    name: <PARAM_NAME>          # emitted as PARAM_NAME instead of yaml_key
+    sheet: <SheetName>
+    column: <ColumnName>
+    aggregate: distinct
+

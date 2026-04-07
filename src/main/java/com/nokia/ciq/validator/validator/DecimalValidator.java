@@ -45,7 +45,8 @@ public class DecimalValidator implements CellValidator {
         } catch (NumberFormatException e) {
             return Collections.singletonList(new ValidationError(
                     row.getRowNumber(), colName, value,
-                    "Value '" + value + "' is not a valid decimal number"));
+                    CellValidator.msg(rule.getMessages(), "type",
+                        "Value '" + value + "' is not a valid decimal number")));
         }
 
         List<ValidationError> errors = new ArrayList<>();
@@ -53,20 +54,23 @@ public class DecimalValidator implements CellValidator {
         if (rule.getMinDecimal() != null
                 && bd.compareTo(BigDecimal.valueOf(rule.getMinDecimal())) < 0) {
             errors.add(new ValidationError(row.getRowNumber(), colName, value,
-                    "Value " + bd.toPlainString() + " is below minimum " + rule.getMinDecimal()));
+                    CellValidator.msg(rule.getMessages(), "min",
+                        "Value " + bd.toPlainString() + " is below minimum " + rule.getMinDecimal())));
         }
         if (rule.getMaxDecimal() != null
                 && bd.compareTo(BigDecimal.valueOf(rule.getMaxDecimal())) > 0) {
             errors.add(new ValidationError(row.getRowNumber(), colName, value,
-                    "Value " + bd.toPlainString() + " exceeds maximum " + rule.getMaxDecimal()));
+                    CellValidator.msg(rule.getMessages(), "max",
+                        "Value " + bd.toPlainString() + " exceeds maximum " + rule.getMaxDecimal())));
         }
         if (rule.getPrecision() != null) {
             // stripTrailingZeros to avoid false failures on "1.10" when precision=2
             int scale = bd.stripTrailingZeros().scale();
             if (scale > rule.getPrecision()) {
                 errors.add(new ValidationError(row.getRowNumber(), colName, value,
-                        "Value '" + value + "' has " + scale
-                        + " decimal place(s) but maximum allowed is " + rule.getPrecision()));
+                        CellValidator.msg(rule.getMessages(), "precision",
+                            "Value '" + value + "' has " + scale
+                            + " decimal place(s) but maximum allowed is " + rule.getPrecision())));
             }
         }
 

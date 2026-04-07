@@ -114,32 +114,18 @@ public class CiqProcessorImpl implements CiqProcessor {
 
         // Step 5: JSON segregation (only on PASSED)
         if ("PASSED".equals(report.getStatus()) && mopJsonOutputDir != null) {
-            String groupByCol   = rules.getGroupByColumnName();
-            boolean forceNode   = groupByCol != null && groupByCol.equalsIgnoreCase("NODE");
-            boolean forceGroup  = groupByCol != null && groupByCol.equalsIgnoreCase("GROUP");
-            boolean forceCRGroup = groupByCol != null && groupByCol.equalsIgnoreCase("CRGROUP");
-
             Map<String, Map<String, List<String>>> crGroupData = reader.getCrGroupToGroupNodes();
             Map<String, List<String>> groupToNodes = reader.getGroupToNodes();
 
-            if (!forceNode && !forceGroup && (forceCRGroup || !crGroupData.isEmpty())) {
-                // CRGROUP mode: explicitly requested via groupByColumnName=CRGROUP,
-                // or auto-detected because INDEX has GROUP | CRGROUP | NODE columns.
-                // Suppressed when groupByColumnName=GROUP (forceGroup overrides auto-detection).
-                log.info("CRGROUP mode (groupByColumnName={}) — segregating into CRGROUP folders: {}",
-                        groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
+            if (!crGroupData.isEmpty()) {
+                log.info("CRGROUP mode — segregating into CRGROUP folders: {}", mopJsonOutputDir);
                 segregateCRGroupBased(store, crGroupData, nodeType, activity, mopJsonOutputDir, rules);
+            } else if (!groupToNodes.isEmpty()) {
+                log.info("GROUP mode — segregating into group folders: {}", mopJsonOutputDir);
+                segregateGroupBased(store, groupToNodes, nodeType, activity, mopJsonOutputDir);
             } else {
-                boolean useGroupMode = forceGroup || (!forceNode && !groupToNodes.isEmpty());
-                if (useGroupMode && !groupToNodes.isEmpty()) {
-                    log.info("GROUP mode (groupByColumnName={}) — segregating into group folders: {}",
-                            groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
-                    segregateGroupBased(store, groupToNodes, nodeType, activity, mopJsonOutputDir);
-                } else {
-                    log.info("NODE mode (groupByColumnName={}) — segregating by child order into: {}",
-                            groupByCol != null ? groupByCol : "auto", mopJsonOutputDir);
-                    segregateByChildOrder(store, nodeType, activity, mopJsonOutputDir);
-                }
+                log.info("NODE mode — segregating by child order into: {}", mopJsonOutputDir);
+                segregateByChildOrder(store, nodeType, activity, mopJsonOutputDir);
             }
         }
 
@@ -262,22 +248,6 @@ public class CiqProcessorImpl implements CiqProcessor {
 
         // Build CRGROUP → email map from User-ID sheet
         Map<String, String> crGroupToEmail = new LinkedHashMap<>();
-        String userIdSheetName = rules != null ? rules.getUserIdSheetName() : null;
-        if (userIdSheetName != null && store.getRawUserIdSheet() != null) {
-            com.nokia.ciq.validator.config.SheetRules userIdRules =
-                    (rules.getSheets() != null) ? rules.getSheets().get(userIdSheetName) : null;
-            String crGroupCol = (userIdRules != null && userIdRules.getCrGroupColumn() != null)
-                    ? userIdRules.getCrGroupColumn() : "CRGROUP";
-            String emailCol   = (userIdRules != null && userIdRules.getEmailColumn() != null)
-                    ? userIdRules.getEmailColumn() : "EMAIL";
-            for (CiqRow row : store.getRawUserIdSheet().getRows()) {
-                String crg   = row.get(crGroupCol);
-                String email = row.get(emailCol);
-                if (crg != null && !crg.trim().isEmpty() && email != null && !email.trim().isEmpty()) {
-                    crGroupToEmail.put(crg.trim(), email.trim());
-                }
-            }
-        }
 
         for (Map.Entry<String, Map<String, List<String>>> crEntry : crGroupToGroupNodes.entrySet()) {
             String crGroup              = crEntry.getKey();

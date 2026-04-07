@@ -152,23 +152,17 @@ Every invocation writes machine-readable `KEY=VALUE` pairs to stdout that can be
 | `REPORT_FILENAME` | Always | Full path to report files (without extension); append `.json`, `.html`, or `.xlsx` |
 | `ERROR` | Runtime error | Exception message |
 
-Additional parameters printed only when **STATUS=PASSED**:
+Additional parameters printed only when **STATUS=PASSED**: any parameters declared in the `outputs:` section of the YAML rules file (see [Post-Validation Outputs](#post-validation-outputs)).
 
-**CRGROUP mode:**
+**Example (MRF rules file defines `CR_LIST` and `CR_COUNT`):**
 
-| Parameter | Example | Description |
-|---|---|---|
-| `CR_LIST` | `CR1,CR2` | Comma-separated list of all CR numbers |
-| `CR_COUNT` | `2` | Total number of CRs |
-
-**NODE mode:**
-
-| Parameter | Example | Description |
-|---|---|---|
-| `NODE_1` | `SBC-1` | Node name (1-based index) |
-| `NIAM_ID_1` | `sbc1-neid` | NIAM ID for that node |
-| `TOTAL_NODES_COUNT` | `2` | Total distinct nodes |
-| `CHILD_ORDERS_COUNT` | `2` | Total child orders (node+CR combinations) |
+```
+STATUS=PASSED
+ERRORS=0
+REPORT_FILENAME=reports/MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT
+CR_LIST=CR1,CR2
+CR_COUNT=2
+```
 
 ---
 
@@ -383,6 +377,148 @@ mop-json/
 
 ## Validation Rules YAML
 
-See **[VALIDATION_RULES_MANUAL.md](./VALIDATION_RULES_MANUAL.md)** for the complete reference.
-
 Naming convention: `{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml`
+
+### Column types
+
+| `type` | What it validates |
+|---|---|
+| `string` | Free-form text (`minLength`, `maxLength`, `allowedValues`, `pattern`) |
+| `integer` | Whole number (`minValue`, `maxValue`, `allowedRanges`) |
+| `decimal` | Decimal number (`minDecimal`, `maxDecimal`, `precision`) |
+| `datetime` | Date / time (`format`, default: `yyyy-MM-dd'T'HH:mm:ss`) |
+| `email` | E-mail address (`multi: true` = comma-separated list) |
+| `ip` | IP address (`accepts`: `ipv4` \| `ipv6` \| `both`) |
+
+### Row rules
+
+Row rules are defined under `sheets.<SheetName>.rules:` and apply to every data row.
+
+**Column reference convention:** `ColumnName` means the current sheet. `SheetName.ColumnName` means a column in another sheet. This applies to **all** rule types — `require`, `forbid`, `when.column`, `compare`, `one_of`, `only_one`, `all_or_none`, `sum`, and `equals`.
+
+| Rule | Description |
+|---|---|
+| `require: [Sheet.]Column` | Column must be non-blank; cross-sheet form checks value exists in that sheet |
+| `forbid: [Sheet.]Column` | Column must be blank; cross-sheet form checks value absent from that sheet |
+| `compare: "[S.]ColA operator [S.]ColB"` | Cross-column comparison (string operators) |
+| `one_of: [[S.]ColA, [S.]ColB, ...]` | At least one must be non-blank |
+| `only_one: [[S.]ColA, [S.]ColB]` | Exactly one must be non-blank |
+| `all_or_none: [[S.]ColA, [S.]ColB, ...]` | All filled or all blank |
+| `sum: [[S.]ColA, [S.]ColB]` + `equals: [S.]ColC` | Sum must equal target column |
+
+All rules support an optional `when:` condition:
+
+```yaml
+rules:
+  # require unconditional — same-sheet
+  - require: ActionKey
+
+  # require unconditional — cross-sheet (value must exist in Node_Details.Node_Name)
+  - require: Node_Details.Node_Name
+
+  # require conditional — same-sheet
+  - require: ActionKey
+    when:
+      column: Action                  # ColumnName = same sheet
+      operator: equals                # equals | notEquals | blank | notBlank | contains
+      value: MODIFY                   # greaterThan | greaterThanOrEquals | lessThan | lessThanOrEquals
+
+  # require conditional — cross-sheet
+  - require: Node_Details.Node_Name
+    when:
+      column: Action
+      operator: notEquals
+      value: DELETE
+
+  # when with sheet: field — existence check in another sheet
+  - require: NIAM_NAME
+    when:
+      sheet: Node_Details             # sheet: + column: + exists/notExists
+      column: Node_Name
+      operator: exists
+
+  # forbid unconditional — cross-sheet (value must NOT exist in Blacklist.ID)
+  - forbid: Blacklist.ID
+
+  # compare with optional cross-sheet columns
+  - compare: "StartPort lessThanOrEquals EndPort"
+  - compare: "Ref.MinPrice greaterThan Pricing.BasePrice"
+```
+
+### Post-Validation Outputs
+
+The `outputs:` section declares values to extract from the validated data and emit as `KEY=VALUE` console parameters when validation **PASSES**. Each entry is also written into the JSON/HTML/Excel report under `parameters`.
+
+#### Fields
+
+| Field | Required | Description |
+|---|---|---|
+| `sheet` | Yes | Sheet to read from (any sheet accessible to the validator, including `Index`) |
+| `aggregate` | Yes | Computation to perform — `distinct`, `count`, or `sum` |
+| `column` | Depends | Column to aggregate. Required for `distinct` and `sum`; optional for `count` (omit to count total rows) |
+| `separator` | No | Join character for `distinct` — default `,` |
+| `name` | No | Override the parameter name emitted to stdout and the report. When absent the YAML key is used |
+
+#### Aggregates
+
+| Aggregate | Description | Example output |
+|---|---|---|
+| `distinct` | Sorted, deduplicated non-blank values joined by `separator` | `CR1,CR2,CR3` |
+| `count` | Count of non-blank values in `column`; or total row count when `column` is omitted | `6` |
+| `sum` | Numeric sum of `column` values; non-numeric cells are ignored | `1024` |
+
+#### Example
+
+```yaml
+outputs:
+  # Distinct CR numbers from the Index sheet → emitted as CR_LIST=CR1,CR2
+  CR_LIST:
+    sheet: Index
+    column: CRGroup
+    aggregate: distinct
+    separator: ","
+
+  # Total rows in ANNOUNCEMENT_FILES → emitted as ANNOUNCEMENT_COUNT=6
+  ANNOUNCEMENT_COUNT:
+    sheet: ANNOUNCEMENT_FILES
+    aggregate: count
+
+  # Count of non-blank GROUP values → emitted as GROUP_COUNT=6
+  GROUP_COUNT:
+    sheet: ANNOUNCEMENT_FILES
+    column: GROUP
+    aggregate: count
+
+  # Numeric sum of a column → emitted as TOTAL_SIZE_KB=2048
+  TOTAL_SIZE_KB:
+    sheet: ANNOUNCEMENT_FILES
+    column: FILE_SIZE_KB
+    aggregate: sum
+
+  # 'name' overrides the YAML key → emitted as UNIQUE_NODES=MRF1,MRF2
+  node_output:
+    name: UNIQUE_NODES
+    sheet: Index
+    column: Node
+    aggregate: distinct
+```
+
+> **Note:** `REPORT_FILENAME` is always emitted regardless of the `outputs:` section. All other parameters on PASSED require an explicit `outputs:` entry.
+
+---
+
+### `when:` operators
+
+| Operator | Applies to | Description |
+|---|---|---|
+| `equals` | String / Number | Condition column value equals `value` |
+| `notEquals` | String / Number | Condition column value does not equal `value` |
+| `blank` | Any | Condition column is empty |
+| `notBlank` | Any | Condition column is non-empty |
+| `contains` | String | Condition column value contains `value` as a substring |
+| `greaterThan` | Number | Condition column value > `value` |
+| `greaterThanOrEquals` | Number | Condition column value >= `value` |
+| `lessThan` | Number | Condition column value < `value` |
+| `lessThanOrEquals` | Number | Condition column value <= `value` |
+| `exists` | Cross-sheet | Current row's value is found in `sheet.column` (used with `sheet:` field) |
+| `notExists` | Cross-sheet | Current row's value is not found in `sheet.column` (used with `sheet:` field) |

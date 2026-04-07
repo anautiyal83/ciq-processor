@@ -6,6 +6,7 @@ import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
+import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.SheetRowRule;
 import com.nokia.ciq.validator.config.SheetRules;
 import com.nokia.ciq.validator.config.ValidatorDefinition;
@@ -14,31 +15,22 @@ import com.nokia.ciq.validator.config.WorkbookRule;
 import com.nokia.ciq.validator.model.SheetValidationResult;
 import com.nokia.ciq.validator.model.ValidationError;
 import com.nokia.ciq.validator.model.ValidationReport;
-import com.nokia.ciq.validator.validator.AllowedRangesValidator;
-import com.nokia.ciq.validator.validator.AllowedValuesValidator;
-import com.nokia.ciq.validator.validator.BooleanValidator;
 import com.nokia.ciq.validator.validator.CellValidator;
-import com.nokia.ciq.validator.validator.CidrValidator;
 import com.nokia.ciq.validator.validator.CompareColumnsValidator;
 import com.nokia.ciq.validator.validator.ConditionalRowRuleValidator;
 import com.nokia.ciq.validator.validator.CrossRefValidator;
-import com.nokia.ciq.validator.validator.DateTimeValidator;
-import com.nokia.ciq.validator.validator.DateValidator;
 import com.nokia.ciq.validator.validator.DecimalValidator;
 import com.nokia.ciq.validator.validator.EmailValidator;
-import com.nokia.ciq.validator.validator.FqdnValidator;
 import com.nokia.ciq.validator.validator.GroupPresenceValidator;
 import com.nokia.ciq.validator.validator.HostnameValidator;
 import com.nokia.ciq.validator.validator.IntegerValidator;
 import com.nokia.ciq.validator.validator.IpAddressValidator;
-import com.nokia.ciq.validator.validator.LengthValidator;
-import com.nokia.ciq.validator.validator.MacAddressValidator;
 import com.nokia.ciq.validator.validator.PatternValidator;
-import com.nokia.ciq.validator.validator.PhoneValidator;
 import com.nokia.ciq.validator.validator.RequiredValidator;
+import com.nokia.ciq.validator.validator.SheetRefValidator;
+import com.nokia.ciq.validator.validator.StringValidator;
 import com.nokia.ciq.validator.validator.SumEqualsValidator;
-import com.nokia.ciq.validator.validator.TimeValidator;
-import com.nokia.ciq.validator.validator.UrlSchemeValidator;
+import com.nokia.ciq.validator.validator.TemporalValidator;
 import com.nokia.ciq.validator.validator.WorkbookCrossRefValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,7 +51,6 @@ import java.util.LinkedHashMap;
  *
  * <p>Validation order per sheet:
  * <ol>
- *   <li>Global checks: index sheet completeness, node ID presence</li>
  *   <li>Per-row, per-column checks delegated to the ordered {@link CellValidator} chain</li>
  * </ol>
  *
@@ -75,17 +67,18 @@ public class CiqValidationEngine {
 
     // Schema.yaml framework: custom validators and row/workbook rule validators
     private final Map<String, CellValidator> customValidators;
-    private final ConditionalRowRuleValidator conditionalRowRuleValidator = new ConditionalRowRuleValidator();
+    private final ConditionalRowRuleValidator conditionalRowRuleValidator;
     private final CompareColumnsValidator compareColumnsValidator = new CompareColumnsValidator();
     private final GroupPresenceValidator groupPresenceValidator = new GroupPresenceValidator();
     private final SumEqualsValidator sumEqualsValidator = new SumEqualsValidator();
     private final WorkbookCrossRefValidator workbookCrossRefValidator = new WorkbookCrossRefValidator();
 
     public CiqValidationEngine(CiqDataStore store, ValidationRulesConfig rules) {
-        this.store            = store;
-        this.rules            = rules;
-        this.validators       = buildValidatorChain(store);
-        this.customValidators = loadCustomValidators(rules);
+        this.store                       = store;
+        this.rules                       = rules;
+        this.validators                  = buildValidatorChain(store);
+        this.customValidators            = loadCustomValidators(rules);
+        this.conditionalRowRuleValidator = new ConditionalRowRuleValidator(store);
     }
 
     /**
@@ -113,55 +106,32 @@ public class CiqValidationEngine {
      *
      * <p>Ordering rules:
      * <ol>
-     *   <li>{@link RequiredValidator} — gatekeeper; must remain first</li>
-     *   <li>Vocabulary validators: {@link AllowedValuesValidator} (enum / protocol / allowedValues)</li>
-     *   <li>String constraints: {@link LengthValidator}</li>
-     *   <li>Numeric type validators: {@link IntegerValidator}, {@link AllowedRangesValidator},
-     *       {@link DecimalValidator}</li>
-     *   <li>Temporal validators: {@link DateValidator}, {@link TimeValidator},
-     *       {@link DateTimeValidator}</li>
-     *   <li>Value-set validators: {@link BooleanValidator}</li>
-     *   <li>Network type validators: {@link IpAddressValidator}, {@link MacAddressValidator},
-     *       {@link CidrValidator}, {@link HostnameValidator}, {@link FqdnValidator}</li>
-     *   <li>Contact / URL validators: {@link EmailValidator}, {@link PhoneValidator},
-     *       {@link UrlSchemeValidator}</li>
-     *   <li>Pattern override — {@link PatternValidator} runs after type validators so it can
-     *       override built-in format checks for mac/cidr/hostname/fqdn/phone</li>
-     *   <li>{@link CrossRefValidator} — last, as it requires an external lookup</li>
+     *   <li>{@link RequiredValidator}      — gatekeeper; must remain first</li>
+     *   <li>{@link StringValidator}        — minLength/maxLength, enum, allowedValues, boolean, urlScheme</li>
+     *   <li>{@link IntegerValidator}       — integer (minValue, maxValue, allowedRanges)</li>
+     *   <li>{@link DecimalValidator}       — decimal (minDecimal, maxDecimal, precision)</li>
+     *   <li>{@link TemporalValidator}      — date / time / datetime</li>
+     *   <li>{@link EmailValidator}         — email (multi-address support)</li>
+     *   <li>{@link IpAddressValidator}     — ip / cidr</li>
+     *   <li>{@link HostnameValidator}      — hostname / fqdn</li>
+     *   <li>{@link PatternValidator}       — mac, phone (built-in), + custom pattern override</li>
+     *   <li>{@link CrossRefValidator}      — crossRef (cross-sheet column lookup)</li>
+     *   <li>{@link SheetRefValidator}      — sheetRef (cell value must match a workbook sheet name)</li>
      * </ol>
      */
     private static List<CellValidator> buildValidatorChain(CiqDataStore store) {
         return Arrays.asList(
-                // 1. Gatekeeper
-                new RequiredValidator(),
-                // 2. Vocabulary
-                new AllowedValuesValidator(),
-                // 3. String constraints
-                new LengthValidator(),
-                // 4. Numeric types
-                new IntegerValidator(),
-                new AllowedRangesValidator(),
-                new DecimalValidator(),
-                // 5. Temporal types
-                new DateValidator(),
-                new TimeValidator(),
-                new DateTimeValidator(),
-                // 6. Boolean
-                new BooleanValidator(),
-                // 7. Network types
-                new IpAddressValidator(),
-                new MacAddressValidator(),
-                new CidrValidator(),
-                new HostnameValidator(),
-                new FqdnValidator(),
-                // 8. Contact / URL
-                new EmailValidator(),
-                new PhoneValidator(),
-                new UrlSchemeValidator(),
-                // 9. Pattern override (after type validators — overrides built-in format checks)
-                new PatternValidator(),
-                // 10. Cross-sheet reference
-                new CrossRefValidator(store)
+                new RequiredValidator(),        // 1. required / requiredWhen
+                new StringValidator(),          // 2. minLength/maxLength, enum, allowedValues, boolean, urlScheme
+                new IntegerValidator(),         // 3. integer (minValue, maxValue, allowedRanges)
+                new DecimalValidator(),         // 4. decimal (minDecimal, maxDecimal, precision)
+                new TemporalValidator(),        // 5. date / time / datetime
+                new EmailValidator(),           // 6. email (multi-address support)
+                new IpAddressValidator(),       // 7. ip / cidr
+                new HostnameValidator(),        // 8. hostname / fqdn
+                new PatternValidator(),         // 9. mac, phone (built-in), + custom pattern override
+                new CrossRefValidator(store),   // 10. crossRef (cross-sheet column lookup)
+                new SheetRefValidator(store)    // 11. sheetRef (cell value must match a sheet name)
         );
     }
 
@@ -172,69 +142,21 @@ public class CiqValidationEngine {
 
         CiqIndex index = store.getIndex();
 
-        // --- GROUP / CRGROUP mode detection ---
-        // groupByColumnName in the rules config overrides auto-detection:
-        //   "NODE"    → force node-wise mode (ignore GROUP/CRGROUP columns in INDEX)
-        //   "GROUP"   → honour GROUP columns (auto-detect still applies)
-        //   "CRGROUP" → force CRGROUP mode; emit CRGROUP parameters
-        //   null      → auto-detect
-        String groupByCol = rules.getGroupByColumnName();
-        boolean forceCRGroup = groupByCol != null && groupByCol.equalsIgnoreCase("CRGROUP");
-        boolean forceGroup   = groupByCol != null && groupByCol.equalsIgnoreCase("GROUP");
-        Map<String, Map<String, List<String>>> crGroupToGroupNodes;
-        Map<String, List<String>> groupToNodes;
-        if (groupByCol != null && groupByCol.equalsIgnoreCase("NODE")) {
-            crGroupToGroupNodes = new LinkedHashMap<>();
-            groupToNodes        = new LinkedHashMap<>();   // force node-wise
-        } else {
-            crGroupToGroupNodes = buildCRGroupMap();
-            groupToNodes        = crGroupToGroupNodes.isEmpty() ? buildGroupToNodesMap()
-                                                                : flattenCRGroupToGroupNodes(crGroupToGroupNodes);
-        }
-        // forceGroup suppresses CRGROUP auto-detection (mirrors CiqProcessorImpl dispatch logic)
-        boolean isCRGroupMode = !forceGroup && (forceCRGroup || !crGroupToGroupNodes.isEmpty());
-        boolean isGroupMode   = !groupToNodes.isEmpty();
-
-        // --- Global checks ---
-        if (rules.isValidateIndexSheets()) {
-            checkIndexSheets(index, report);
-        }
-
-        // Build valid node set for node-ID validation (case-insensitive lookup)
-        Set<String> validNodes = index.getNiamMapping().keySet();
-        Set<String> validNodesLower = new java.util.HashSet<>();
-        for (String n : validNodes) validNodesLower.add(n.toLowerCase());
-
-        // In GROUP mode: validate all group nodes against NODE_ID sheet (global check)
-        if (isGroupMode && rules.isValidateNodeIds()) {
-            for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet()) {
-                for (String node : ge.getValue()) {
-                    if (!validNodes.isEmpty() && !validNodesLower.contains(node.toLowerCase())) {
-                        report.getGlobalErrors().add(
-                                "Node '" + node + "' in group '" + ge.getKey() +
-                                "' not found in Node_ID sheet. Valid nodes: " + validNodes);
-                    }
+        // --- Determine which tables to validate ---
+        // Start with sheets listed in the Index's Tables column, then add any additional
+        // sheets defined in the YAML rules that are not special and not already included.
+        // This ensures Node_Details, USER_ID, and any other configured sheets are always validated.
+        Set<String> specialNames = specialSheetNames(rules);
+        List<String> tableNames = new ArrayList<>(index.getAllTables());
+        if (rules.getSheets() != null) {
+            for (String name : rules.getSheets().keySet()) {
+                if (!specialNames.contains(name) && !tableNames.contains(name)) {
+                    tableNames.add(name);
                 }
             }
-            log.info("GROUP_MAP={}", formatGroupMap(groupToNodes));
         }
-
-        // --- Determine which tables to validate ---
-        // When the index has entries, validate exactly the tables listed there.
-        // When the index is empty (e.g. no Index sheet), fall back to the sheets
-        // defined in the rules config so that index-free CIQs are still validated.
-        List<String> tableNames = index.getAllTables();
-        if (tableNames.isEmpty() && rules.getSheets() != null) {
-            // Exclude special sheets — they are validated separately below
-            Set<String> specialNames = specialSheetNames(rules);
-            tableNames = new ArrayList<>();
-            for (String name : rules.getSheets().keySet()) {
-                if (!specialNames.contains(name)) tableNames.add(name);
-            }
-            if (!tableNames.isEmpty()) {
-                log.info("Index is empty — validating {} sheet(s) from rules config: {}",
-                        tableNames.size(), tableNames);
-            }
+        if (!tableNames.isEmpty()) {
+            log.info("Validating {} sheet(s): {}", tableNames.size(), tableNames);
         }
 
         // --- Per-sheet validation ---
@@ -269,15 +191,20 @@ public class CiqValidationEngine {
 
             result.setRowsChecked(sheet.getRows().size());
 
-            // All-rows-blank check: fail if every data row has all-null values
-            if (!sheet.getRows().isEmpty()
-                    && sheet.getRows().stream().allMatch(r ->
+            // Blank-sheet check: fail if the sheet has no rows OR every row has all-null values.
+            // Note: isEmpty() must also be checked — when rows is empty the allMatch predicate
+            // is vacuously true, so the original !isEmpty() guard would silently pass an empty sheet.
+            if (sheet.getRows().isEmpty()
+                    || sheet.getRows().stream().allMatch(r ->
                             r.getData().values().stream().allMatch(v -> v == null))) {
                 result.setStatus("FAILED");
                 result.addError(new ValidationError(0, "-", null,
-                        "Sheet '" + tableName + "' contains only blank rows — no valid data found"));
+                        sheet.getRows().isEmpty()
+                            ? "Sheet '" + tableName + "' has no data rows"
+                            : "Sheet '" + tableName + "' contains only blank rows — no valid data found"));
                 report.getSheets().add(result);
-                log.warn("Sheet '{}': all rows are blank", tableName);
+                log.warn("Sheet '{}': {}", tableName,
+                        sheet.getRows().isEmpty() ? "no data rows" : "all rows are blank");
                 continue;
             }
 
@@ -307,16 +234,6 @@ public class CiqValidationEngine {
             Set<String> missingColumns = checkMissingColumns(sheet, sheetRules, result);
 
             for (CiqRow row : sheet.getRows()) {
-                // Node-ID check (global, no YAML rule needed)
-                if (rules.isValidateNodeIds()) {
-                    String node = row.get("Node");
-                    if (node != null && !validNodes.isEmpty()
-                            && !validNodesLower.contains(node.toLowerCase())) {
-                        result.addError(new ValidationError(row.getRowNumber(), "Node", node,
-                                "Node '" + node + "' not found in Node_ID sheet. Valid nodes: " + validNodes));
-                    }
-                }
-
                 // Column rules — delegated to the validator chain; skip missing columns
                 if (sheetRules != null) {
                     for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
@@ -341,8 +258,7 @@ public class CiqValidationEngine {
             report.getSheets().add(result);
         }
 
-        // --- Special-sheet validation (Index, Node-ID, User-ID) ---
-        // Column rules come from the generic sheets: map — no special config objects needed.
+        // --- Special-sheet validation (Index, Node_ID) ---
         if (store instanceof InMemoryCiqDataStore) {
             InMemoryCiqDataStore imStore = (InMemoryCiqDataStore) store;
 
@@ -351,19 +267,10 @@ public class CiqValidationEngine {
                 validateSpecialSheet(imStore.getRawIndexSheet(), "Index",
                         indexRules, index, report);
             }
-            String nodeIdName  = rules.getNodeIdSheetName();
-            SheetRules nodeIdRules = sheetRulesFor(rules, nodeIdName);
+            SheetRules nodeIdRules = sheetRulesFor(rules, "Node_ID");
             if (nodeIdRules != null) {
-                validateSpecialSheet(imStore.getRawNodeIdSheet(), nodeIdName,
+                validateSpecialSheet(imStore.getRawNodeIdSheet(), "Node_ID",
                         nodeIdRules, index, report);
-            }
-            String userIdName  = rules.getUserIdSheetName();
-            if (userIdName != null) {
-                SheetRules userIdRules = sheetRulesFor(rules, userIdName);
-                if (userIdRules != null) {
-                    validateSpecialSheet(imStore.getRawUserIdSheet(), userIdName,
-                            userIdRules, index, report);
-                }
             }
         }
 
@@ -379,22 +286,11 @@ public class CiqValidationEngine {
 
         report.finalise();
         if ("PASSED".equals(report.getStatus())) {
-            if (isCRGroupMode) {
-                // CRGROUP mode: CR_LIST and CR_COUNT only — email is embedded per CR in the JSON
-                log.info("CRGROUP_MAP={}", formatCRGroupMap(crGroupToGroupNodes));
-                Map<String, String> params = new LinkedHashMap<>();
-                List<String> crList = new ArrayList<>(crGroupToGroupNodes.keySet());
-                params.put("CR_LIST",  String.join(",", crList));
-                params.put("CR_COUNT", String.valueOf(crList.size()));
-                report.setParameters(params);
-            } else {
-                // NODE / GROUP mode: populate from index entries
-                report.populateGroupingSummary(index);
-            }
-
-            // Log every parameter
-            for (Map.Entry<String, String> e : report.getParameters().entrySet()) {
-                log.info("{}={}", e.getKey(), e.getValue());
+            if (rules.getOutputs() != null && !rules.getOutputs().isEmpty()) {
+                computeOutputs(rules.getOutputs(), report);
+                for (Map.Entry<String, String> e : report.getParameters().entrySet()) {
+                    log.info("{}={}", e.getKey(), e.getValue());
+                }
             }
         }
         log.info("Validation complete: {} — {} error(s)", report.getStatus(), report.getTotalErrors());
@@ -432,15 +328,18 @@ public class CiqValidationEngine {
 
         result.setRowsChecked(sheet.getRows().size());
 
-        // All-rows-blank check
-        if (!sheet.getRows().isEmpty()
-                && sheet.getRows().stream().allMatch(r ->
+        // Blank-sheet check: same fix as the per-sheet loop — also catches zero-row sheets.
+        if (sheet.getRows().isEmpty()
+                || sheet.getRows().stream().allMatch(r ->
                         r.getData().values().stream().allMatch(v -> v == null))) {
             result.setStatus("FAILED");
             result.addError(new ValidationError(0, "-", null,
-                    "Sheet '" + sheetLabel + "' contains only blank rows — no valid data found"));
+                    sheet.getRows().isEmpty()
+                        ? "Sheet '" + sheetLabel + "' has no data rows"
+                        : "Sheet '" + sheetLabel + "' contains only blank rows — no valid data found"));
             report.getSheets().add(result);
-            log.warn("Sheet '{}': all rows are blank", sheetLabel);
+            log.warn("Sheet '{}' (special): {}", sheetLabel,
+                    sheet.getRows().isEmpty() ? "no data rows" : "all rows are blank");
             return;
         }
 
@@ -450,6 +349,16 @@ public class CiqValidationEngine {
             for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
                 if (missingColumns.contains(entry.getKey())) continue;
                 validateCell(row, entry.getKey(), entry.getValue(), index, result);
+            }
+        }
+
+        // Apply per-sheet row rules (require/forbid/compare/one_of/etc.)
+        if (sheetRules.getRules() != null) {
+            for (CiqRow row : sheet.getRows()) {
+                for (SheetRowRule rowRule : sheetRules.getRules()) {
+                    List<ValidationError> errors = applyRowRule(row, rowRule);
+                    for (ValidationError e : errors) result.addError(e);
+                }
             }
         }
 
@@ -544,112 +453,107 @@ public class CiqValidationEngine {
     }
 
     // -------------------------------------------------------------------------
-    // Global checks
+    // Post-validation output extraction
     // -------------------------------------------------------------------------
 
     /**
-     * Reads the INDEX sheet from the store and builds a GROUP→Nodes map.
-     * Returns a non-empty map only when the INDEX sheet has {@code Group | Node} columns
-     * (GROUP mode).  Returns an empty map for all other modes.
+     * Computes each declared {@code outputs:} rule against the data store and adds the
+     * result to {@code report.parameters}.  Called only when validation has PASSED.
      */
-    private Map<String, List<String>> buildGroupToNodesMap() throws IOException {
-        Map<String, List<String>> map = new LinkedHashMap<>();
-        for (String sheetName : store.getAvailableSheets()) {
-            if (!sheetName.replace("_", "").equalsIgnoreCase("index")) continue;
-            com.nokia.ciq.reader.model.CiqSheet idxSheet = store.getSheet(sheetName);
-            if (idxSheet == null) break;
+    private void computeOutputs(Map<String, OutputRule> outputs, ValidationReport report) throws IOException {
+        for (Map.Entry<String, OutputRule> entry : outputs.entrySet()) {
+            String yamlKey  = entry.getKey();
+            OutputRule rule = entry.getValue();
 
-            // Require "Group" column and "Node" column; must NOT have "CRGroup"
-            boolean hasGroup   = false;
-            boolean hasNode    = false;
-            boolean hasCrGroup = false;
-            for (String col : idxSheet.getColumns()) {
-                String norm = col.replace("_", "").toLowerCase();
-                if (norm.equals("group"))   hasGroup   = true;
-                if (norm.equals("node"))    hasNode    = true;
-                if (norm.equals("crgroup")) hasCrGroup = true;
-            }
-            if (!hasGroup || !hasNode || hasCrGroup) break;
+            // Resolve the parameter name: explicit 'name' field takes precedence over the YAML key
+            String paramName = (rule.getName() != null && !rule.getName().trim().isEmpty())
+                    ? rule.getName().trim() : yamlKey;
 
-            for (com.nokia.ciq.reader.model.CiqRow r : idxSheet.getRows()) {
-                String g = r.get("Group");
-                String n = r.get("Node");
-                if (g != null && !g.trim().isEmpty() && n != null && !n.trim().isEmpty()) {
-                    map.computeIfAbsent(g.trim(), k -> new ArrayList<>()).add(n.trim());
-                }
+            if (rule.getSheet() == null || rule.getAggregate() == null) {
+                log.warn("outputs[{}]: 'sheet' and 'aggregate' are required — skipping", yamlKey);
+                continue;
             }
-            break;
+
+            CiqSheet sheet = store.getSheet(rule.getSheet());
+            if (sheet == null) {
+                log.warn("outputs[{}]: sheet '{}' not found — skipping", yamlKey, rule.getSheet());
+                continue;
+            }
+
+            String value = computeAggregate(yamlKey, sheet, rule);
+            report.getParameters().put(paramName, value);
+            log.info("Output {}={}", paramName, value);
         }
-        return map;
     }
 
     /**
-     * Reads the INDEX sheet when it has {@code GROUP | CRGROUP | NODE} columns and
-     * builds the CRGROUP → (GROUP → nodes) map.  Returns empty if the sheet is absent
-     * or lacks the CRGROUP column.
+     * Evaluates one {@link OutputRule} against the rows of {@code sheet}.
+     *
+     * @param key   parameter name (used in log messages only)
+     * @param sheet sheet to aggregate
+     * @param rule  output rule describing the aggregate
+     * @return string representation of the computed value (never {@code null})
      */
-    private Map<String, Map<String, List<String>>> buildCRGroupMap() {
-        Map<String, Map<String, List<String>>> map = new LinkedHashMap<>();
-        if (!(store instanceof InMemoryCiqDataStore)) return map;
-        InMemoryCiqDataStore imStore = (InMemoryCiqDataStore) store;
-        com.nokia.ciq.reader.model.CiqSheet rawIndex = imStore.getRawIndexSheet();
-        if (rawIndex == null) return map;
+    private String computeAggregate(String key, CiqSheet sheet, OutputRule rule) {
+        String agg = rule.getAggregate().trim().toLowerCase();
 
-        boolean hasGroup = false, hasNode = false, hasCrGroup = false;
-        for (String col : rawIndex.getColumns()) {
-            String norm = col.replace("_", "").toLowerCase();
-            if (norm.equals("group"))   hasGroup   = true;
-            if (norm.equals("node"))    hasNode    = true;
-            if (norm.equals("crgroup")) hasCrGroup = true;
-        }
-        if (!hasGroup || !hasNode || !hasCrGroup) return map;
+        switch (agg) {
 
-        for (com.nokia.ciq.reader.model.CiqRow r : rawIndex.getRows()) {
-            String group   = r.get("Group");
-            String node    = r.get("Node");
-            String crGroup = r.get("CRGroup");
-            if (isBlank(group) || isBlank(node) || isBlank(crGroup)) continue;
-            map.computeIfAbsent(crGroup.trim(), k -> new LinkedHashMap<>())
-               .computeIfAbsent(group.trim(),   k -> new ArrayList<>())
-               .add(node.trim());
-        }
-        return map;
-    }
+            case "count": {
+                String col = rule.getColumn();
+                long count;
+                if (col == null || col.trim().isEmpty()) {
+                    count = sheet.getRows().size();
+                } else {
+                    count = sheet.getRows().stream()
+                            .filter(r -> !isBlank(r.get(col)))
+                            .count();
+                }
+                return String.valueOf(count);
+            }
 
-    /** Flattens CRGROUP → (GROUP → nodes) into GROUP → nodes (unique groups only). */
-    private static Map<String, List<String>> flattenCRGroupToGroupNodes(
-            Map<String, Map<String, List<String>>> crGroupToGroupNodes) {
-        Map<String, List<String>> flat = new LinkedHashMap<>();
-        for (Map<String, List<String>> groupMap : crGroupToGroupNodes.values()) {
-            for (Map.Entry<String, List<String>> ge : groupMap.entrySet()) {
-                flat.computeIfAbsent(ge.getKey(), k -> new ArrayList<>());
-                for (String node : ge.getValue()) {
-                    if (!flat.get(ge.getKey()).contains(node)) {
-                        flat.get(ge.getKey()).add(node);
+            case "sum": {
+                if (isBlank(rule.getColumn())) {
+                    log.warn("outputs[{}]: 'column' is required for aggregate 'sum' — returning 0", key);
+                    return "0";
+                }
+                double total = 0.0;
+                for (CiqRow row : sheet.getRows()) {
+                    String v = row.get(rule.getColumn());
+                    if (v != null && !v.trim().isEmpty()) {
+                        try { total += Double.parseDouble(v.trim()); }
+                        catch (NumberFormatException ignored) { /* skip non-numeric */ }
                     }
                 }
+                if (total == Math.floor(total) && !Double.isInfinite(total)) {
+                    return String.valueOf((long) total);
+                }
+                return String.valueOf(total);
             }
+
+            case "distinct": {
+                if (isBlank(rule.getColumn())) {
+                    log.warn("outputs[{}]: 'column' is required for aggregate 'distinct' — returning empty", key);
+                    return "";
+                }
+                String sep = (rule.getSeparator() != null) ? rule.getSeparator() : ",";
+                Set<String> seen = new LinkedHashSet<>();
+                for (CiqRow row : sheet.getRows()) {
+                    String v = row.get(rule.getColumn());
+                    if (v != null && !v.trim().isEmpty()) seen.add(v.trim());
+                }
+                return String.join(sep, seen);
+            }
+
+            default:
+                log.warn("outputs[{}]: unknown aggregate '{}' — returning empty", key, rule.getAggregate());
+                return "";
         }
-        return flat;
     }
 
-    private static String formatGroupMap(Map<String, List<String>> groupToNodes) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, List<String>> e : groupToNodes.entrySet()) {
-            if (sb.length() > 0) sb.append(", ");
-            sb.append(e.getKey()).append(":").append(e.getValue());
-        }
-        return sb.toString();
-    }
-
-    private static String formatCRGroupMap(Map<String, Map<String, List<String>>> crGroupToGroupNodes) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, Map<String, List<String>>> ce : crGroupToGroupNodes.entrySet()) {
-            if (sb.length() > 0) sb.append("; ");
-            sb.append(ce.getKey()).append("=").append(formatGroupMap(ce.getValue()));
-        }
-        return sb.toString();
-    }
+    // -------------------------------------------------------------------------
+    // Global checks
+    // -------------------------------------------------------------------------
 
     private static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
@@ -662,39 +566,13 @@ public class CiqValidationEngine {
     }
 
     /**
-     * Returns the set of sheet names that are treated as special (Index, Node-ID, User-ID).
+     * Returns the set of sheet names that are treated as special (Index, Node_ID).
      * These are validated separately and must be excluded from the generic per-sheet loop.
      */
     private static Set<String> specialSheetNames(ValidationRulesConfig rules) {
         Set<String> names = new java.util.HashSet<>();
         names.add("Index");
-        if (rules.getNodeIdSheetName() != null)  names.add(rules.getNodeIdSheetName());
-        if (rules.getUserIdSheetName() != null)  names.add(rules.getUserIdSheetName());
+        names.add("Node_ID");
         return names;
-    }
-
-    private void checkIndexSheets(CiqIndex index, ValidationReport report) throws IOException {
-        List<String> indexTables     = index.getAllTables();
-        List<String> availableSheets = store.getAvailableSheets();
-
-        for (String table : indexTables) {
-            if (!availableSheets.contains(table)) {
-                report.getGlobalErrors().add(
-                        "Table '" + table + "' listed in Index but no JSON file found");
-            }
-        }
-
-        for (String sheet : availableSheets) {
-            if (!indexTables.contains(sheet)) {
-                report.getGlobalErrors().add(
-                        "JSON file found for sheet '" + sheet + "' but it is not listed in the Index");
-            }
-        }
-
-        if (indexTables.size() != availableSheets.size()) {
-            report.getGlobalErrors().add(
-                    "Sheet count mismatch: Index lists " + indexTables.size() +
-                    " table(s) but " + availableSheets.size() + " JSON file(s) found");
-        }
     }
 }

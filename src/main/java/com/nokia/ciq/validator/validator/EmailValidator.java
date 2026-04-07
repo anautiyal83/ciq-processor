@@ -45,7 +45,8 @@ public class EmailValidator implements CellValidator {
             String email = part.trim();
             if (!email.isEmpty() && !EMAIL_PATTERN.matcher(email).matches()) {
                 errors.add(new ValidationError(row.getRowNumber(), colName, value,
-                        "'" + email + "' is not a valid email address"));
+                        CellValidator.msg(rule.getMessages(), "type",
+                            "'" + email + "' is not a valid email address")));
             }
         }
         return errors;

@@ -783,6 +783,15 @@ validateNodeIds: true</code></pre>
 <!-- ─── Data sheets ────────────────────────────────────────────────────────── -->
 <h3 id="data-sheet-rules">Data Sheet Rules</h3>
 
+<div class="callout callout-info">
+  <strong>Column reference convention — applies to all rule types:</strong><br>
+  <code>ColumnName</code> → column in the current sheet (default)<br>
+  <code>SheetName.ColumnName</code> → column in the named sheet<br>
+  This applies to <code>require</code>, <code>forbid</code>, <code>when.column</code>,
+  <code>compare</code>, <code>one_of</code>, <code>only_one</code>, <code>all_or_none</code>,
+  <code>sum</code>, and <code>equals</code>.
+</div>
+
 <pre><code>sheets:
 
   MyTable:
@@ -796,7 +805,8 @@ validateNodeIds: true</code></pre>
 
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
 
       ActionKey:
         requiredWhen:         # Required only when another column has a specific value
@@ -807,11 +817,12 @@ validateNodeIds: true</code></pre>
         requiredWhen:
           column: Action
           value:  MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
 
       ID:
         required: true
-        integer:  true
+        type: integer
         minValue: 1
         maxValue: 6000
 
@@ -822,30 +833,190 @@ validateNodeIds: true</code></pre>
       Record.VERSION:
         required: true
         pattern: "^\\d+\\.\\d+\\.\\d+\\.\\d+$"
-        patternMessage: "VERSION must be in format X.X.X.X (e.g. 17.0.3.7)"
+        messages:
+          pattern: "VERSION must be in format X.X.X.X (e.g. 17.0.3.7)"
 
       Record.SOME_RANGE_FIELD:
+        type: integer
         allowedRanges:        # Multiple allowed numeric bands (OR logic)
           - { min: 0,    max: 0    }
           - { min: 500,  max: 500  }
-          - { min: 1024, max: 65535 }</code></pre>
+          - { min: 1024, max: 65535 }
+
+      Tables:
+        required: true
+        sheetRef: true              # value must match an existing sheet name
+        sheetRefIgnoreCase: false   # exact-case match (set true for case-insensitive)
+
+    rules:
+
+      # require a column when a same-sheet condition is met
+      - require: ActionKey
+        when:
+          column: Action
+          operator: equals          # equals | notEquals | blank | notBlank | contains
+          value: MODIFY             # (not used for blank/notBlank)
+
+      # forbid a column based on a condition
+      - forbid: SubAction
+        when:
+          column: Action
+          operator: equals
+          value: CREATE
+
+      # cross-sheet require — value must exist in referenced sheet's column
+      - require: Node_Details.Node_Name
+
+      # cross-sheet when — apply rule only when row's value exists in another sheet
+      - require: NIAM_NAME
+        when:
+          sheet: Node_Details       # sheet to look up in
+          column: Node_Name         # column whose value is looked up
+          operator: exists          # exists | notExists
+
+      # numeric/lexicographic when condition
+      - require: SubAction
+        when:
+          column: Version
+          operator: greaterThan     # greaterThan | greaterThanOrEquals | lessThan | lessThanOrEquals
+          value: "17.0"
+
+      # compound when condition (AND / OR nesting)
+      - require: SubAction
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: MODIFY
+            - any:
+                - column: SubAction
+                  operator: blank
+                - column: ActionKey
+                  operator: notBlank
+
+      # cross-column comparison — string operators only
+      - compare: "StartPort lessThanOrEquals EndPort"
+
+      # group presence
+      - one_of: [IPv4_Address, IPv6_Address]
+      - all_or_none: [SubAction, ActionKey]
+
+      # column sum
+      - sum: [Leg1, Leg2]
+        equals: Total</code></pre>
 
 <!-- ─── Column options table ──────────────────────────────────────────────── -->
 <h3 id="column-options">Column Options — Full Reference</h3>
 
 <table>
   <tr><th>Option</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>type: &lt;type&gt;</code></td><td>string</td><td>Column type: <code>string</code>, <code>integer</code>, <code>decimal</code>, <code>date</code>, <code>time</code>, <code>datetime</code>, <code>boolean</code>, <code>email</code>, <code>phone</code>, <code>ip</code>, <code>mac</code>, <code>cidr</code>, <code>hostname</code>, <code>fqdn</code>, <code>enum</code>, <code>urlScheme</code>, <code>protocol</code></td></tr>
   <tr><td><code>required: true</code></td><td>boolean</td><td>Cell must not be blank</td></tr>
   <tr><td><code>requiredWhen: { column, value }</code></td><td>object</td><td>Required only when the named column equals the given value</td></tr>
-  <tr><td><code>allowedValues: [...]</code></td><td>list</td><td>Cell must be one of the listed values (case-sensitive)</td></tr>
-  <tr><td><code>allowedRanges: [{min, max}, ...]</code></td><td>list</td><td>Numeric value must fall within at least one band (OR logic)</td></tr>
-  <tr><td><code>integer: true</code></td><td>boolean</td><td>Cell must parse as a whole number</td></tr>
-  <tr><td><code>minValue</code> / <code>maxValue</code></td><td>number</td><td>Numeric lower / upper bound (inclusive)</td></tr>
+  <tr><td><code>values: [...]</code></td><td>list</td><td>Closed vocabulary for <code>type: enum</code>, <code>type: protocol</code>, <code>type: urlScheme</code></td></tr>
+  <tr><td><code>allowedValues: [...]</code></td><td>list</td><td>Allowed values for <code>type: string</code>; generates Excel dropdown</td></tr>
+  <tr><td><code>allowedRanges: [{min, max}, ...]</code></td><td>list</td><td>Numeric bands (OR logic); requires <code>type: integer</code></td></tr>
+  <tr><td><code>minValue</code> / <code>maxValue</code></td><td>number</td><td>Numeric bounds (inclusive); requires <code>type: integer</code></td></tr>
+  <tr><td><code>minDecimal</code> / <code>maxDecimal</code></td><td>number</td><td>Decimal bounds (inclusive); requires <code>type: decimal</code></td></tr>
   <tr><td><code>minLength</code> / <code>maxLength</code></td><td>number</td><td>String length bounds (inclusive)</td></tr>
-  <tr><td><code>pattern: "regex"</code></td><td>string</td><td>Value must match the Java regex</td></tr>
-  <tr><td><code>patternMessage: "..."</code></td><td>string</td><td>Custom error message when <code>pattern</code> fails</td></tr>
+  <tr><td><code>precision</code></td><td>integer</td><td>Max decimal places; requires <code>type: decimal</code></td></tr>
+  <tr><td><code>format</code></td><td>string</td><td>Date/time format pattern; requires <code>type: date/time/datetime</code></td></tr>
+  <tr><td><code>accepts</code></td><td>string</td><td>IP version: <code>ipv4</code> | <code>ipv6</code> | <code>both</code>; requires <code>type: ip</code></td></tr>
+  <tr><td><code>accept</code></td><td>string</td><td>Boolean representation: <code>true/false</code> | <code>yes/no</code> | <code>1/0</code>; requires <code>type: boolean</code></td></tr>
+  <tr><td><code>pattern: "regex"</code></td><td>string</td><td>Value must match the Java regex (any type)</td></tr>
+  <tr><td><code>patternMessage: "..."</code></td><td>string</td><td>Shorthand for <code>messages.pattern</code> — custom message when <code>pattern</code> fails</td></tr>
   <tr><td><code>crossRef: { sheet, column }</code></td><td>object</td><td>Value must exist in the referenced sheet's column; <code>_index</code> = INDEX sheet</td></tr>
+  <tr><td><code>sheetRef: true</code></td><td>boolean</td><td>Value must match an existing workbook sheet name</td></tr>
+  <tr><td><code>sheetRefIgnoreCase: true</code></td><td>boolean</td><td>Case-insensitive sheet name match (only when <code>sheetRef: true</code>)</td></tr>
+  <tr><td><code>ignoreCase: true</code></td><td>boolean</td><td>Case-insensitive comparison for <code>allowedValues</code> / <code>values</code></td></tr>
+  <tr><td><code>unique: true</code></td><td>boolean</td><td>Values must be unique within the sheet</td></tr>
+  <tr><td><code>multi: true</code></td><td>boolean</td><td>Cell may contain multiple comma-separated values</td></tr>
+  <tr><td><code>messages: { ... }</code></td><td>object</td><td>Per-constraint custom messages: <code>required</code>, <code>minLength</code>, <code>maxLength</code>, <code>pattern</code>, <code>min</code>, <code>max</code>, <code>format</code>, <code>precision</code>, <code>type</code></td></tr>
 </table>
+
+<h3>Row Rules Reference</h3>
+
+<table>
+  <tr><th>Rule</th><th>Syntax</th><th>Description</th></tr>
+  <tr><td><code>require</code></td><td><code>require: [Sheet.]Column</code></td><td>Column must be non-blank; cross-sheet form checks value exists in that sheet</td></tr>
+  <tr><td><code>forbid</code></td><td><code>forbid: [Sheet.]Column</code></td><td>Column must be blank; cross-sheet form checks value absent from that sheet</td></tr>
+  <tr><td><code>compare</code></td><td><code>compare: "[S.]ColA op [S.]ColB"</code></td><td>Cross-column comparison using string operator</td></tr>
+  <tr><td><code>one_of</code></td><td><code>one_of: [[S.]ColA, [S.]ColB, ...]</code></td><td>At least one must be non-blank</td></tr>
+  <tr><td><code>only_one</code></td><td><code>only_one: [[S.]ColA, [S.]ColB]</code></td><td>Exactly one must be non-blank</td></tr>
+  <tr><td><code>all_or_none</code></td><td><code>all_or_none: [[S.]ColA, ...]</code></td><td>All filled or all blank</td></tr>
+  <tr><td><code>sum</code></td><td><code>sum: [[S.]ColA, [S.]ColB]</code> + <code>equals: [S.]ColC</code></td><td>Sum must equal target column</td></tr>
+</table>
+
+<h4>when: condition operators</h4>
+<table>
+  <tr><th>Operator</th><th>Description</th></tr>
+  <tr><td><code>equals</code></td><td>Column value equals <code>value</code> (case-insensitive)</td></tr>
+  <tr><td><code>notEquals</code></td><td>Column value does not equal <code>value</code></td></tr>
+  <tr><td><code>blank</code></td><td>Column value is null or empty</td></tr>
+  <tr><td><code>notBlank</code></td><td>Column value is not null/empty</td></tr>
+  <tr><td><code>contains</code></td><td>Column value contains <code>value</code> (case-insensitive)</td></tr>
+  <tr><td><code>greaterThan</code></td><td>Numeric or lexicographic &gt;</td></tr>
+  <tr><td><code>greaterThanOrEquals</code></td><td>Numeric or lexicographic &gt;=</td></tr>
+  <tr><td><code>lessThan</code></td><td>Numeric or lexicographic &lt;</td></tr>
+  <tr><td><code>lessThanOrEquals</code></td><td>Numeric or lexicographic &lt;=</td></tr>
+  <tr><td><code>exists</code></td><td>Used with <code>sheet:</code> field — current row's column value exists in that sheet</td></tr>
+  <tr><td><code>notExists</code></td><td>Used with <code>sheet:</code> field — current row's column value absent from that sheet</td></tr>
+</table>
+
+<pre><code># require unconditional — same-sheet
+- require: ActionKey
+
+# require unconditional — cross-sheet (value must exist in Node_Details.Node_Name)
+- require: Node_Details.Node_Name
+
+# require conditional — same-sheet
+- require: ActionKey
+  when:
+    column: Action                   # ColumnName = same sheet
+    operator: equals
+    value: MODIFY
+
+# require conditional — cross-sheet
+- require: Node_Details.Node_Name
+  when:
+    column: Action
+    operator: notEquals
+    value: DELETE
+
+# when with sheet: field (existence check in another sheet)
+- require: NIAM_NAME
+  when:
+    sheet: Node_Details
+    column: Node_Name
+    operator: exists
+
+# forbid unconditional — same-sheet
+- forbid: SubAction
+
+# forbid unconditional — cross-sheet (value must NOT exist in Blacklist.ID)
+- forbid: Blacklist.ID
+
+# forbid conditional — cross-sheet
+- forbid: Blacklist.ID
+  when:
+    column: Action
+    operator: notEquals
+    value: DELETE
+
+# compare — both sides support SheetName.ColumnName
+- compare: "StartPort lessThanOrEquals EndPort"
+- compare: "Ref.MinPrice greaterThan Pricing.BasePrice"
+
+# group presence with cross-sheet columns
+- one_of: [IPv4_Address, Backup.IPv6_Address]
+
+# sum with cross-sheet columns
+- sum: [Leg1, Leg2]
+  equals: Summary.Total</code></pre>
+
+<p><code>compare</code> string operators: <code>equals</code>, <code>notEquals</code>, <code>greaterThan</code>,
+<code>greaterThanOrEquals</code>, <code>lessThan</code>, <code>lessThanOrEquals</code>.
+Symbol aliases (<code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>) are accepted but string form is preferred.</p>
 
 <hr class="section">
 
@@ -897,11 +1068,19 @@ for (SheetValidationResult r : report.getSheetResults()) {
         ├── <span class="dir">config/</span>
         │   ├── <span class="file">ValidationRulesConfig.java</span>     <span class="comment"># Top-level rules model</span>
         │   ├── <span class="file">ValidationRulesLoader.java</span>     <span class="comment"># Loads and parses YAML rules file</span>
-        │   ├── <span class="file">ColumnRule.java</span>                <span class="comment"># Per-column rule model</span>
+        │   ├── <span class="file">ColumnRule.java</span>                <span class="comment"># Per-column rule (type, required, sheetRef, messages, etc.)</span>
+        │   ├── <span class="file">ColumnMessages.java</span>            <span class="comment"># Per-column custom error messages</span>
         │   ├── <span class="file">SheetRules.java</span>                <span class="comment"># Per-sheet rule model</span>
+        │   ├── <span class="file">SheetRowRule.java</span>              <span class="comment"># Row-level rule (require/forbid/compare/one_of/sum)</span>
+        │   ├── <span class="file">RowCondition.java</span>              <span class="comment"># when: condition (same-sheet + cross-sheet)</span>
+        │   ├── <span class="file">WorkbookSettings.java</span>          <span class="comment"># Global/per-sheet settings</span>
+        │   ├── <span class="file">WorkbookRule.java</span>              <span class="comment"># workbook_rules entry model</span>
+        │   ├── <span class="file">SubsetRule.java</span>                <span class="comment"># subset/superset rule model</span>
+        │   ├── <span class="file">UniqueRule.java</span>                <span class="comment"># unique rule model</span>
         │   ├── <span class="file">ConditionalRequired.java</span>       <span class="comment"># requiredWhen model</span>
         │   ├── <span class="file">CrossRef.java</span>                  <span class="comment"># crossRef model</span>
-        │   └── <span class="file">IntRange.java</span>                  <span class="comment"># allowedRanges entry model</span>
+        │   ├── <span class="file">IntRange.java</span>                  <span class="comment"># allowedRanges entry model</span>
+        │   └── <span class="file">ValidatorDefinition.java</span>       <span class="comment"># Custom validator registry entry</span>
         ├── <span class="dir">model/</span>
         │   ├── <span class="file">ValidationReport.java</span>          <span class="comment"># Report model (status, errors, parameters)</span>
         │   ├── <span class="file">SheetValidationResult.java</span>     <span class="comment"># Per-sheet error list</span>
@@ -911,14 +1090,25 @@ for (SheetValidationResult r : report.getSheetResults()) {
         │   ├── <span class="file">HtmlReportWriter.java</span>          <span class="comment"># Writes HTML validation report</span>
         │   └── <span class="file">ExcelReportWriter.java</span>         <span class="comment"># Writes Excel validation report</span>
         └── <span class="dir">validator/</span>
-            ├── <span class="file">CellValidator.java</span>             <span class="comment"># Dispatcher: runs all applicable validators per cell</span>
-            ├── <span class="file">RequiredValidator.java</span>
-            ├── <span class="file">AllowedValuesValidator.java</span>
-            ├── <span class="file">AllowedRangesValidator.java</span>
-            ├── <span class="file">IntegerValidator.java</span>
-            ├── <span class="file">LengthValidator.java</span>
-            ├── <span class="file">PatternValidator.java</span>
-            └── <span class="file">CrossRefValidator.java</span>
+            ├── <span class="file">CellValidator.java</span>             <span class="comment"># Validator interface + msg() helper</span>
+            ├── <span class="file">RowValidator.java</span>              <span class="comment"># Row-rule validator interface</span>
+            ├── <span class="file">RequiredValidator.java</span>         <span class="comment"># required / requiredWhen</span>
+            ├── <span class="file">StringValidator.java</span>           <span class="comment"># string: minLength/maxLength, allowedValues, boolean, urlScheme</span>
+            ├── <span class="file">IntegerValidator.java</span>          <span class="comment"># integer: minValue/maxValue, allowedRanges</span>
+            ├── <span class="file">DecimalValidator.java</span>          <span class="comment"># decimal: minDecimal/maxDecimal, precision</span>
+            ├── <span class="file">TemporalValidator.java</span>         <span class="comment"># date / time / datetime</span>
+            ├── <span class="file">EmailValidator.java</span>            <span class="comment"># email (multi-address support)</span>
+            ├── <span class="file">IpAddressValidator.java</span>        <span class="comment"># ip / cidr</span>
+            ├── <span class="file">HostnameValidator.java</span>         <span class="comment"># hostname / fqdn</span>
+            ├── <span class="file">PatternValidator.java</span>          <span class="comment"># mac, phone (built-in patterns), custom pattern</span>
+            ├── <span class="file">CrossRefValidator.java</span>         <span class="comment"># crossRef (cross-sheet column lookup)</span>
+            ├── <span class="file">SheetRefValidator.java</span>         <span class="comment"># sheetRef (value must match a sheet name)</span>
+            ├── <span class="file">CompareColumnsValidator.java</span>   <span class="comment"># compare row rule (ColA op ColB)</span>
+            ├── <span class="file">ConditionalRowRuleValidator.java</span> <span class="comment"># require/forbid with when condition + cross-sheet</span>
+            ├── <span class="file">WorkbookRuleValidator.java</span>     <span class="comment"># workbook_rules (subset/superset/unique/match)</span>
+            ├── <span class="file">GroupPresenceValidator.java</span>    <span class="comment"># one_of / only_one / all_or_none row rules</span>
+            ├── <span class="file">SumEqualsValidator.java</span>        <span class="comment"># sum: [...] equals: col row rule</span>
+            └── <span class="file">Operator.java</span>                 <span class="comment"># canonical operator constants + normalize/evaluate</span>
 </div>
 
 <hr class="section">
@@ -966,10 +1156,21 @@ sheets:
         required: true
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       Record.MY_FIELD:
         required: true
-        maxLength: 64</code></pre>
+        maxLength: 64
+
+    rules:
+      # require same-sheet column when condition met
+      - require: ActionKey
+        when:
+          column: Action
+          operator: equals
+          value: MODIFY
+      # require cross-sheet (SheetName.ColumnName)
+      - require: Node_Details.Node_Name</code></pre>
 
 <footer>
   CIQ Processor — Nokia CIQ Toolchain &nbsp;|&nbsp;

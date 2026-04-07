@@ -107,34 +107,8 @@ public class InMemoryExcelReader {
 
     private InMemoryCiqDataStore readInternal(String ciqFilePath, String nodeType, String activity,
                                               ValidationRulesConfig rules) throws IOException {
-        // Resolve special-sheet identity: sheet names from top-level config;
-        // column names from the sheet's own SheetRules entry (with defaults).
-        String nodeIdSheetName = (rules != null && rules.getNodeIdSheetName() != null)
-                ? rules.getNodeIdSheetName() : "Node_ID";
-        String userIdSheetName = (rules != null) ? rules.getUserIdSheetName() : null;
-
-        SheetRules nodeIdRules = (rules != null && rules.getSheets() != null)
-                ? rules.getSheets().get(nodeIdSheetName) : null;
-        String nodeIdNodeColumn = (nodeIdRules != null && nodeIdRules.getNodeColumn() != null)
-                ? nodeIdRules.getNodeColumn() : "Node";
-        String nodeIdNiamColumn = (nodeIdRules != null && nodeIdRules.getNiamColumn() != null)
-                ? nodeIdRules.getNiamColumn() : "NIAM_ID";
-
-        SheetRules userIdRules = (rules != null && rules.getSheets() != null && userIdSheetName != null)
-                ? rules.getSheets().get(userIdSheetName) : null;
-        String userIdCrGroupColumn = (userIdRules != null && userIdRules.getCrGroupColumn() != null)
-                ? userIdRules.getCrGroupColumn() : "CRGROUP";
-        String userIdEmailColumn   = (userIdRules != null && userIdRules.getEmailColumn() != null)
-                ? userIdRules.getEmailColumn() : "EMAIL";
-
         log.info("Reading CIQ into memory: {}", ciqFilePath);
         log.info("Node type: {}, Activity: {}", nodeType, activity);
-        log.info("NODE_ID sheet: '{}', nodeColumn: '{}', niamColumn: '{}'",
-                nodeIdSheetName, nodeIdNodeColumn, nodeIdNiamColumn);
-        if (userIdSheetName != null) {
-            log.info("USER_ID sheet: '{}', crGroupColumn: '{}', emailColumn: '{}'",
-                    userIdSheetName, userIdCrGroupColumn, userIdEmailColumn);
-        }
 
         validateFile(ciqFilePath);
 
@@ -142,7 +116,7 @@ public class InMemoryExcelReader {
              Workbook wb = new XSSFWorkbook(fis)) {
 
             Map<String, String> niamMapping =
-                    readNiamMapping(wb, nodeIdSheetName, nodeIdNodeColumn, nodeIdNiamColumn);
+                    readNiamMapping(wb, "Node_ID", "Node", "NIAM_ID");
             log.info("NIAM mapping: {} entries", niamMapping.size());
 
             CiqIndex index = readIndex(wb, nodeType, activity, niamMapping);
@@ -157,8 +131,7 @@ public class InMemoryExcelReader {
                 tables = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) {
                     String sName = wb.getSheetName(i);
-                    if (sName.equalsIgnoreCase(nodeIdSheetName)) continue;
-                    if (userIdSheetName != null && sName.equalsIgnoreCase(userIdSheetName)) continue;
+                    if (sName.equalsIgnoreCase("Node_ID")) continue;
                     if (groupMode && sName.equalsIgnoreCase(SHEET_INDEX)) continue;
                     tables.add(sName);
                 }
@@ -181,7 +154,41 @@ public class InMemoryExcelReader {
                 log.info("Loaded table '{}': {} rows", tableName, ciqSheet.getRows().size());
             }
 
+            // Load YAML-configured sheets that are NOT listed in the Index Tables column
+            // (e.g. Node_Details, USER_ID). These are auxiliary sheets that must be validated
+            // but are not referenced in the Index — include them in the store so the validation
+            // engine and workbook_rules validators can access them.
+            if (rules != null && rules.getSheets() != null) {
+                Set<String> alwaysSpecial = new java.util.HashSet<>(
+                        java.util.Arrays.asList("Index", "Node_ID"));
+                for (String sheetName : rules.getSheets().keySet()) {
+                    if (!alwaysSpecial.contains(sheetName) && !sheets.containsKey(sheetName)) {
+                        Sheet auxSheet = findSheet(wb, sheetName);
+                        if (auxSheet != null) {
+                            Set<String> cols = configuredColumns(rules, sheetName);
+                            WorkbookSettings sheetSettings = effectiveSettings(rules, sheetName);
+                            CiqSheet ciqSheet = readSheet(auxSheet, sheetName, cols, sheetSettings);
+                            sheets.put(sheetName, ciqSheet);
+                            log.info("Loaded auxiliary sheet '{}': {} rows", sheetName, ciqSheet.getRows().size());
+                        } else {
+                            log.warn("YAML-configured sheet '{}' not found in workbook", sheetName);
+                        }
+                    }
+                }
+            }
+
             InMemoryCiqDataStore store = new InMemoryCiqDataStore(index, sheets);
+
+            // Capture all workbook sheet names for sheetRef validation.
+            // This must reflect every sheet in the Excel file — not just the ones loaded as
+            // data tables — so that sheetRef: true can correctly validate Index.Tables values
+            // against the full workbook contents.
+            List<String> allSheetNames = new ArrayList<>();
+            for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                allSheetNames.add(wb.getSheetName(i));
+            }
+            store.setAllWorkbookSheetNames(allSheetNames);
+            log.debug("Workbook contains {} sheet(s): {}", allSheetNames.size(), allSheetNames);
 
             // Capture Index, Node-ID, and User-ID sheets separately for column-rule validation
             // and special data extraction (NIAM mapping, CR-email mapping).
@@ -191,27 +198,16 @@ public class InMemoryExcelReader {
             if (rawIndex != null) {
                 Set<String> indexCols = configuredColumns(rules, SHEET_INDEX);
                 store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, indexCols,
-                        effectiveSettings(rules, SHEET_INDEX)));
+                        effectiveSettings(rules, SHEET_INDEX), true /* stripTrailingBlanks */));
                 log.debug("Captured raw Index sheet ({} rows)",
                         store.getRawIndexSheet().getRows().size());
             }
-            Sheet rawNodeId = wb.getSheet(nodeIdSheetName);
+            Sheet rawNodeId = wb.getSheet("Node_ID");
             if (rawNodeId != null) {
                 store.setRawNodeIdSheet(
-                        readNodeIdSheet(rawNodeId, nodeIdSheetName, nodeIdNodeColumn, nodeIdNiamColumn));
-                log.debug("Captured raw '{}' sheet ({} rows)",
-                        nodeIdSheetName, store.getRawNodeIdSheet().getRows().size());
-            }
-            if (userIdSheetName != null) {
-                Sheet rawUserId = wb.getSheet(userIdSheetName);
-                if (rawUserId != null) {
-                    store.setRawUserIdSheet(
-                            readUserIdSheet(rawUserId, userIdSheetName, userIdCrGroupColumn, userIdEmailColumn));
-                    log.info("USER_ID sheet '{}': {} row(s) loaded",
-                            userIdSheetName, store.getRawUserIdSheet().getRows().size());
-                } else {
-                    log.warn("'{}' sheet not found in workbook", userIdSheetName);
-                }
+                        readNodeIdSheet(rawNodeId, "Node_ID", "Node", "NIAM_ID"));
+                log.debug("Captured raw Node_ID sheet ({} rows)",
+                        store.getRawNodeIdSheet().getRows().size());
             }
 
             return store;
@@ -454,51 +450,6 @@ public class InMemoryExcelReader {
      * one of the two columns is still read partially.  The missing column is then reported
      * precisely by {@code CiqValidationEngine.checkMissingColumns()}.
      */
-    private CiqSheet readUserIdSheet(Sheet sheet,
-                                     String sheetName, String crGroupColumn, String emailColumn) {
-        CiqSheet ciqSheet = new CiqSheet();
-        ciqSheet.setSheetName(sheetName);
-
-        int headerRowIdx = findHeaderRow(sheet, crGroupColumn, emailColumn);
-        if (headerRowIdx < 0)
-            headerRowIdx = findHeaderRowAny(sheet, crGroupColumn, emailColumn);
-        if (headerRowIdx < 0) {
-            log.warn("Header row not found in '{}' sheet (expected columns '{}' and '{}') " +
-                    "— sheet will have no rows", sheetName, crGroupColumn, emailColumn);
-            return ciqSheet;
-        }
-
-        Row headerRow  = sheet.getRow(headerRowIdx);
-        int crGroupCol = findColumnIndex(headerRow, crGroupColumn);
-        int emailCol   = findColumnIndex(headerRow, emailColumn);
-
-        // Build column list from only the columns actually present
-        List<String> colNames = new ArrayList<>();
-        if (crGroupCol >= 0) colNames.add(crGroupColumn);
-        if (emailCol   >= 0) colNames.add(emailColumn);
-        ciqSheet.setColumns(colNames);
-
-        for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
-            Row row = sheet.getRow(r);
-            if (row == null) continue;
-            Map<String, String> data = new LinkedHashMap<>();
-            boolean hasAnyValue = false;
-            if (crGroupCol >= 0) {
-                String v = getCellString(row.getCell(crGroupCol));
-                data.put(crGroupColumn, v);
-                if (v != null) hasAnyValue = true;
-            }
-            if (emailCol >= 0) {
-                String v = getCellString(row.getCell(emailCol));
-                data.put(emailColumn, v);
-                if (v != null) hasAnyValue = true;
-            }
-            if (!hasAnyValue) continue;
-            ciqSheet.getRows().add(new CiqRow(r + 1, data));
-        }
-        return ciqSheet;
-    }
-
     // -------------------------------------------------------------------------
     // Data sheet reading
     // -------------------------------------------------------------------------
@@ -519,6 +470,20 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings) {
+        return readSheet(sheet, tableName, columnsToRead, settings, false);
+    }
+
+    /**
+     * @param stripTrailingBlanks when {@code true}, trailing all-null rows are removed after
+     *                            reading regardless of the {@code ignoreBlankRows} setting.
+     *                            Pass {@code true} for structural/metadata sheets (Index, Node_ID)
+     *                            that are prone to Excel phantom rows, so those rows are silently
+     *                            stripped and do not produce spurious required-field errors.
+     *                            Pass {@code false} (default) for user data sheets so that
+     *                            intentional blank rows reach the validator.
+     */
+    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
+                               WorkbookSettings settings, boolean stripTrailingBlanks) {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
@@ -590,13 +555,15 @@ public class InMemoryExcelReader {
             ciqSheet.getRows().add(new CiqRow(r + 1, data));
         }
 
-        // Always strip trailing blank rows (rows where every value is null).
-        // This prevents Excel's internal empty rows at the end of the used range
-        // from being validated, regardless of the ignoreBlankRows setting.
-        if (!ignoreBlank) {
+        // Strip trailing all-null rows for structural/metadata sheets (Index, Node_ID) that are
+        // prone to Excel phantom rows extending the used-range well beyond the last real data row.
+        // For user data sheets (stripTrailingBlanks=false) we intentionally keep trailing blank
+        // rows so that required-field validation catches them as deliberate blank entries.
+        if (stripTrailingBlanks) {
             List<CiqRow> rows = ciqSheet.getRows();
             int last = rows.size() - 1;
-            while (last >= 0 && rows.get(last).getData().values().stream().allMatch(v -> v == null)) {
+            while (last >= 0
+                    && rows.get(last).getData().values().stream().allMatch(v -> v == null)) {
                 rows.remove(last--);
             }
         }

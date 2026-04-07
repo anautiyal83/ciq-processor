@@ -16,11 +16,19 @@ import java.util.List;
  *       column: Action
  *       operator: equals
  *       value: MODIFY
+ *   - require: Node_Details.Node_Name   # cross-sheet: value must exist in Node_Details.Node_Name
  *   - one_of: [IPv4, IPv6]
- *   - compare: "StartPort <= EndPort"
+ *   - compare: "StartPort lessThanOrEquals EndPort"
+ *   - compare: "Price greaterThan MinPrice"
  *   - sum: [Col1, Col2]
  *     equals: Total
  * </pre>
+ *
+ * <p>Supported {@code compare} operators (string form only):
+ * {@code equals}, {@code notEquals}, {@code greaterThan}, {@code greaterThanOrEquals},
+ * {@code lessThan}, {@code lessThanOrEquals}.
+ * Symbol aliases ({@code ==}, {@code !=}, {@code >}, {@code >=}, {@code <}, {@code <=})
+ * are also accepted but the string form is preferred.
  */
 public class SheetRowRule {
 
@@ -31,8 +39,11 @@ public class SheetRowRule {
     private String forbid;
 
     /**
-     * Comparison expression of the form {@code "ColA op ColB"} where op is
-     * one of {@code >=, <=, >, <, ==, !=}.
+     * Comparison expression of the form {@code "ColA operator ColB"}.
+     * Preferred string operators: {@code equals}, {@code notEquals}, {@code greaterThan},
+     * {@code greaterThanOrEquals}, {@code lessThan}, {@code lessThanOrEquals}.
+     * Symbol aliases ({@code ==}, {@code !=}, {@code >}, {@code >=}, {@code <}, {@code <=})
+     * are also accepted.
      */
     private String compare;
 

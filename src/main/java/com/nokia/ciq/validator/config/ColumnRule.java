@@ -100,6 +100,36 @@ public class ColumnRule {
     private CrossRef crossRef;
 
     /**
+     * Value must match a sheet name that exists in the workbook.
+     * Useful for Index / routing sheets where a column holds table names.
+     *
+     * <p>YAML usage:
+     * <pre>
+     * Tables:
+     *   required: true
+     *   sheetRef: true
+     * </pre>
+     */
+    private boolean sheetRef;
+
+    /**
+     * When {@code sheetRef: true}, controls whether the sheet-name comparison
+     * is case-insensitive.  Defaults to {@code false} (exact-case match).
+     *
+     * <p>Kept separate from {@code ignoreCase} (which applies to column-value
+     * comparisons such as {@code allowedValues}) to avoid ambiguity.
+     *
+     * <p>YAML usage:
+     * <pre>
+     * Tables:
+     *   required: true
+     *   sheetRef: true
+     *   sheetRefIgnoreCase: true    # "announcement_files" matches "ANNOUNCEMENT_FILES"
+     * </pre>
+     */
+    private boolean sheetRefIgnoreCase;
+
+    /**
      * Date/time format pattern used by {@code type: date}, {@code type: time},
      * and {@code type: datetime}.  Uses {@code java.text.SimpleDateFormat} patterns.
      * Defaults: date → {@code yyyy-MM-dd}, time → {@code HH:mm:ss},
@@ -225,6 +255,12 @@ public class ColumnRule {
 
     public CrossRef getCrossRef() { return crossRef; }
     public void setCrossRef(CrossRef crossRef) { this.crossRef = crossRef; }
+
+    public boolean isSheetRef() { return sheetRef; }
+    public void setSheetRef(boolean sheetRef) { this.sheetRef = sheetRef; }
+
+    public boolean isSheetRefIgnoreCase() { return sheetRefIgnoreCase; }
+    public void setSheetRefIgnoreCase(boolean sheetRefIgnoreCase) { this.sheetRefIgnoreCase = sheetRefIgnoreCase; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

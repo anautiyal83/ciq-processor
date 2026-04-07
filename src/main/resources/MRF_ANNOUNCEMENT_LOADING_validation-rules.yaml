@@ -4,17 +4,10 @@
 #
 # Use-case: Load announcement audio files (TAR or individual) onto MRF nodes.
 #
-# CIQ Sheet validated: ANNOUNCEMENT_FILES
-#   CRGROUP mode columns: GROUP, Action, VERSION, INPUT_FILE, MRF_DESTINATION_PATH
-#
-# Notes:
-#   - CRGROUP mode: INDEX sheet has GROUP | CRGROUP | NODE columns (no TABLES).
-#     GROUP drives MOP content — all nodes in the same GROUP get identical rows.
-#     CRGROUP drives execution and approval — nodes in the same CRGROUP are
-#     executed in the same change window (in parallel by NCE).
-#     validateNodeIds checks every node in every GROUP against the NODE_ID sheet.
-#   - ciq-processor writes one sub-folder per CRGROUP value containing a
-#     CRGroupIndex JSON and per-GROUP data files.
+# CIQ structure:
+#   - INDEX sheet: Node | CRGroup | Tables
+#   - Data sheets: ANNOUNCEMENT_FILES
+#   - Node-ID sheet: Node_Details (Node_Name → NIAM NAME)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -26,52 +19,44 @@ settings:
   trimCellValues: true
   ignoreBlankRows: false
   caseSensitiveHeaders: false
-  caseSensitiveValues: true
-
-
-# INDEX sheet has GROUP|CRGROUP|NODE format (no TABLES column) — no cross-sheet validation
-validateIndexSheets: false
-
-# Validate that each node in the GROUP→NODE index exists in the NODE_ID sheet
-validateNodeIds: true
-
-# CRGROUP mode: INDEX sheet uses GROUP|CRGROUP|NODE columns; one MOP folder per CRGROUP
-groupByColumnName: CRGROUP
-
+  caseSensitiveValues: true   
+ 
+ # ---------------------------------------------------------------------------
+# Cross-sheet (workbook-level) rules
 # ---------------------------------------------------------------------------
-# Special sheet identity — sheet names only; column names live inside each
-# sheet's own definition under sheets:
-# ---------------------------------------------------------------------------
-nodeIdSheetName: Node_Details
-userIdSheetName: User_ID
-
+workbook_rules:
+   # every CRGroup value in the Index must have a matching entry in USER_ID
+  - match:
+      from: Index.CRGroup
+      to:   USER_ID.CRGroup
+           
 sheets:
 
   # ---------------------------------------------------------------------------
   # Sheet: Index
-  # GROUP | CRGROUP | NODE format — one row per node assignment.
+  # Standard NODE | CRGROUP | TABLES format.
   # ---------------------------------------------------------------------------
   Index:
     columns:
-      GROUP:
-        required: true
-      CRGROUP:
-        required: true
-        description: "CR Number"
-      NODE:
+      Node:
         required: true
         description: "MRF Hostname"
+        type: string
+        pattern: ".*MRF.*"
+      CRGroup:
+        required: true
+        description: "CR Number"
       Tables:
         required: true
-        description: "Table or sheets names"
+        description: "Data sheet name (must match an actual sheet in the workbook)"
+        sheetRef: true
+        sheetRefIgnoreCase: true
 
   # ---------------------------------------------------------------------------
   # Sheet: Node_Details
   # Maps each MRF hostname to its NIAM login ID.
   # ---------------------------------------------------------------------------
   Node_Details:
-    nodeColumn: Node_Name
-    niamColumn: "NIAM NAME"
     columns:
       Node_Name:
         required: true
@@ -81,22 +66,6 @@ sheets:
         description: "NIAM ID for the hostname"
 
   # ---------------------------------------------------------------------------
-  # Sheet: User_ID
-  # Maps each CRGROUP to the responsible user's email address.
-  # ---------------------------------------------------------------------------
-  User_ID:
-    crGroupColumn: CRGROUP
-    emailColumn: EMAIL
-    columns:
-      CRGROUP:
-        required: true
-        description: "CR Number. Should match Index sheet"
-      EMAIL:
-        required: true
-        type: email
-        description: "Email address(es) of the user(s) responsible for executing the CR, used for sending notifications related to execution status, reports, and alerts. Can hold a comma-separated list"
-
-  # ---------------------------------------------------------------------------
   # Sheet: ANNOUNCEMENT_FILES
   # One row per announcement file to be loaded onto MRF nodes.
   # ---------------------------------------------------------------------------
@@ -104,6 +73,7 @@ sheets:
     columns:
       GROUP:
         required: true
+        description: "Group name for the configuration changes"
       INPUT_FILE:
         required: true
         maxLength: 512
@@ -112,3 +82,45 @@ sheets:
         pattern: "^/.*"
         patternMessage: "MRF Destination Path must be an absolute Unix path starting with /"
         maxLength: 1024
+
+          # ---------------------------------------------------------------------------
+  # Sheet: USER_ID
+  # Maps each CRGROUP to its EMAIL.
+  # ---------------------------------------------------------------------------
+  USER_ID:
+    columns:
+      CRGroup:
+        required: true
+        description: "CR Number"
+      EMAIL:
+        required: true
+        type: email
+        multi: false
+        description: "Email ID"
+
+# ---------------------------------------------------------------------------
+# Post-validation outputs (computed only when validation passes)
+# ---------------------------------------------------------------------------
+# Each entry key is used as the parameter name unless 'name' is specified.
+# Supported aggregates: distinct | count | sum
+# ---------------------------------------------------------------------------
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: Index
+    column: CRGroup
+    aggregate: distinct
+    separator: ","
+
+  # Total number of announcement file rows
+  CR_COUNT:
+    sheet: Index
+    column: CRGroup
+    aggregate: count
+
+  # Example: use 'name' to override the parameter key in the report
+#  af_group_count:
+#    name: UNIQUE_GROUPS_COUNT
+#    sheet: ANNOUNCEMENT_FILES
+#    column: GROUP
+#    aggregate: count

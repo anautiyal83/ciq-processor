@@ -4,21 +4,6 @@
 # Rules are applied to every data row in each sheet.
 # Add a new use case by creating a new YAML file - zero code changes required.
 
-# Validate all tables listed in Index have matching JSON files
-validateIndexSheets: true
-
-# Validate Node column values exist in Node_ID sheet
-validateNodeIds: true
-
-# NODE mode: INDEX sheet uses Node|CRGroup|Tables columns; one MOP folder per node
-groupByColumnName: NODE
-
-# ---------------------------------------------------------------------------
-# Special sheet identity — sheet names only; column names live inside each
-# sheet's own definition under sheets:
-# ---------------------------------------------------------------------------
-nodeIdSheetName: Node_ID
-
 sheets:
 
 ########### Index ##############
@@ -30,11 +15,11 @@ sheets:
         required: true
       Tables:
         required: true
+        sheetRef: true
+        sheetRefIgnoreCase: true
 
 ########### Node_ID ##############
   Node_ID:
-    nodeColumn: Node
-    niamColumn: NIAM
     columns:
       Node:
         required: true
