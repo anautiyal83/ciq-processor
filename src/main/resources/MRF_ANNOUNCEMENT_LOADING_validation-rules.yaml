@@ -17,55 +17,84 @@
 #     CRGroupIndex JSON and per-GROUP data files.
 # =============================================================================
 
+# ---------------------------------------------------------------------------
+# Global settings
+# ---------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: false
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+
 # INDEX sheet has GROUP|CRGROUP|NODE format (no TABLES column) — no cross-sheet validation
 validateIndexSheets: false
 
 # Validate that each node in the GROUP→NODE index exists in the NODE_ID sheet
 validateNodeIds: true
 
-# GROUP mode: INDEX sheet uses GROUP|CRGROUP|NODE columns; one MOP folder per CRGROUP
+# CRGROUP mode: INDEX sheet uses GROUP|CRGROUP|NODE columns; one MOP folder per CRGROUP
 groupByColumnName: CRGROUP
 
-# Validate columns in the INDEX sheet (GROUP|CRGROUP|NODE format for MRF)
-indexSheet:
-  columns:
-    GROUP:
-      required: true
-    CRGROUP:
-      required: true
-      description: "CR Number"
-    NODE:
-      required: true
-      description: "MRF Hostname"
-
-# NODE_ID sheet: name, key column names, and column-level validation rules
-nodeIdSheet:
-  name:       Node_Details1
-  nodeColumn: Node_Name
-  niamColumn: "NIAM NAME"
-  columns:
-    Node_Name:
-      required: true
-      description: "MRF Hostname"
-    "NIAM NAME":
-      required: true
-      description: "NIAM ID for the hostname"
-
-# USER_ID sheet: maps each CRGROUP to the responsible user's email address
-userIdSheet:
-  name:          User_ID
-  crGroupColumn: CRGROUP
-  emailColumn:   EMAIL
-  columns:
-    CRGROUP:
-      required: true
-      description: "CR Number. Should match Index sheet"
-    EMAIL:
-      required: true
-      email:    true
-      description: "Email address(es) of the user(s) responsible for executing the CR, used for sending notifications related to execution status, reports, and alerts. Can hold a comma-separated list"
+# ---------------------------------------------------------------------------
+# Special sheet identity — sheet names only; column names live inside each
+# sheet's own definition under sheets:
+# ---------------------------------------------------------------------------
+nodeIdSheetName: Node_Details
+userIdSheetName: User_ID
 
 sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Index
+  # GROUP | CRGROUP | NODE format — one row per node assignment.
+  # ---------------------------------------------------------------------------
+  Index:
+    columns:
+      GROUP:
+        required: true
+      CRGROUP:
+        required: true
+        description: "CR Number"
+      NODE:
+        required: true
+        description: "MRF Hostname"
+      Tables:
+        required: true
+        description: "Table or sheets names"
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Node_Details
+  # Maps each MRF hostname to its NIAM login ID.
+  # ---------------------------------------------------------------------------
+  Node_Details:
+    nodeColumn: Node_Name
+    niamColumn: "NIAM NAME"
+    columns:
+      Node_Name:
+        required: true
+        description: "MRF Hostname"
+      "NIAM NAME":
+        required: true
+        description: "NIAM ID for the hostname"
+
+  # ---------------------------------------------------------------------------
+  # Sheet: User_ID
+  # Maps each CRGROUP to the responsible user's email address.
+  # ---------------------------------------------------------------------------
+  User_ID:
+    crGroupColumn: CRGROUP
+    emailColumn: EMAIL
+    columns:
+      CRGROUP:
+        required: true
+        description: "CR Number. Should match Index sheet"
+      EMAIL:
+        required: true
+        type: email
+        description: "Email address(es) of the user(s) responsible for executing the CR, used for sending notifications related to execution status, reports, and alerts. Can hold a comma-separated list"
 
   # ---------------------------------------------------------------------------
   # Sheet: ANNOUNCEMENT_FILES

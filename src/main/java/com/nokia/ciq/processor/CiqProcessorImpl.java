@@ -12,7 +12,6 @@ import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.model.NodeEntry;
 import com.nokia.ciq.reader.util.FileNamingUtil;
 import com.nokia.ciq.validator.CiqValidationEngine;
-import com.nokia.ciq.validator.config.UserIdSheetConfig;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.ValidationRulesLoader;
 import com.nokia.ciq.validator.model.ValidationReport;
@@ -261,13 +260,19 @@ public class CiqProcessorImpl implements CiqProcessor {
             }
         }
 
-        // Build CRGROUP → email map from User_ID sheet
+        // Build CRGROUP → email map from User-ID sheet
         Map<String, String> crGroupToEmail = new LinkedHashMap<>();
-        UserIdSheetConfig userIdCfg = rules != null ? rules.getUserIdSheet() : null;
-        if (userIdCfg != null && store.getRawUserIdSheet() != null) {
+        String userIdSheetName = rules != null ? rules.getUserIdSheetName() : null;
+        if (userIdSheetName != null && store.getRawUserIdSheet() != null) {
+            com.nokia.ciq.validator.config.SheetRules userIdRules =
+                    (rules.getSheets() != null) ? rules.getSheets().get(userIdSheetName) : null;
+            String crGroupCol = (userIdRules != null && userIdRules.getCrGroupColumn() != null)
+                    ? userIdRules.getCrGroupColumn() : "CRGROUP";
+            String emailCol   = (userIdRules != null && userIdRules.getEmailColumn() != null)
+                    ? userIdRules.getEmailColumn() : "EMAIL";
             for (CiqRow row : store.getRawUserIdSheet().getRows()) {
-                String crg   = row.get(userIdCfg.getCrGroupColumn());
-                String email = row.get(userIdCfg.getEmailColumn());
+                String crg   = row.get(crGroupCol);
+                String email = row.get(emailCol);
                 if (crg != null && !crg.trim().isEmpty() && email != null && !email.trim().isEmpty()) {
                     crGroupToEmail.put(crg.trim(), email.trim());
                 }

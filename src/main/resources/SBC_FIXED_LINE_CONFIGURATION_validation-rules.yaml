@@ -13,28 +13,33 @@ validateNodeIds: true
 # NODE mode: INDEX sheet uses Node|CRGroup|Tables columns; one MOP folder per node
 groupByColumnName: NODE
 
-# Validate columns in the INDEX sheet (Node|CRGroup|Tables format for SBC)
-indexSheet:
-  columns:
-    Node:
-      required: true
-    CRGroup:
-      required: true
-    Tables:
-      required: true
-
-# NODE_ID sheet: name, key column names, and column-level validation rules
-nodeIdSheet:
-  name:       Node_ID
-  nodeColumn: Node
-  niamColumn: NIAM
-  columns:
-    Node:
-      required: true
-    NIAM:
-      required: true
+# ---------------------------------------------------------------------------
+# Special sheet identity — sheet names only; column names live inside each
+# sheet's own definition under sheets:
+# ---------------------------------------------------------------------------
+nodeIdSheetName: Node_ID
 
 sheets:
+
+########### Index ##############
+  Index:
+    columns:
+      Node:
+        required: true
+      CRGroup:
+        required: true
+      Tables:
+        required: true
+
+########### Node_ID ##############
+  Node_ID:
+    nodeColumn: Node
+    niamColumn: NIAM
+    columns:
+      Node:
+        required: true
+      NIAM:
+        required: true
 
 ########### CRFTargetList ##############
   CRFTargetList:
@@ -46,7 +51,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -55,7 +61,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -77,21 +84,27 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 32
       Record.LOCATION:
-        allowedValues: [Access, Core]
+        type: enum
+        values: [Access, Core]
       Record.TARGET_TYPE:
-        allowedValues: ["Type 1", "Type 2", "IBCF Trunk Group"]
+        type: enum
+        values: ["Type 1", "Type 2", "IBCF Trunk Group"]
       Record.CRFTargetListEntry.TRANSPORT_TYPE:
-        allowedValues: [UDP, TCP, SCTP, TLS, ANY]
+        type: enum
+        values: [UDP, TCP, SCTP, TLS, ANY]
       Record.CRFTargetListEntry.ORDER:
-        allowedValues: ["10", "20"]
+        type: enum
+        values: ["10", "20"]
       Record.CRFTargetListEntry.PRIORITY:
-        allowedValues: ["10", "20", "30"]
+        type: enum
+        values: ["10", "20", "30"]
       Record.CRFTargetListEntry.WEIGHT:
         integer: true
         minValue: 0
         maxValue: 100
       Record.TARGET_LIST_SELECTION_OPTION:
-        allowedValues: ["Order/Priority/Weight","Weight/Order/Priority", "TOD Cost Index"]
+        type: enum
+        values: ["Order/Priority/Weight","Weight/Order/Priority", "TOD Cost Index"]
 
 ########### PeeringSDPProfileTable ##############
   PeeringSDPProfileTable:
@@ -103,7 +116,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -112,7 +126,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -128,17 +143,23 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 128
       Record.SDP_OFFER_FROM_PEERING_SIDE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_ANSWER_FROM_PEERING_SIDE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_OFFER_FROM_CORE_SIDE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_ANSWER_FROM_CORE_SIDE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.GoldenCodecSet.GOLDEN_CODEC:
-        allowedValues: [PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, "G726-16", "G726-24", "G726-32", "G726-40", G728, "AMR-WB", GSM, "GSM-EFR", "GSM-HR", G722, OPUS, EVS]
+        type: enum
+        values: [PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, "G726-16", "G726-24", "G726-32", "G726-40", G728, "AMR-WB", GSM, "GSM-EFR", "GSM-HR", G722, OPUS, EVS]
       Record.CodecBandwidth.CODEC:
-        allowedValues: ["H263-2000", H264, "MP4V-ES", PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, "G726-16", "G726-24", "G726-32", "G726-40", G728, "AMR-WB", GSM, "GSM-EFR", "GSM-HR", G722, OPUS, "iSAC-16", "iSAC-32", VP8, t140, EVS, "SILK-NB", "SILK-MB", "SILK-WB", "SILK-SWB"]
+        type: enum
+        values: ["H263-2000", H264, "MP4V-ES", PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, "G726-16", "G726-24", "G726-32", "G726-40", G728, "AMR-WB", GSM, "GSM-EFR", "GSM-HR", G722, OPUS, "iSAC-16", "iSAC-32", VP8, t140, EVS, "SILK-NB", "SILK-MB", "SILK-WB", "SILK-SWB"]
       Record.CodecBandwidth.BANDWIDTH:
         integer: true
         minValue: 0
@@ -192,9 +213,11 @@ sheets:
         minValue: 0
         maxValue: 255
       Record.AuxiliaryCodecSet.AUXILIARY_CODEC:
-        allowedValues: [CN, DTMF]
+        type: enum
+        values: [CN, DTMF]
       Record.MsrpBandwidth.MSRP_MEDIA_TYPE:
-        allowedValues: [text, image, audio, video, application, multipart, message]
+        type: enum
+        values: [text, image, audio, video, application, multipart, message]
       Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
         integer: true
         minValue: 0
@@ -224,19 +247,26 @@ sheets:
         minValue: 0
         maxValue: 10000
       Record.MODE_CHANGE_PERIOD:
-        allowedValues: ["NULL", "1", "2"]
+        type: enum
+        values: ["NULL", "1", "2"]
       Record.INSERT_AMR_NB_CODEC_WITH_MODE_SET:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET:
-        allowedValues: ["4.75", "5.15", "5.9", "6.7", "7.4", "7.95", "10.2", "12.2"]
+        type: enum
+        values: ["4.75", "5.15", "5.9", "6.7", "7.4", "7.95", "10.2", "12.2"]
       Record.INSERT_AMR_WB_CODEC_WITH_MODE_SET:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET:
-        allowedValues: ["6.6", "8.85", "12.65", "14.25", "15.85", "18.25", "19.85", "23.05", "23.85"]
+        type: enum
+        values: ["6.6", "8.85", "12.65", "14.25", "15.85", "18.25", "19.85", "23.05", "23.85"]
       Record.REUSE_SDP_PAYLOAD_NUMBER_IF_NO_MODE_SET_IN_SDP_OFFER:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.AMR_PREFERRED_MODESET_PRIORITY:
-        allowedValues: [Before, After]
+        type: enum
+        values: [Before, After]
       Record.DEFAULT_APPLICATION_MEDIA_TYPE_BANDWIDTH:
         integer: true
         minValue: 0
@@ -278,25 +308,35 @@ sheets:
         minValue: 1
         maxValue: 250
       Record.SDES_SRTP_SUPPORTED:
-        allowedValues: ["No", "Non-3GPP SDES-SRTP", "3GPP SDES-SRTP"]
+        type: enum
+        values: ["No", "Non-3GPP SDES-SRTP", "3GPP SDES-SRTP"]
       Record.LATCH_4_MEDIA_CONNECTIONS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.INTELLIGENT_TRANSCODING_SUPPORT:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SUPPORT_EVS_AMR_WB_IO_MODE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MIN_ALLOWED_EVS_BR:
-        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        type: enum
+        values: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
       Record.MAX_ALLOWED_EVS_BR:
-        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        type: enum
+        values: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
       Record.MIN_ALLOWED_EVS_BW:
-        allowedValues: [none, nb, wb, swb, fb]
+        type: enum
+        values: [none, nb, wb, swb, fb]
       Record.MAX_ALLOWED_EVS_BW:
-        allowedValues: [none, nb, wb, swb, fb]
+        type: enum
+        values: [none, nb, wb, swb, fb]
       Record.RTCP_MUX_SUPPORT:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.PRESCRIBED_DTMF_PT_FOR_EGRESS_SDP_OFFER:
         allowedRanges:
           - min: 0
@@ -304,11 +344,14 @@ sheets:
           - min: 96
             max: 127
       Record.RINGBACK_TONE_FOR_CALLING_PARTY:
-        allowedValues: ["Off", "MS Teams Support", "Carrier Support"]
+        type: enum
+        values: ["Off", "MS Teams Support", "Carrier Support"]
       Record.ICE_SUPPORT:
-        allowedValues: ["No", "ICE Lite Support Peering"]
+        type: enum
+        values: ["No", "ICE Lite Support Peering"]
       Record.SIGNAL_ICE_LITE_IN_SDP:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
 
 ########### BorderGatewayPublishedRealmTable ##############
   BorderGatewayPublishedRealmTable:
@@ -320,7 +363,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ID:
         required: true
         integer: true
@@ -344,7 +388,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -353,7 +398,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -372,7 +418,8 @@ sheets:
       Record.VN_NAME:
         maxLength: 32
       Record.VN_TYPE:
-        allowedValues: [Core, Peer]
+        type: enum
+        values: [Core, Peer]
       Record.TRUNK_CONTEXT:
         maxLength: 128
       Record.SPARE_TABLE_ID:
@@ -380,11 +427,14 @@ sheets:
         minValue: 0
         maxValue: 10000
       Record.MEASUREMENT_TG_TRAFFIC:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MEASUREMENT_ISGW_POLICY:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MEASUREMENT_CAC:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.REMOTE_IPSEC_TUNNEL_GW_ADDR:
         maxLength: 45
       Record.IKE_REMOTE_SERVER_PORT:
@@ -396,9 +446,11 @@ sheets:
           - min: 1024
             max: 65535
       Record.ENABLE_STIR_SHAKEN:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.VERIFICATION_FAILURE_ACTION:
-        allowedValues: ["Verification Server Action", Continue]
+        type: enum
+        values: ["Verification Server Action", Continue]
 
 ########### ServiceProfileTable ##############
   ServiceProfileTable:
@@ -410,7 +462,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ID:
         required: true
         integer: true
@@ -426,69 +479,81 @@ sheets:
       Record.SERVICE_DESCRIPTION:
         maxLength: 19
       Record.ALLOW_ALL_IN_SESSION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_INCOMING_SESSION:
         integer: true
         minValue: 0
         maxValue: 32000
       Record.ALLOW_ALL_OUT_SESSION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_OUTGOING_SESSION:
         integer: true
         minValue: 0
         maxValue: 32000
       Record.ALLOW_ALL_IN_BANDWIDTH:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_INCOMING_BANDWIDTH:
         integer: true
         minValue: 0
         maxValue: 30000000
       Record.ALLOW_ALL_OUT_BANDWIDTH:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_OUTGOING_BANDWIDTH:
         integer: true
         minValue: 0
         maxValue: 30000000
       Record.ALLOW_ALL_TOTAL_SESSION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_TOTAL_SESSION:
         integer: true
         minValue: 0
         maxValue: 64000
       Record.ALLOW_ALL_TOTAL_BANDWIDTH:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_TOTAL_BANDWIDTH:
         integer: true
         minValue: 0
         maxValue: 60000000
       Record.ALLOW_ALL_TOTAL_AUDIO_BANDWIDTH:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_TOTAL_AUDIO_BANDWIDTH:
         integer: true
         minValue: 0
         maxValue: 10000000
       Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_TOTAL_VIDEO_BANDWIDTH:
         integer: true
         minValue: 0
         maxValue: 50000000
       Record.PER_USER:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.ALLOW_ALL_TOTAL_CPS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_TOTAL_CPS:
         integer: true
         minValue: 0
         maxValue: 64000
       Record.ALLOW_ALL_IN_CPS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_INCOMING_CPS:
         integer: true
         minValue: 0
         maxValue: 32000
       Record.ALLOW_ALL_OUT_CPS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MAX_OUTGOING_CPS:
         integer: true
         minValue: 0
@@ -504,7 +569,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ID:
         required: true
         integer: true
@@ -516,11 +582,14 @@ sheets:
       Record.EXTERNAL_HOST_NAME:
         maxLength: 256
       Record.ADMINISTRATIVE_STATE:
-        allowedValues: [Unlocked, Locked]
+        type: enum
+        values: [Unlocked, Locked]
       Record.OVERLOAD_SPECIAL_TREATMENT:
-        allowedValues: ["Reject with 500", "Pass Through"]
+        type: enum
+        values: ["Reject with 500", "Pass Through"]
       Record.INCLUDE_SERVER_PORT_IN_EXT_PFED_URI:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.IPV4_VLAN_ID:
         integer: true
         minValue: 0
@@ -530,9 +599,11 @@ sheets:
         minValue: 0
         maxValue: 4094
       Record.EIPM_MONITOR_MODE:
-        allowedValues: [Disabled, "Heartbeat-only", Monitor]
+        type: enum
+        values: [Disabled, "Heartbeat-only", Monitor]
       Record.IPSEC_ALLOWED:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.IPSEC_LOCAL_SERVER_PORT:
         allowedRanges:
           - min: 0
@@ -548,7 +619,8 @@ sheets:
           - min: 1024
             max: 32767
       Record.COMMON_IP_WITH_MEDIA:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
 
 ########### PublishedRealmTable ##############
   PublishedRealmTable:
@@ -560,7 +632,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ID:
         required: true
         integer: true
@@ -580,13 +653,15 @@ sheets:
         minLength: 1
         maxLength: 128
       Record.IP_VERSION:
-        allowedValues: [v4, v6, "v4/v6"]
+        type: enum
+        values: [v4, v6, "v4/v6"]
       Record.BYPASS_IPV4_DOMAIN_SUFFIX:
         maxLength: 128
       Record.BYPASS_IPV6_DOMAIN_SUFFIX:
         maxLength: 128
       Record.EIPM_INTER_MONITOR_MODE:
-        allowedValues: [Disabled, "Heartbeat-only", Monitor]
+        type: enum
+        values: [Disabled, "Heartbeat-only", Monitor]
 
 ########### IbcfSipProfileTable ##############
   IbcfSipProfileTable:
@@ -598,7 +673,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -607,7 +683,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -623,35 +700,49 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 128
       Record.URI_TYPE:
-        allowedValues: [SIP, TEL, SIPS]
+        type: enum
+        values: [SIP, TEL, SIPS]
       Record.RURI_POPULATION:
-        allowedValues: ["Egress TG destination", "Pass through", "Pass through w/o inserting Route"]
+        type: enum
+        values: ["Egress TG destination", "Pass through", "Pass through w/o inserting Route"]
       Record.INVITE_PRELOADED_ROUTE_HEADER_PASS_THRU:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.P_CHARGING_VECTOR_HANDLING:
-        allowedValues: ["Not handle", "Pass through", "Generate Transit IOI", "Generate Transit IOI and Void Received", "Generate Orig IOI", "Generate Term IOI"]
+        type: enum
+        values: ["Not handle", "Pass through", "Generate Transit IOI", "Generate Transit IOI and Void Received", "Generate Orig IOI", "Generate Term IOI"]
       Record.IOI:
         maxLength: 64
       Record.CONTACT_HEADER_RFC4904_TGRP_OR_TRUNK_CONTEXT_POPULATION:
-        allowedValues: ["Not Populate", "Local TG", "Pass through"]
+        type: enum
+        values: ["Not Populate", "Local TG", "Pass through"]
       Record.RURI_HEADER_RFC4904_TGRP_OR_TRUNK_CONTEXT_POPULATION:
-        allowedValues: ["Not Populate", "Local TG", "Pass through"]
+        type: enum
+        values: ["Not Populate", "Local TG", "Pass through"]
       Record.CALLING_PARTY_IDENTITY_HEADER:
-        allowedValues: ["P-Asserted-ID header only", "P-Asserted-ID then From header", "From header only"]
+        type: enum
+        values: ["P-Asserted-ID header only", "P-Asserted-ID then From header", "From header only"]
       Record.REMOVE_HEADERS:
-        allowedValues: ["P-Access-Network-Info", "P-Preferred-Service", "P-Asserted-Service", "P-Charging-Function-Addresses", "P-Served-User", "P-DCS-Billing-Info", "P-Early-Media", "P-Private-Network-Indication", "P-Profile-Key", "Feature-Caps", Priority, "Restoration-Info", "Relayed-Charge", "Service-Interact-Info", "Cellular-Network-Info", "Resource-Priority", Diversion, "Remote-Party-ID", "P-Called-Party-ID", "P-Charge-Info", "Alert-Info", "Accept-Contact", "User-to-User", Reason]
+        type: enum
+        values: ["P-Access-Network-Info", "P-Preferred-Service", "P-Asserted-Service", "P-Charging-Function-Addresses", "P-Served-User", "P-DCS-Billing-Info", "P-Early-Media", "P-Private-Network-Indication", "P-Profile-Key", "Feature-Caps", Priority, "Restoration-Info", "Relayed-Charge", "Service-Interact-Info", "Cellular-Network-Info", "Resource-Priority", Diversion, "Remote-Party-ID", "P-Called-Party-ID", "P-Charge-Info", "Alert-Info", "Accept-Contact", "User-to-User", Reason]
       Record.PAID_PRECEDENCE:
-        allowedValues: ["SIPUSERPHONE-TEL", "SIP-TEL", "TEL-SIP", "TEL-SIPUSERPHONE", TOP, SIPUSERPHONE]
+        type: enum
+        values: ["SIPUSERPHONE-TEL", "SIP-TEL", "TEL-SIP", "TEL-SIPUSERPHONE", TOP, SIPUSERPHONE]
       Record.PAID_POPULATION:
-        allowedValues: ["Pass through", Remove, "Remove PAID with Privacy"]
+        type: enum
+        values: ["Pass through", Remove, "Remove PAID with Privacy"]
       Record.HANDLING_3XX:
-        allowedValues: ["Release Call", "Pass through", "Evaluate Route", "Route Direct"]
+        type: enum
+        values: ["Release Call", "Pass through", "Evaluate Route", "Route Direct"]
       Record.PASS_THROUGH_BOTH_HISTORY_INFO_AND_DIVERSION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.HISTORY_INFO_HANDLING:
-        allowedValues: ["Pass through", Remove, "Remove only entries with privacy", "Mapping History-Info to Diversion"]
+        type: enum
+        values: ["Pass through", Remove, "Remove only entries with privacy", "Mapping History-Info to Diversion"]
       Record.DIVERSION_HANDLING:
-        allowedValues: ["Pass through", Remove, "Remove only Diversion with privacy", "Mapping Diversion to History-Info"]
+        type: enum
+        values: ["Pass through", Remove, "Remove only Diversion with privacy", "Mapping Diversion to History-Info"]
       Record.SIP_ERROR_TREATMENT_TABLE_ID:
         integer: true
         minValue: 0
@@ -661,15 +752,20 @@ sheets:
         minValue: 1
         maxValue: 12
       Record.REFER_TO_INVITE_CALL_TRANSFER:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.REFER_TO_REINVITE_CALL_TRANSFER:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.PRESERVE_DIALOG_ID_BY_B2BUA:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SEND_SDPLESS_REINVITE_TO_TRANSFEREE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SEND_NOTIFY_FOR_PROVISIONAL_RESPONSE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.CALL_TRANSFER_NO_ANSWER_TIMER:
         integer: true
         minValue: 15
@@ -679,25 +775,35 @@ sheets:
         minValue: 0
         maxValue: 180
       Record.ALLOW_INCOMING_REQ_ON_PFED_OUTBOUND_CONN:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.HEADER_FOR_CALL_DIVERSION:
-        allowedValues: [DIVHDR, HISTINFOHDR]
+        type: enum
+        values: [DIVHDR, HISTINFOHDR]
       Record.ALLOW_SDP_IN_200OK_AFTER_REL_18X:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.ADD_SDP_WITH_CODECS_FOR_INITIAL_INVITE:
-        allowedValues: ["From GCS", "No"]
+        type: enum
+        values: ["From GCS", "No"]
       Record.SUPPORT_100REL_INTERWORKING:
-        allowedValues: [Disabled, Enabled]
+        type: enum
+        values: [Disabled, Enabled]
       Record.MS_TEAMS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SUPPORT_TRANSPORT_TLS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.INSERT_REFERRED_BY_HEADER_INTO_INVITE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.PRECONDITION_HANDLING:
-        allowedValues: ["Pass Through", Disabled, Enabled]
+        type: enum
+        values: ["Pass Through", Disabled, Enabled]
       Record.STRENGTH_TAG:
-        allowedValues: [Optional, Mandatory]
+        type: enum
+        values: [Optional, Mandatory]
 
 ########### IbcfTrunkGroupTable ##############
   IbcfTrunkGroupTable:
@@ -709,7 +815,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -718,7 +825,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -741,7 +849,8 @@ sheets:
       Record.TG_NAME:
         maxLength: 32
       Record.REMOTE_DEST_ADDR_TYPE:
-        allowedValues: [FQDN, IPv4, IPv6]
+        type: enum
+        values: [FQDN, IPv4, IPv6]
       Record.REMOTE_DEST_IP_FQDN:
         maxLength: 128
       Record.REMOTE_DEST_PORT:
@@ -751,29 +860,40 @@ sheets:
       Record.REMOTEIPADDRESSList.REMOTEIPADDRESS:
         maxLength: 45
       Record.TRANSPORT_TYPE:
-        allowedValues: [UDP, TCP, SCTP, TLS]
+        type: enum
+        values: [UDP, TCP, SCTP, TLS]
       Record.SIP_HEARTBEAT_OPTIONS:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.THIG:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.MEDIA_IP_VERSION:
-        allowedValues: [IPv4, IPv6]
+        type: enum
+        values: [IPv4, IPv6]
       Record.SECOND_STAGE_INGRESS_TG_SELECTION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SCTP_SECONDARY_REMOTE_DEST_IP:
         maxLength: 45
       Record.INSERT_SERVICE_ROUTE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.THIG_2_PATH:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.THIG_2_SERVICE_ROUTE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.THIG_2_REGISTER_CONTACT:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.BYPASS_IBCF_DEFAULT_ENUM:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SIPI_VARIANT:
-        allowedValues: [NONE, FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, "Q.767", IT]
+        type: enum
+        values: [NONE, FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, "Q.767", IT]
       Record.IPSEC_REMOTE_SERVER_PORT:
         allowedRanges:
           - min: 0
@@ -781,11 +901,14 @@ sheets:
           - min: 1024
             max: 65535
       Record.ADMINISTRATIVE_STATE:
-        allowedValues: [Unlocked, Locked]
+        type: enum
+        values: [Unlocked, Locked]
       Record.DETECT_FAREND_NAPT:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SUPPORT_TLS_SYMMETRIC:
-        allowedValues: ["No", Always, NAT]
+        type: enum
+        values: ["No", Always, NAT]
 
 ########### CRFDATable ##############
   CRFDATable:
@@ -797,7 +920,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -806,7 +930,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -818,11 +943,14 @@ sheets:
       Record.DIGIT_STRING:
         maxLength: 20
       Record.AREA_CODE_FOR_CALL_BARRING:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.PASS_VISIT_AREA_CODE_FOR_CALL_BARRING:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.NEGATION_FOR_CALL_BARRING:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.AREA_CODE:
         maxLength: 10
 
@@ -836,7 +964,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -845,7 +974,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -861,9 +991,11 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 32
       Record.ROUTE_PLAN_TYPE:
-        allowedValues: ["Digit Analysis", "Trunk Group", "Host URI", "Programmable Routing"]
+        type: enum
+        values: ["Digit Analysis", "Trunk Group", "Host URI", "Programmable Routing"]
       Record.TYPE:
-        allowedValues: [Origination, Destination]
+        type: enum
+        values: [Origination, Destination]
 
 ########### CRFRoutePriorityList ##############
   CRFRoutePriorityList:
@@ -875,7 +1007,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -884,7 +1017,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -900,9 +1034,11 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 32
       Record.CRF_PRIORITY_LIST_TYPE:
-        allowedValues: ["Routing Type", "Statistics Type"]
+        type: enum
+        values: ["Routing Type", "Statistics Type"]
       Record.CRFRoutePriorityListEntry.PLAN_TYPE:
-        allowedValues: [Route, Task]
+        type: enum
+        values: [Route, Task]
 
 ########### CRFRouteProfile ##############
   CRFRouteProfile:
@@ -914,7 +1050,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -923,7 +1060,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -939,15 +1077,20 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 32
       Record.NO_MATCH_ACTION_FOR_RT_LIST1:
-        allowedValues: ["Return No Match", "Continue Next Route Priority List"]
+        type: enum
+        values: ["Return No Match", "Continue Next Route Priority List"]
       Record.CRF_PROG_ROUTE_PLAN:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.CRF_MESSAGE_MANIPULATION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.CRF_ENUM_TLD:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.TAC_MATCHING:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
 
 ########### CRFTreatment ##############
   CRFTreatment:
@@ -959,7 +1102,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -968,7 +1112,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -984,7 +1129,8 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 32
       Record.TREATMENT_TYPE:
-        allowedValues: ["Type 1 Target List", "Type 2 Target List", "Continue Re-Route", "SIP Error Response", "IBCF TG Target List", "Continue With"]
+        type: enum
+        values: ["Type 1 Target List", "Type 2 Target List", "Continue Re-Route", "SIP Error Response", "IBCF TG Target List", "Continue With"]
 
 ########### CRFHostURITable ##############
   CRFHostURITable:
@@ -996,7 +1142,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -1005,7 +1152,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -1018,7 +1166,8 @@ sheets:
         minLength: 1
         maxLength: 128
       Record.HOST_URI_TYPE:
-        allowedValues: [IPv4, IPv6, Domain]
+        type: enum
+        values: [IPv4, IPv6, Domain]
 
 ########### IbcfIngressTrunkGroupMappingTable ##############
   IbcfIngressTrunkGroupMappingTable:
@@ -1030,7 +1179,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -1039,7 +1189,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -1067,7 +1218,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -1076,7 +1228,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true
@@ -1092,7 +1245,8 @@ sheets:
       Record.DESCRIPTION:
         maxLength: 32
       Record.ADDRESS_TYPE:
-        allowedValues: [IPv4, IPv6, Domain]
+        type: enum
+        values: [IPv4, IPv6, Domain]
       Record.TARGET_HOST_NAME:
         minLength: 1
         maxLength: 256
@@ -1101,23 +1255,32 @@ sheets:
         minValue: 0
         maxValue: 65535
       Record.ADMIN_STATE:
-        allowedValues: [Unlock, Lock]
+        type: enum
+        values: [Unlock, Lock]
       Record.ENABLE_HEARTBEAT:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_AUDIO:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_VIDEO:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_APPLICATION:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_DATA:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_CONTROL:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_MESSAGE:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
       Record.SDP_MEDIA_TEXT:
-        allowedValues: ["Yes", "No"]
+        type: enum
+        values: ["Yes", "No"]
 
 ########### CRFTrunkGroup ##############
   CRFTrunkGroup:
@@ -1129,7 +1292,8 @@ sheets:
           column: node
       Action:
         required: true
-        allowedValues: [CREATE, DELETE, MODIFY]
+        type: enum
+        values: [CREATE, DELETE, MODIFY]
       ActionKey:
         requiredWhen:
           column: Action
@@ -1138,7 +1302,8 @@ sheets:
         requiredWhen:
           column: Action
           value: MODIFY
-        allowedValues: [ADD, DEL, MOD]
+        type: enum
+        values: [ADD, DEL, MOD]
       ID:
         required: true
         integer: true

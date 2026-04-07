@@ -37,7 +37,7 @@ public class EmailValidator implements CellValidator {
     @Override
     public List<ValidationError> validate(CiqRow row, String colName, String value,
                                           ColumnRule rule, CiqIndex index) {
-        if (!rule.isEmail()) return Collections.emptyList();
+        if (!rule.isEmail() && !rule.isEmailType()) return Collections.emptyList();
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
 
         List<ValidationError> errors = new ArrayList<>();

@@ -1,8 +1,6 @@
 package com.nokia.ciq.processor.template;
 
-import com.nokia.ciq.validator.config.NodeIdSheetConfig;
 import com.nokia.ciq.validator.config.SheetRules;
-import com.nokia.ciq.validator.config.UserIdSheetConfig;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.ValidationRulesLoader;
 import com.nokia.ciq.validator.config.ColumnRule;
@@ -16,7 +14,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,15 +22,12 @@ import java.util.Map;
 /**
  * Generates a blank CIQ Excel template from a {@link ValidationRulesConfig}.
  *
- * <p>The workbook contains:
- * <ol>
- *   <li><b>Index</b> — header row derived from {@code indexSheet.columns}</li>
- *   <li><b>Data sheets</b> — one sheet per entry in {@code sheets:}, columns from YAML</li>
- *   <li><b>Node_ID sheet</b> — header from {@code nodeIdSheet} config</li>
- *   <li><b>User_ID sheet</b> — header from {@code userIdSheet} config (if configured)</li>
- * </ol>
+ * <p>The workbook contains one sheet per entry in {@code sheets:} (in YAML order), followed
+ * by the generated {@code Column_Guide} sheet.  All sheets — Index, Node-ID, User-ID, and
+ * data sheets — are declared under {@code sheets:} in the rules YAML; no special config
+ * sections are needed.
  *
- * <p>Columns that have {@code allowedValues} in the YAML get an Excel dropdown validation
+ * <p>Columns with {@code type: enum} or {@code allowedValues} get an Excel dropdown validation
  * on rows 2–101 so the user can pick valid values directly in the workbook.
  */
 public class CiqTemplateGenerator {
@@ -77,46 +71,19 @@ public class CiqTemplateGenerator {
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             XSSFCellStyle headerStyle = buildHeaderStyle(wb);
 
-            // 1. INDEX sheet
-            if (rules.getIndexSheet() != null
-                    && rules.getIndexSheet().getColumns() != null
-                    && !rules.getIndexSheet().getColumns().isEmpty()) {
-                List<String> cols = new ArrayList<>(rules.getIndexSheet().getColumns().keySet());
-                createSheet(wb, "Index", cols, rules.getIndexSheet(), headerStyle);
-                log.info("  Index sheet: {}", cols);
-            }
-
-            // 2. Data sheets (order preserved from YAML LinkedHashMap)
+            // All sheets — in the order they appear in rules.getSheets() (YAML order).
+            // Index, Node-ID, User-ID, and data sheets are all declared under sheets: generically.
             if (rules.getSheets() != null) {
                 for (Map.Entry<String, SheetRules> entry : rules.getSheets().entrySet()) {
                     List<String> cols = entry.getValue().getColumns() != null
                             ? new ArrayList<>(entry.getValue().getColumns().keySet())
                             : Collections.<String>emptyList();
                     createSheet(wb, entry.getKey(), cols, entry.getValue(), headerStyle);
-                    log.info("  Data sheet '{}': {}", entry.getKey(), cols);
+                    log.info("  Sheet '{}': {}", entry.getKey(), cols);
                 }
             }
 
-            // 3. NODE_ID sheet
-            NodeIdSheetConfig nodeIdCfg = rules.getNodeIdSheet() != null
-                    ? rules.getNodeIdSheet() : new NodeIdSheetConfig();
-            List<String> nodeIdCols = (nodeIdCfg.getColumns() != null && !nodeIdCfg.getColumns().isEmpty())
-                    ? new ArrayList<>(nodeIdCfg.getColumns().keySet())
-                    : Arrays.asList(nodeIdCfg.getNodeColumn(), nodeIdCfg.getNiamColumn());
-            createSheet(wb, nodeIdCfg.getName(), nodeIdCols, nodeIdCfg, headerStyle);
-            log.info("  '{}' sheet: {}", nodeIdCfg.getName(), nodeIdCols);
-
-            // 4. USER_ID sheet (optional)
-            if (rules.getUserIdSheet() != null) {
-                UserIdSheetConfig userIdCfg = rules.getUserIdSheet();
-                List<String> userIdCols = (userIdCfg.getColumns() != null && !userIdCfg.getColumns().isEmpty())
-                        ? new ArrayList<>(userIdCfg.getColumns().keySet())
-                        : Arrays.asList(userIdCfg.getCrGroupColumn(), userIdCfg.getEmailColumn());
-                createSheet(wb, userIdCfg.getName(), userIdCols, userIdCfg, headerStyle);
-                log.info("  '{}' sheet: {}", userIdCfg.getName(), userIdCols);
-            }
-
-            // 5. Column_Guide sheet — describes every column across all sheets
+            // Column_Guide sheet — describes every column across all sheets
             createColumnGuideSheet(wb, rules, headerStyle);
             log.info("  Column_Guide sheet added");
 
@@ -148,11 +115,14 @@ public class CiqTemplateGenerator {
             cell.setCellStyle(headerStyle);
         }
 
-        // Dropdown validation for columns with allowedValues
+        // Dropdown validation for enum-type and allowedValues columns
         if (sheetRules != null && sheetRules.getColumns() != null) {
             for (int i = 0; i < columns.size(); i++) {
                 ColumnRule rule = sheetRules.getColumns().get(columns.get(i));
-                if (rule != null && rule.getAllowedValues() != null && !rule.getAllowedValues().isEmpty()) {
+                if (rule == null) continue;
+                if (rule.isEnum() && rule.getValues() != null && !rule.getValues().isEmpty()) {
+                    addDropdown(sheet, i, rule.getValues());
+                } else if (rule.getAllowedValues() != null && !rule.getAllowedValues().isEmpty()) {
                     addDropdown(sheet, i, rule.getAllowedValues());
                 }
             }
@@ -182,18 +152,10 @@ public class CiqTemplateGenerator {
             cell.setCellStyle(headerStyle);
         }
 
-        // Collect all sheet→column entries in order
+        // All sheets come from rules.getSheets() — Index, Node-ID, User-ID and data sheets alike
         Map<String, SheetRules> allSheets = new LinkedHashMap<>();
-        if (rules.getIndexSheet() != null && rules.getIndexSheet().getColumns() != null)
-            allSheets.put("Index", rules.getIndexSheet());
         if (rules.getSheets() != null)
             allSheets.putAll(rules.getSheets());
-        NodeIdSheetConfig nodeIdCfg = rules.getNodeIdSheet() != null
-                ? rules.getNodeIdSheet() : new NodeIdSheetConfig();
-        if (nodeIdCfg.getColumns() != null)
-            allSheets.put(nodeIdCfg.getName(), nodeIdCfg);
-        if (rules.getUserIdSheet() != null && rules.getUserIdSheet().getColumns() != null)
-            allSheets.put(rules.getUserIdSheet().getName(), rules.getUserIdSheet());
 
         // Alternating row background for readability
         XSSFCellStyle altStyle = wb.createCellStyle();
@@ -243,6 +205,30 @@ public class CiqTemplateGenerator {
 
     private String inferType(ColumnRule rule) {
         if (rule == null) return "Text";
+        // Explicit type field takes precedence over legacy boolean flags
+        String t = rule.getType();
+        if (t != null) {
+            switch (t.toLowerCase()) {
+                case "enum":      return "Enum";
+                case "integer":   return "Integer";
+                case "decimal":   return "Decimal";
+                case "date":      return "Date";
+                case "time":      return "Time";
+                case "datetime":  return "DateTime";
+                case "boolean":   return "Boolean";
+                case "email":     return "Email";
+                case "phone":     return "Phone";
+                case "ip":        return "IP Address";
+                case "mac":       return "MAC Address";
+                case "cidr":      return "CIDR";
+                case "hostname":  return "Hostname";
+                case "fqdn":      return "FQDN";
+                case "protocol":  return "Protocol";
+                case "urlscheme": return "URL Scheme";
+                default:          break;
+            }
+        }
+        // Legacy boolean flags
         if (rule.isEmail())   return "Email";
         if (rule.isInteger()) return "Integer";
         if (rule.getAllowedValues() != null && !rule.getAllowedValues().isEmpty()) return "Enum";
@@ -261,14 +247,20 @@ public class CiqTemplateGenerator {
     }
 
     private String allowedValuesLabel(ColumnRule rule) {
-        if (rule == null || rule.getAllowedValues() == null || rule.getAllowedValues().isEmpty())
-            return "";
-        return String.join(", ", rule.getAllowedValues());
+        if (rule == null) return "";
+        // enum type uses values field
+        if (rule.isEnum() && rule.getValues() != null && !rule.getValues().isEmpty())
+            return String.join(", ", rule.getValues());
+        // string constraint uses allowedValues field
+        if (rule.getAllowedValues() != null && !rule.getAllowedValues().isEmpty())
+            return String.join(", ", rule.getAllowedValues());
+        return "";
     }
 
     private String buildConstraints(ColumnRule rule) {
         if (rule == null) return "";
         List<String> parts = new ArrayList<>();
+        // String constraints
         if (rule.getMinLength() != null || rule.getMaxLength() != null) {
             String len = "Length: ";
             if (rule.getMinLength() != null) len += rule.getMinLength();
@@ -276,6 +268,7 @@ public class CiqTemplateGenerator {
             if (rule.getMaxLength() != null) len += rule.getMaxLength();
             parts.add(len);
         }
+        // Integer constraints
         if (rule.getMinValue() != null || rule.getMaxValue() != null) {
             String range = "Range: ";
             if (rule.getMinValue() != null) range += rule.getMinValue();
@@ -289,11 +282,36 @@ public class CiqTemplateGenerator {
                 ranges.add(r.getMin() + ".." + r.getMax());
             parts.add("Ranges: " + String.join(" | ", ranges));
         }
+        // Decimal constraints
+        if (rule.getMinDecimal() != null || rule.getMaxDecimal() != null) {
+            String range = "Range: ";
+            if (rule.getMinDecimal() != null) range += rule.getMinDecimal();
+            range += "..";
+            if (rule.getMaxDecimal() != null) range += rule.getMaxDecimal();
+            parts.add(range);
+        }
+        if (rule.getPrecision() != null) {
+            parts.add("Max decimal places: " + rule.getPrecision());
+        }
+        // Date/time format
+        if (rule.getFormat() != null) {
+            parts.add("Format: " + rule.getFormat());
+        }
+        // Boolean accept
+        if (rule.getAccept() != null) {
+            parts.add("Accept: " + rule.getAccept());
+        }
+        // IP accepts
+        if (rule.getAccepts() != null) {
+            parts.add("Accepts: " + rule.getAccepts());
+        }
+        // Pattern override
         if (rule.getPattern() != null) {
             String msg = rule.getPatternMessage() != null ? rule.getPatternMessage()
                     : "Pattern: " + rule.getPattern();
             parts.add(msg);
         }
+        // Cross-sheet reference
         if (rule.getCrossRef() != null)
             parts.add("Ref: " + rule.getCrossRef().getSheet() + "." + rule.getCrossRef().getColumn());
         return String.join("; ", parts);

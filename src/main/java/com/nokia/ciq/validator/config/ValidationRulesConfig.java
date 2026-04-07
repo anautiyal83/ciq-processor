@@ -1,6 +1,7 @@
 package com.nokia.ciq.validator.config;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -9,19 +10,46 @@ import java.util.Map;
  * File naming: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
  * Example:     SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
  *
- * Full YAML structure:
+ * <h3>YAML structure</h3>
  * <pre>
- * # Validate that Index sheet tables all have matching sheets in the CIQ JSON output
  * validateIndexSheets: true
+ * validateNodeIds:     true
+ * groupByColumnName:   NODE
  *
- * # Validate that all nodes in data sheets exist in Node_ID sheet
- * validateNodeIds: true
- *
- * # Column name that drives grouping: GROUP (group-based MOP generation) or NODE (node-wise).
- * # Omit to auto-detect from the INDEX sheet column layout.
- * groupByColumnName: NODE
+ * # Special sheet identity — column rules (including nodeColumn/niamColumn and
+ * # crGroupColumn/emailColumn) live inside the sheet definition under sheets:
+ * nodeIdSheetName:  Node_ID    # identifies which sheet is the Node-ID sheet (default: Node_ID)
+ * userIdSheetName:  User_ID    # identifies which sheet is the User-ID sheet (omit if none)
  *
  * sheets:
+ *   Index:                     # Index sheet — generic like any other sheet
+ *     columns:
+ *       Node:
+ *         required: true
+ *       CRGroup:
+ *         required: true
+ *       Tables:
+ *         required: true
+ *
+ *   Node_ID:                   # Node-ID sheet
+ *     nodeColumn: Node         # column that holds the node/hostname (default: Node)
+ *     niamColumn: NIAM_ID      # column that holds the NIAM/login ID (default: NIAM_ID)
+ *     columns:
+ *       Node:
+ *         required: true
+ *       NIAM_ID:
+ *         required: true
+ *
+ *   User_ID:                   # User-ID sheet (omit entirely if no User-ID sheet needed)
+ *     crGroupColumn: CRGROUP   # column that holds the CR-group name (default: CRGROUP)
+ *     emailColumn: EMAIL       # column that holds the user e-mail (default: EMAIL)
+ *     columns:
+ *       CRGROUP:
+ *         required: true
+ *       EMAIL:
+ *         required: true
+ *         type: email
+ *
  *   CRFTargetList:
  *     columns:
  *       Node:
@@ -31,84 +59,102 @@ import java.util.Map;
  *           column: node
  *       Action:
  *         required: true
- *         allowedValues: [CREATE, DELETE, MODIFY]
- *       ActionKey:
- *         requiredWhen:
- *           column: Action
- *           value: MODIFY
- *       SubAction:
- *         requiredWhen:
- *           column: Action
- *           value: MODIFY
- *         allowedValues: [ADD, DEL, MOD]
- *       ID:
- *         required: true
- *         integer: true
- *         minValue: 1
+ *         type: enum
+ *         values: [CREATE, DELETE, MODIFY]
  * </pre>
  */
 public class ValidationRulesConfig {
 
-    /** Whether to validate that every table in the Index has a corresponding JSON file. */
+    /** Whether to validate that every table in the Index has a corresponding sheet. */
     private boolean validateIndexSheets = true;
 
-    /** Whether to validate that every Node value in data sheets exists in niamMapping. */
+    /** Whether to validate that every Node value in data sheets exists in the Node_ID sheet. */
     private boolean validateNodeIds = true;
 
     /**
      * Column name that drives grouping for MOP generation.
      * <ul>
-     *   <li>{@code "GROUP"} — GROUP mode: INDEX sheet has GROUP|NODE columns; one MOP folder per group.</li>
+     *   <li>{@code "GROUP"} — GROUP mode: INDEX sheet has GROUP|NODE columns.</li>
      *   <li>{@code "NODE"}  — node-wise mode: INDEX sheet has Node|CRGroup|Tables columns.</li>
      *   <li>{@code null}    — auto-detect from INDEX sheet column layout (default).</li>
      * </ul>
      */
     private String groupByColumnName;
 
-    /**
-     * Optional column-level validation rules for the INDEX sheet.
-     * When present, every row in the Index sheet is validated against these rules
-     * using the same cell-validator chain as data sheets.
-     */
-    private SheetRules indexSheet;
+    // -------------------------------------------------------------------------
+    // Special sheet identity — column rules (and role-specific field names)
+    // live inside the sheet definition under sheets:
+    // -------------------------------------------------------------------------
+
+    /** Name of the Node-ID sheet. Default: {@code "Node_ID"}. */
+    private String nodeIdSheetName = "Node_ID";
 
     /**
-     * Configuration for the NODE_ID sheet: sheet name, key column names, and
-     * optional column-level validation rules.
-     * When present, every row in the Node_ID sheet is validated against the column
-     * rules using the same cell-validator chain as data sheets.
+     * Name of the User-ID sheet. {@code null} (default) means no User-ID sheet is expected
+     * for this activity.
      */
-    private NodeIdSheetConfig nodeIdSheet;
+    private String userIdSheetName;
 
-    /**
-     * Configuration for the USER_ID sheet: sheet name, CRGROUP column name, EMAIL column name,
-     * and optional column-level validation rules.
-     * Maps each CRGROUP to the responsible user's email address.
-     * When present, every row is validated and the EMAIL values are used for CR_EMAIL_ID_LIST.
-     */
-    private UserIdSheetConfig userIdSheet;
+    // -------------------------------------------------------------------------
+    // Per-sheet column rules (all sheets — Index, Node-ID, User-ID, data sheets)
+    // -------------------------------------------------------------------------
 
-    /** Per-sheet column rules. Key = sheet name (e.g. "CRFTargetList"). */
+    /** Column validation rules for every sheet, keyed by sheet name. */
     private Map<String, SheetRules> sheets = new LinkedHashMap<>();
 
+    // -------------------------------------------------------------------------
+    // Schema.yaml extension fields
+    // -------------------------------------------------------------------------
+
+    /** Schema version string (informational only). */
+    private String version;
+
+    /** Global workbook reading settings (can be overridden per sheet). */
+    private WorkbookSettings settings;
+
+    /**
+     * List of workbook-level cross-sheet validation rules.
+     * YAML key: {@code workbook_rules} (mapped via property alias).
+     */
+    private List<WorkbookRule> workbookRules;
+
+    /**
+     * Named custom validators that can be referenced from column rules via
+     * {@code validator: &lt;name&gt;}.
+     */
+    private Map<String, ValidatorDefinition> validators;
+
+    // Getters and setters
+
     public boolean isValidateIndexSheets() { return validateIndexSheets; }
-    public void setValidateIndexSheets(boolean validateIndexSheets) { this.validateIndexSheets = validateIndexSheets; }
+    public void setValidateIndexSheets(boolean v) { this.validateIndexSheets = v; }
 
     public boolean isValidateNodeIds() { return validateNodeIds; }
-    public void setValidateNodeIds(boolean validateNodeIds) { this.validateNodeIds = validateNodeIds; }
+    public void setValidateNodeIds(boolean v) { this.validateNodeIds = v; }
 
     public String getGroupByColumnName() { return groupByColumnName; }
-    public void setGroupByColumnName(String groupByColumnName) { this.groupByColumnName = groupByColumnName; }
+    public void setGroupByColumnName(String v) { this.groupByColumnName = v; }
 
-    public SheetRules getIndexSheet() { return indexSheet; }
-    public void setIndexSheet(SheetRules indexSheet) { this.indexSheet = indexSheet; }
+    public String getNodeIdSheetName() { return nodeIdSheetName; }
+    public void setNodeIdSheetName(String v) { this.nodeIdSheetName = v; }
 
-    public NodeIdSheetConfig getNodeIdSheet() { return nodeIdSheet; }
-    public void setNodeIdSheet(NodeIdSheetConfig nodeIdSheet) { this.nodeIdSheet = nodeIdSheet; }
-
-    public UserIdSheetConfig getUserIdSheet() { return userIdSheet; }
-    public void setUserIdSheet(UserIdSheetConfig userIdSheet) { this.userIdSheet = userIdSheet; }
+    public String getUserIdSheetName() { return userIdSheetName; }
+    public void setUserIdSheetName(String v) { this.userIdSheetName = v; }
 
     public Map<String, SheetRules> getSheets() { return sheets; }
     public void setSheets(Map<String, SheetRules> sheets) { this.sheets = sheets; }
+
+    // Schema.yaml extension getters/setters
+
+    public String getVersion() { return version; }
+    public void setVersion(String version) { this.version = version; }
+
+    public WorkbookSettings getSettings() { return settings; }
+    public void setSettings(WorkbookSettings settings) { this.settings = settings; }
+
+    public List<WorkbookRule> getWorkbookRules() { return workbookRules; }
+    public void setWorkbookRules(List<WorkbookRule> workbookRules) { this.workbookRules = workbookRules; }
+
+    public Map<String, ValidatorDefinition> getValidators() { return validators; }
+    public void setValidators(Map<String, ValidatorDefinition> validators) { this.validators = validators; }
 }

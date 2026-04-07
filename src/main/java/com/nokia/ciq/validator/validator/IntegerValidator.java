@@ -18,7 +18,7 @@ public class IntegerValidator implements CellValidator {
     @Override
     public List<ValidationError> validate(CiqRow row, String colName, String value,
                                           ColumnRule rule, CiqIndex index) {
-        if (!rule.isInteger()) return Collections.emptyList();
+        if (!rule.isInteger() && !rule.isIntegerType()) return Collections.emptyList();
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
 
         try {

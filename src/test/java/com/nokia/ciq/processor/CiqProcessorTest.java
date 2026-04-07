@@ -122,7 +122,7 @@ public class CiqProcessorTest {
     // -------------------------------------------------------------------------
 
     private static final String MRF_CIQ_FILE  =
-            "D:/Nokia/documents/CR_Automation/MRF/MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx";
+            "D:/Nokia/documents/CR_Automation/MRF/MRF_ANNOUNCEMENT_LOADING_TEST_CIQ.xlsx";
     private static final String MRF_RULES_FILE =
             "src/main/resources/MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml";
     private static final String MRF_OUTPUT_DIR   = "target/mrf-processor-output";
