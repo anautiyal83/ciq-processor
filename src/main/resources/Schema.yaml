@@ -1,0 +1,242 @@
+version: "1.0"
+
+# ---------------------------------------------------------------------------
+# Global settings
+# ---------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: true
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# ---------------------------------------------------------------------------
+# Cross-sheet rules
+# ---------------------------------------------------------------------------
+workbook_rules:
+
+  # every value in source must exist in target
+  - subset:
+      from: <SheetName>.<ColumnName>
+      to: <SheetName>.<ColumnName>
+
+  # source must contain all values from target
+  - superset:
+      from: <SheetName>.<ColumnName>
+      to: <SheetName>.<ColumnName>
+
+  # value must not exist in both columns
+  - unique:
+      columns: [<SheetName>.<ColumnName>, <SheetName>.<ColumnName>]
+
+  # every row in source must match a row in target
+  - match:
+      from: <SheetName>.<ColumnName>
+      to: <SheetName>.<ColumnName>
+      
+# ---------------------------------------------------------------------------
+# Custom validator registry
+# ---------------------------------------------------------------------------
+validators:
+  <validatorName>:
+    class: "<fully.qualified.ClassName>"
+    description: "<description>"
+
+# ---------------------------------------------------------------------------
+# Sheet definitions
+# ---------------------------------------------------------------------------
+sheets:
+
+  <SheetName>:
+    required: true
+    aliases: []
+    settings:
+      headerRow: 0          # override any global setting here
+
+    columns:
+
+      # string column
+      <ColumnName>:
+        required: true
+        type: string
+        aliases: []
+        unique: false
+        minLength: 1
+        maxLength: 100
+        pattern: "<regex>"
+        ignoreCase: false
+        ref: <SheetName>.<ColumnName>
+        validator: <validatorName>
+        messages:
+          required: "<message>"
+          minLength: "<message>"
+          maxLength: "<message>"
+          pattern: "<message>"
+
+      # integer column
+      <ColumnName>:
+        required: true
+        type: integer
+        min: 1
+        max: 100
+        values: []
+        ranges:
+          - [<min>, <max>]
+        messages:
+          min: "<message>"
+          max: "<message>"
+
+      # decimal column
+      <ColumnName>:
+        required: true
+        type: decimal
+        min: 0.00
+        max: 9999.99
+        precision: 2
+        messages:
+          precision: "<message>"
+
+      # date column
+      <ColumnName>:
+        required: true
+        type: date
+        format: "yyyy-MM-dd"
+        min: "<date>"
+        max: $today
+        messages:
+          format: "<message>"
+          min: "<message>"
+          max: "<message>"
+
+      # time column
+      <ColumnName>:
+        required: false
+        type: time
+        format: "HH:mm:ss"
+        min: "<time>"
+        max: "<time>"
+
+      # datetime column
+      <ColumnName>:
+        required: false
+        type: datetime
+        format: "yyyy-MM-dd HH:mm:ss"
+        min: "<datetime>"
+        max: $now
+
+      # boolean column
+      <ColumnName>:
+        required: true
+        type: boolean
+        accept: [true/false]
+
+      # email column
+      <ColumnName>:
+        required: true
+        type: email
+        multi: false
+
+      # phone column
+      <ColumnName>:
+        required: false
+        type: phone
+        pattern: "<regex>"
+
+      # url scheme column
+      <ColumnName>:
+        required: false
+        type: urlScheme
+        values: [http, https]
+
+      # ip column
+      <ColumnName>:
+        required: false
+        type: ip
+        accept: both
+
+      # mac column
+      <ColumnName>:
+        required: false
+        type: mac
+
+      # cidr column
+      <ColumnName>:
+        required: false
+        type: cidr
+
+      # hostname column
+      <ColumnName>:
+        required: false
+        type: hostname
+
+      # fqdn column
+      <ColumnName>:
+        required: false
+        type: fqdn
+
+      # protocol column
+      <ColumnName>:
+        required: false
+        type: protocol
+        values: [http, https, ssh, ftp]
+
+      # enum column
+      <ColumnName>:
+        required: true
+        type: enum
+        values: [<value>, <value>, <value>]
+
+      # custom validator column
+      <ColumnName>:
+        required: false
+        type: custom
+        validator: <validatorName>
+
+    # -------------------------------------------------------------------------
+    # Row rules
+    # -------------------------------------------------------------------------
+    rules:
+
+      # require column when condition is met
+      - require: <ColumnName>
+        when:
+          column: <ColumnName>
+          operator: equals
+          value: <value>
+
+      # forbid column when condition is met
+      - forbid: <ColumnName>
+        when:
+          column: <ColumnName>
+          operator: notBlank
+
+      # require with compound condition
+      - require: <ColumnName>
+        when:
+          all:
+            - column: <ColumnName>
+              operator: equals
+              value: <value>
+            - any:
+                - column: <ColumnName>
+                  operator: greaterThan
+                  value: <value>
+                - column: <ColumnName>
+                  operator: blank
+
+      # cross-column comparison
+      - compare: <ColumnA> >= <ColumnB>
+
+      # at least one of these columns must have a value
+      - one_of: [<ColumnA>, <ColumnB>, <ColumnC>]
+
+      # exactly one of these columns must have a value
+      - only_one: [<ColumnA>, <ColumnB>]
+
+      # all columns have a value or none do
+      - all_or_none: [<ColumnA>, <ColumnB>, <ColumnC>]
+
+      # sum of columns must equal target
+      - sum: [<ColumnA>, <ColumnB>]
+        equals: <ColumnC>
