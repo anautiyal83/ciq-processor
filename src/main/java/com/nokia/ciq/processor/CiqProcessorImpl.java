@@ -2,15 +2,10 @@ package com.nokia.ciq.processor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.nokia.ciq.processor.model.CRGroupIndex;
-import com.nokia.ciq.processor.model.GroupIndex;
 import com.nokia.ciq.processor.reader.InMemoryCiqDataStore;
 import com.nokia.ciq.processor.reader.InMemoryExcelReader;
-import com.nokia.ciq.reader.model.CiqIndex;
 import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
-import com.nokia.ciq.reader.model.NodeEntry;
-import com.nokia.ciq.reader.util.FileNamingUtil;
 import com.nokia.ciq.validator.CiqValidationEngine;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.ValidationRulesLoader;
@@ -26,10 +21,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Default implementation of {@link CiqProcessor}.
@@ -41,14 +34,33 @@ import java.util.Set;
  *       {@link InMemoryCiqDataStore}.</li>
  *   <li>{@link CiqValidationEngine} validates the in-memory data.</li>
  *   <li>Reports are written in the requested formats (JSON, HTML, Excel).</li>
- *   <li>If validation passed and {@code mopJsonOutputDir} is provided, segregated
- *       JSON files are written for MOP generation.</li>
+ *   <li>When validation passes and {@code mopJsonOutputDir} is set, JSON output
+ *       files are produced according to the {@code json_output} block in the rules YAML.</li>
  * </ol>
  *
- * <p>When {@code json_output:} is configured in the rules YAML, each segregation unit
- * (CR / Group / Node) produces a <em>single</em> JSON file whose structure is defined
- * by the {@code fields} and {@code rows} declarations.  When {@code json_output:} is
- * absent, the default CiqSheet / index format is used.
+ * <h2>JSON output modes</h2>
+ * <h3>output_mode: single</h3>
+ * <p>One JSON file for the entire workbook.  The {@code data} template is evaluated
+ * with all rows from every sheet available in the context.
+ *
+ * <h3>output_mode: individual</h3>
+ * <p>One JSON file per distinct value of the configured {@code segregate_by} column.
+ * The YAML must include a {@code segregate_by} block specifying the sheet and column
+ * that drives file splitting:
+ * <pre>
+ * json_output:
+ *   output_mode: individual
+ *   segregate_by:
+ *     sheet:  Index          # any sheet in the workbook
+ *     column: CRGroup        # any column in that sheet
+ *     as:     $cr            # variable injected into the template (default: $unit)
+ *   data:
+ *     crGroup: $cr
+ *     ...
+ * </pre>
+ * <p>The template is evaluated once per distinct value with the segregation sheet
+ * pre-scoped to matching rows.  All other sheets remain fully accessible so the
+ * template can cross-reference freely via WHERE conditions.
  */
 public class CiqProcessorImpl implements CiqProcessor {
 
@@ -86,41 +98,28 @@ public class CiqProcessorImpl implements CiqProcessor {
         ValidationRulesConfig rules = new ValidationRulesLoader().load(rulesFilePath);
 
         // Step 2: Read Excel into memory
-        InMemoryExcelReader reader = new InMemoryExcelReader();
-        InMemoryCiqDataStore store = reader.read(ciqFilePath, nodeType, activity, rules);
+        InMemoryCiqDataStore store = new InMemoryExcelReader()
+                .read(ciqFilePath, nodeType, activity, rules);
 
         // Step 3: Validate
         ValidationReport report =
                 new CiqValidationEngine(store, rules).validate(nodeType, activity);
 
-        // Step 4: Write reports
+        // Step 4: Write validation reports
         String baseName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + "_VALIDATION_REPORT";
         for (ReportFormat fmt : formats) {
             String fileName = baseName + "." + fmt.extension();
-            String path = new File(outDir, fileName).getAbsolutePath();
+            String path     = new File(outDir, fileName).getAbsolutePath();
             report.getParameters().put("REPORT_FILENAME_" + fmt.name(), fileName);
             switch (fmt) {
-                case JSON:
-                    mapper.writeValue(new File(path), report);
-                    log.info("JSON report:  {}", path);
-                    break;
-                case HTML:
-                    new HtmlReportWriter().write(report, path);
-                    log.info("HTML report:  {}", path);
-                    break;
-                case MSEXCEL:
-                    new ExcelReportWriter().write(report, path);
-                    log.info("Excel report: {}", path);
-                    break;
+                case JSON:    mapper.writeValue(new File(path), report);   log.info("JSON report:  {}", path); break;
+                case HTML:    new HtmlReportWriter().write(report, path);  log.info("HTML report:  {}", path); break;
+                case MSEXCEL: new ExcelReportWriter().write(report, path); log.info("Excel report: {}", path); break;
             }
         }
 
-        // Step 5: JSON segregation (only on PASSED)
+        // Step 5: JSON output — only when validation passed and output dir provided
         if ("PASSED".equals(report.getStatus()) && mopJsonOutputDir != null) {
-            Map<String, Map<String, List<String>>> crGroupData = reader.getCrGroupToGroupNodes();
-            Map<String, List<String>> groupToNodes = reader.getGroupToNodes();
-
-            // Ensure output directory exists once — no subfolders are ever created
             File mopOutDir = new File(mopJsonOutputDir);
             if (!mopOutDir.exists()) mopOutDir.mkdirs();
 
@@ -128,19 +127,17 @@ public class CiqProcessorImpl implements CiqProcessor {
             Map<String, Object> template = resolveTemplate(rules);
 
             if (outputMode == OutputMode.SINGLE) {
-                log.info("output_mode: single — writing one JSON for entire workbook: {}", mopJsonOutputDir);
-                segregateSingle(store, crGroupData, groupToNodes, nodeType, activity, mopJsonOutputDir, template);
+                log.info("output_mode=single → {}", mopJsonOutputDir);
+                segregateSingle(store, nodeType, activity, mopJsonOutputDir, template);
             } else {
-                // INDIVIDUAL — auto-detect grouping from workbook structure
-                if (!crGroupData.isEmpty()) {
-                    log.info("CRGROUP mode — segregating into CRGROUP folders: {}", mopJsonOutputDir);
-                    segregateCRGroupBased(store, crGroupData, nodeType, activity, mopJsonOutputDir, template);
-                } else if (!groupToNodes.isEmpty()) {
-                    log.info("GROUP mode — segregating into group folders: {}", mopJsonOutputDir);
-                    segregateGroupBased(store, groupToNodes, nodeType, activity, mopJsonOutputDir, template);
+                // INDIVIDUAL — driven entirely by 'segregate_by' in the rules YAML
+                SegregateByConfig seg = resolveSegregateBy(rules);
+                if (seg == null) {
+                    log.warn("output_mode=individual requires a 'segregate_by' block in json_output — skipping JSON output");
                 } else {
-                    log.info("NODE mode — segregating by child order into: {}", mopJsonOutputDir);
-                    segregateByChildOrder(store, nodeType, activity, mopJsonOutputDir, template);
+                    log.info("output_mode=individual — segregating by {}.{} (${}) → {}",
+                            seg.sheet, seg.column, seg.varName, mopJsonOutputDir);
+                    segregateIndividual(store, nodeType, activity, mopJsonOutputDir, template, seg);
                 }
             }
         }
@@ -148,509 +145,78 @@ public class CiqProcessorImpl implements CiqProcessor {
         return report;
     }
 
-    // -------------------------------------------------------------------------
-    // Child-order (NODE) segregation
-    // -------------------------------------------------------------------------
-
-    private void segregateByChildOrder(InMemoryCiqDataStore store,
-                                       String nodeType,
-                                       String activity,
-                                       String mopJsonOutputDir,
-                                       Map<String, Object> template) throws IOException {
-
-        CiqIndex index = store.getIndex();
-
-        if (index.getEntries().isEmpty()) {
-            segregateNoIndex(store, nodeType, activity, mopJsonOutputDir, template);
-            return;
-        }
-
-
-        for (NodeEntry entry : index.getEntries()) {
-            String node    = entry.getNode()    != null ? entry.getNode().trim()    : "";
-            String crGroup = entry.getCrGroup() != null ? entry.getCrGroup().trim() : "";
-            if (node.isEmpty()) continue;
-
-            String childOrder = crGroup.isEmpty() ? node : node + "_" + crGroup;
-
-            File childDir = new File(mopJsonOutputDir);
-            String fileName = FileNamingUtil.indexFileName(nodeType, activity, childOrder);
-
-            if (template != null && !template.isEmpty()) {
-                // ── Single structured JSON via template ──
-                Map<String, List<CiqRow>> filteredRows = buildNodeFilteredRows(store, entry, node);
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
-                Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
-                mapper.writeValue(new File(childDir, fileName), json);
-                log.info("  [{}] single JSON → {}", childOrder, fileName);
-
-            } else {
-                // ── Default: index file + per-table CiqSheet files ──
-                Map<String, String> niamSubset = new LinkedHashMap<>();
-                String niamId = index.getNiamMapping().get(node);
-                if (niamId != null) niamSubset.put(node, niamId);
-
-                CiqIndex childIndex = new CiqIndex();
-                childIndex.setNodeType(nodeType);
-                childIndex.setActivity(activity);
-                childIndex.getEntries().add(entry);
-                childIndex.setNiamMapping(niamSubset);
-
-                mapper.writeValue(new File(childDir, fileName), childIndex);
-                log.info("  [{}] index → {}", childOrder, fileName);
-
-                for (String tableName : entry.getTables()) {
-                    CiqSheet sheet = store.getSheet(tableName);
-                    if (sheet == null) {
-                        log.warn("  [{}] table '{}' not found — skipping", childOrder, tableName);
-                        continue;
-                    }
-                    List<CiqRow> filteredRows = new ArrayList<>();
-                    for (CiqRow row : sheet.getRows()) {
-                        if (node.equals(row.get("Node"))) filteredRows.add(row);
-                    }
-                    CiqSheet filteredSheet = new CiqSheet();
-                    filteredSheet.setSheetName(sheet.getSheetName());
-                    filteredSheet.setColumns(sheet.getColumns());
-                    filteredSheet.setRows(filteredRows);
-
-                    String sheetFileName =
-                            FileNamingUtil.sheetFileName(nodeType, activity, tableName, childOrder);
-                    mapper.writeValue(new File(childDir, sheetFileName), filteredSheet);
-                    log.info("  [{}] table '{}' ({} rows) → {}",
-                            childOrder, tableName, filteredRows.size(), sheetFileName);
-                }
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // CRGROUP-mode segregation
-    // -------------------------------------------------------------------------
-
-    private void segregateCRGroupBased(InMemoryCiqDataStore store,
-                                       Map<String, Map<String, List<String>>> crGroupToGroupNodes,
-                                       String nodeType,
-                                       String activity,
-                                       String mopJsonOutputDir,
-                                       Map<String, Object> template) throws IOException {
-
-        CiqIndex index = store.getIndex();
-
-        List<String> dataSheets = indexDataSheets(index);
-
-        for (Map.Entry<String, Map<String, List<String>>> crEntry : crGroupToGroupNodes.entrySet()) {
-            String crGroup                         = crEntry.getKey();
-            Map<String, List<String>> groupToNodes = crEntry.getValue();
-
-            File crGroupDir = new File(mopJsonOutputDir);
-            String fileName = FileNamingUtil.indexFileName(nodeType, activity, crGroup);
-
-            if (template != null && !template.isEmpty()) {
-                // ── Single structured JSON via template ──
-                Map<String, List<CiqRow>> filteredRows =
-                        buildCRGroupFilteredRows(store, crGroup, groupToNodes.keySet(), dataSheets);
-                Map<String, String> nodeToGroup = new LinkedHashMap<>();
-                for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet())
-                    for (String n : ge.getValue()) nodeToGroup.put(n, ge.getKey());
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
-                Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
-                mapper.writeValue(new File(crGroupDir, fileName), json);
-                log.info("CRGROUP {} → single JSON → {}", crGroup, fileName);
-
-            } else {
-                // ── Default: CRGroupIndex with embedded table data ──
-                CRGroupIndex crGroupIndex = new CRGroupIndex();
-                crGroupIndex.setNodeType(nodeType);
-                crGroupIndex.setActivity(activity);
-                crGroupIndex.setCrGroup(crGroup);
-
-                List<CRGroupIndex.GroupEntry> groupEntries = new ArrayList<>();
-                for (Map.Entry<String, List<String>> gEntry : groupToNodes.entrySet()) {
-                    String group          = gEntry.getKey();
-                    List<String> nodeList = gEntry.getValue();
-
-                    Map<String, String> niamSubset = new LinkedHashMap<>();
-                    for (String node : nodeList) {
-                        String neid = index.getNiamMapping().get(node);
-                        if (neid != null) niamSubset.put(node, neid);
-                    }
-
-                    Map<String, List<Map<String, String>>> tableData = new LinkedHashMap<>();
-                    for (String tableName : dataSheets) {
-                        CiqSheet sheet = store.getSheet(tableName);
-                        if (sheet == null) {
-                            log.warn("  [{}/{}] table '{}' not found — skipping",
-                                    crGroup, group, tableName);
-                            continue;
-                        }
-                        List<Map<String, String>> rows = new ArrayList<>();
-                        for (CiqRow row : sheet.getRows()) {
-                            if (group.equals(row.get("Group"))) rows.add(row.getData());
-                        }
-                        tableData.put(tableName, rows);
-                        log.info("  [{}/{}] table '{}' — {} row(s) embedded",
-                                crGroup, group, tableName, rows.size());
-                    }
-
-                    CRGroupIndex.GroupEntry ge = new CRGroupIndex.GroupEntry();
-                    ge.setGroup(group);
-                    ge.setNodes(nodeList);
-                    ge.setNiamMapping(niamSubset);
-                    ge.setTableData(tableData);
-                    groupEntries.add(ge);
-                }
-
-                crGroupIndex.setGroups(groupEntries);
-                mapper.writeValue(new File(crGroupDir, fileName), crGroupIndex);
-                log.info("CRGROUP {} → groups {}, {} data sheet(s)",
-                        crGroup, groupToNodes.keySet(), dataSheets.size());
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // GROUP-mode segregation
-    // -------------------------------------------------------------------------
-
-    private void segregateGroupBased(InMemoryCiqDataStore store,
-                                     Map<String, List<String>> groupToNodes,
-                                     String nodeType,
-                                     String activity,
-                                     String mopJsonOutputDir,
-                                     Map<String, Object> template) throws IOException {
-
-        CiqIndex index = store.getIndex();
-
-        List<String> dataSheets = indexDataSheets(index);
-
-        for (Map.Entry<String, List<String>> entry : groupToNodes.entrySet()) {
-            String group          = entry.getKey();
-            List<String> nodeList = entry.getValue();
-
-            File groupDir = new File(mopJsonOutputDir);
-            String fileName = FileNamingUtil.indexFileName(nodeType, activity, group);
-
-            if (template != null && !template.isEmpty()) {
-                // ── Single structured JSON via template ──
-                Map<String, List<CiqRow>> filteredRows =
-                        buildGroupFilteredRows(store, group, dataSheets);
-                Map<String, String> nodeToGroup = new LinkedHashMap<>();
-                for (String n : nodeList) nodeToGroup.put(n, group);
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
-                Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
-                mapper.writeValue(new File(groupDir, fileName), json);
-                log.info("Group {} → single JSON → {}", group, fileName);
-
-            } else {
-                // ── Default: GroupIndex metadata + per-table CiqSheet files ──
-                for (String tableName : dataSheets) {
-                    CiqSheet sheet = store.getSheet(tableName);
-                    if (sheet == null) {
-                        log.warn("  [{}] table '{}' not found — skipping", group, tableName);
-                        continue;
-                    }
-                    List<CiqRow> filteredRows = new ArrayList<>();
-                    for (CiqRow row : sheet.getRows()) {
-                        if (group.equals(row.get("Group"))) filteredRows.add(row);
-                    }
-                    CiqSheet filteredSheet = new CiqSheet();
-                    filteredSheet.setSheetName(sheet.getSheetName());
-                    filteredSheet.setColumns(sheet.getColumns());
-                    filteredSheet.setRows(filteredRows);
-
-                    String sheetFileName =
-                            FileNamingUtil.sheetFileName(nodeType, activity, tableName, group);
-                    mapper.writeValue(new File(groupDir, sheetFileName), filteredSheet);
-                    log.info("  [{}] table '{}' ({} rows) → {}",
-                            group, tableName, filteredRows.size(), sheetFileName);
-                }
-
-                Map<String, String> niamSubset = new LinkedHashMap<>();
-                for (String node : nodeList) {
-                    String neid = index.getNiamMapping().get(node);
-                    if (neid != null) niamSubset.put(node, neid);
-                }
-
-                GroupIndex groupIndex = new GroupIndex();
-                groupIndex.setNodeType(nodeType);
-                groupIndex.setActivity(activity);
-                groupIndex.setGroup(group);
-                groupIndex.setNodes(nodeList);
-                groupIndex.setTables(new ArrayList<>(dataSheets));
-                groupIndex.setNiamMapping(niamSubset);
-
-                mapper.writeValue(new File(groupDir, fileName), groupIndex);
-                log.info("Group {} → nodes {}, {} data sheet(s)", group, nodeList, dataSheets.size());
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // No-Index fallback segregation
-    // -------------------------------------------------------------------------
-
-    private void segregateNoIndex(InMemoryCiqDataStore store,
-                                  String nodeType,
-                                  String activity,
-                                  String mopJsonOutputDir,
-                                  Map<String, Object> template) throws IOException {
-
-        List<String> dataSheets = new ArrayList<>();
-        for (String name : store.getAvailableSheets()) {
-            if (!name.replace("_", "").equalsIgnoreCase("index")) dataSheets.add(name);
-        }
-
-        Map<String, String> nodeToCrGroup = buildNodeCrGroupMap(store);
-        boolean indexSheetPresent = !nodeToCrGroup.isEmpty();
-
-        Set<String> nodes;
-        if (indexSheetPresent) {
-            nodes = new LinkedHashSet<>(nodeToCrGroup.keySet());
-            log.info("INDEX sheet present — grouping {} node(s) by NODE + CRGroup: {}",
-                    nodes.size(), nodes);
-        } else {
-            nodes = new LinkedHashSet<>(store.getIndex().getNiamMapping().keySet());
-            log.info("INDEX sheet absent — grouping {} node(s) by NODE (from NODE_ID): {}",
-                    nodes.size(), nodes);
-        }
-
-        if (nodes.isEmpty()) {
-            log.warn("No nodes found for child-order segregation — skipped");
-            return;
-        }
-
-
-        for (String node : nodes) {
-            String crGroup    = nodeToCrGroup.getOrDefault(node, "").trim();
-            String childOrder = crGroup.isEmpty() ? node : node + "_" + crGroup;
-
-            File childDir = new File(mopJsonOutputDir);
-            String fileName = FileNamingUtil.indexFileName(nodeType, activity, childOrder);
-
-            NodeEntry entry = new NodeEntry();
-            entry.setNode(node);
-            entry.setCrGroup(crGroup);
-            entry.setTables(new ArrayList<>(dataSheets));
-
-            if (template != null && !template.isEmpty()) {
-                // ── Single structured JSON via template ──
-                Map<String, List<CiqRow>> filteredRows =
-                        buildNodeFilteredRows(store, entry, node);
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
-                Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
-                mapper.writeValue(new File(childDir, fileName), json);
-                log.info("  [{}] single JSON → {}", childOrder, fileName);
-
-            } else {
-                // ── Default: index file + per-table CiqSheet files ──
-                CiqIndex childIndex = new CiqIndex();
-                childIndex.setNodeType(nodeType);
-                childIndex.setActivity(activity);
-                childIndex.getEntries().add(entry);
-                childIndex.setNiamMapping(store.getIndex().getNiamMapping());
-
-                mapper.writeValue(new File(childDir, fileName), childIndex);
-                log.info("  [{}] index → {}", childOrder, fileName);
-
-                for (String tableName : dataSheets) {
-                    CiqSheet sheet = store.getSheet(tableName);
-                    if (sheet == null) continue;
-
-                    List<CiqRow> filteredRows = new ArrayList<>();
-                    for (CiqRow row : sheet.getRows()) {
-                        if (node.equals(row.get("Node"))) filteredRows.add(row);
-                    }
-                    CiqSheet filtered = new CiqSheet();
-                    filtered.setSheetName(sheet.getSheetName());
-                    filtered.setColumns(sheet.getColumns());
-                    filtered.setRows(filteredRows);
-
-                    String sheetFileName =
-                            FileNamingUtil.sheetFileName(nodeType, activity, tableName, childOrder);
-                    mapper.writeValue(new File(childDir, sheetFileName), filtered);
-                    log.info("  [{}] table '{}' ({} rows) → {}",
-                            childOrder, tableName, filteredRows.size(), sheetFileName);
-                }
-            }
-        }
-    }
-
-    // -------------------------------------------------------------------------
-    // Filtered-row builders (per segregation mode)
-    // -------------------------------------------------------------------------
-
-    /**
-     * Builds the filtered-row map for a NODE-mode segregation unit.
-     * Data sheets are filtered by {@code Node == node}; the raw Index sheet is
-     * filtered by the same node.
-     */
-    private Map<String, List<CiqRow>> buildNodeFilteredRows(InMemoryCiqDataStore store,
-                                                             NodeEntry entry,
-                                                             String node) throws IOException {
-        Map<String, List<CiqRow>> out = new LinkedHashMap<>();
-        for (String tableName : entry.getTables()) {
-            CiqSheet sheet = store.getSheet(tableName);
-            if (sheet == null) continue;
-            List<CiqRow> rows = new ArrayList<>();
-            for (CiqRow row : sheet.getRows()) {
-                if (node.equals(row.get("Node"))) rows.add(row);
-            }
-            out.put(tableName, rows);
-        }
-        if (store.getRawIndexSheet() != null) {
-            List<CiqRow> rows = new ArrayList<>();
-            for (CiqRow row : store.getRawIndexSheet().getRows()) {
-                if (node.equals(row.get("Node"))) rows.add(row);
-            }
-            out.put("Index", rows);
-        }
-        return out;
-    }
-
-    /**
-     * Builds the filtered-row map for a GROUP-mode segregation unit.
-     * Data sheets are filtered by {@code Group == group}; the raw Index sheet likewise.
-     */
-    private Map<String, List<CiqRow>> buildGroupFilteredRows(InMemoryCiqDataStore store,
-                                                              String group,
-                                                              List<String> dataSheets) throws IOException {
-        Map<String, List<CiqRow>> out = new LinkedHashMap<>();
-        for (String tableName : dataSheets) {
-            CiqSheet sheet = store.getSheet(tableName);
-            if (sheet == null) continue;
-            List<CiqRow> rows = new ArrayList<>();
-            for (CiqRow row : sheet.getRows()) {
-                if (group.equals(row.get("Group"))) rows.add(row);
-            }
-            out.put(tableName, rows);
-        }
-        if (store.getRawIndexSheet() != null) {
-            List<CiqRow> rows = new ArrayList<>();
-            for (CiqRow row : store.getRawIndexSheet().getRows()) {
-                if (group.equals(row.get("Group"))) rows.add(row);
-            }
-            out.put("Index", rows);
-        }
-        return out;
-    }
-
-    /**
-     * Builds the filtered-row map for a CRGROUP-mode segregation unit.
-     * Data sheets are filtered by rows whose GROUP column is in {@code groupsInCR};
-     * the raw Index sheet is filtered by {@code CRGroup == crGroup}.
-     */
-    private Map<String, List<CiqRow>> buildCRGroupFilteredRows(InMemoryCiqDataStore store,
-                                                                String crGroup,
-                                                                Set<String> groupsInCR,
-                                                                List<String> dataSheets) throws IOException {
-        Map<String, List<CiqRow>> out = new LinkedHashMap<>();
-        for (String tableName : dataSheets) {
-            CiqSheet sheet = store.getSheet(tableName);
-            if (sheet == null) continue;
-            List<CiqRow> rows = new ArrayList<>();
-            for (CiqRow row : sheet.getRows()) {
-                String g = row.get("Group");
-                if (g != null && groupsInCR.contains(g)) rows.add(row);
-            }
-            out.put(tableName, rows);
-        }
-        if (store.getRawIndexSheet() != null) {
-            List<CiqRow> rows = new ArrayList<>();
-            for (CiqRow row : store.getRawIndexSheet().getRows()) {
-                if (crGroup.equals(row.get("CRGroup"))) rows.add(row);
-            }
-            out.put("Index", rows);
-        }
-        return out;
-    }
-
-    // -------------------------------------------------------------------------
-    // Utility
-    // -------------------------------------------------------------------------
-
-    // -------------------------------------------------------------------------
-    // Single-output segregation (output_mode: single)
-    // -------------------------------------------------------------------------
+    // =========================================================================
+    // SINGLE output — one file for the entire workbook
+    // =========================================================================
 
     private void segregateSingle(InMemoryCiqDataStore store,
-                                 Map<String, Map<String, List<String>>> crGroupToGroupNodes,
-                                 Map<String, List<String>> groupToNodes,
                                  String nodeType,
                                  String activity,
-                                 String mopJsonOutputDir,
+                                 String outputDir,
                                  Map<String, Object> template) throws IOException {
-
         if (template == null || template.isEmpty()) {
-            log.warn("output_mode: single — no json_output template defined; skipping");
+            log.warn("output_mode=single: no 'data' template in json_output — skipping");
+            return;
+        }
+        JsonTemplateEvaluator.TemplateContext ctx =
+                new JsonTemplateEvaluator.TemplateContext(store, buildAllRows(store));
+        Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
+        String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + ".json";
+        mapper.writeValue(new File(outputDir, fileName), json);
+        log.info("Single JSON → {}", fileName);
+    }
+
+    // =========================================================================
+    // INDIVIDUAL output — one file per distinct value of segregate_by column
+    // =========================================================================
+
+    private void segregateIndividual(InMemoryCiqDataStore store,
+                                     String nodeType,
+                                     String activity,
+                                     String outputDir,
+                                     Map<String, Object> template,
+                                     SegregateByConfig seg) throws IOException {
+        List<String> values = distinctValues(store, seg.sheet, seg.column);
+        if (values.isEmpty()) {
+            log.warn("segregate_by: no distinct values found in {}.{} — skipping", seg.sheet, seg.column);
             return;
         }
 
-        // Build whole-workbook nodeToGroup map (union of all CRs and groups)
-        Map<String, String> nodeToGroup = new LinkedHashMap<>();
-        for (Map.Entry<String, Map<String, List<String>>> crEntry : crGroupToGroupNodes.entrySet()) {
-            for (Map.Entry<String, List<String>> ge : crEntry.getValue().entrySet()) {
-                for (String n : ge.getValue()) nodeToGroup.put(n, ge.getKey());
+        for (String value : values) {
+            // Scope the segregation sheet to rows matching this value.
+            // All other sheets are NOT in scopedRows — the template engine falls back
+            // to store.getSheet() for unfiltered access when a sheet isn't in filteredRows.
+            Map<String, List<CiqRow>> scopedRows = filterSheetByColumn(store, seg.sheet, seg.column, value);
+
+            Object json;
+            if (template != null && !template.isEmpty()) {
+                JsonTemplateEvaluator.TemplateContext ctx =
+                        new JsonTemplateEvaluator.TemplateContext(store, scopedRows)
+                                .withVar(seg.varName, value, scopedRows);
+                json = new JsonTemplateEvaluator().evaluate(template, ctx);
+            } else {
+                // No template: produce a minimal generic JSON of all sheets with full row data
+                json = buildDefaultJson(store, nodeType, activity, seg.column, value);
             }
+
+            String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase()
+                    + "_" + sanitize(value) + ".json";
+            mapper.writeValue(new File(outputDir, fileName), json);
+            log.info("  [{}.{}={}] → {}", seg.sheet, seg.column, value, fileName);
         }
-        for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet()) {
-            for (String n : ge.getValue()) nodeToGroup.putIfAbsent(n, ge.getKey());
-        }
-
-        Map<String, List<CiqRow>> allRows = buildAllRows(store);
-        JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, allRows);
-
-        Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
-
-        String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + ".json";
-        mapper.writeValue(new File(mopJsonOutputDir, fileName), json);
-        log.info("SINGLE mode — wrote {}", fileName);
     }
 
-    /**
-     * Builds an unfiltered row map containing all rows for every data sheet,
-     * every auxiliary sheet, and the full raw Index sheet.  Used in single-output mode
-     * so the template engine can access all workbook data.
-     */
-    private Map<String, List<CiqRow>> buildAllRows(InMemoryCiqDataStore store) {
-        Map<String, List<CiqRow>> out = new LinkedHashMap<>();
-        // Data sheets (Index-referenced)
-        for (String name : indexDataSheets(store.getIndex())) {
-            CiqSheet s = store.getSheet(name);
-            if (s != null) out.put(name, s.getRows());
-        }
-        // Auxiliary sheets (User_ID, Node_Details, etc.)
-        for (String name : store.getAvailableSheets()) {
-            if (!out.containsKey(name)) {
-                CiqSheet s = store.getSheet(name);
-                if (s != null) out.put(name, s.getRows());
-            }
-        }
-        // Full unfiltered Index
-        if (store.getRawIndexSheet() != null) {
-            out.put("Index", store.getRawIndexSheet().getRows());
-        }
-        return out;
-    }
+    // =========================================================================
+    // YAML config resolution
+    // =========================================================================
 
-    /**
-     * Reads {@code output_mode} from inside the {@code json_output} block.
-     * Defaults to {@link OutputMode#INDIVIDUAL} when absent.
-     */
-    @SuppressWarnings("unchecked")
     private OutputMode resolveOutputMode(ValidationRulesConfig rules) {
         Map<String, Object> jo = rules.getJsonOutput();
-        log.info("[resolveOutputMode] jsonOutput map = {}", jo);
         if (jo == null) return OutputMode.INDIVIDUAL;
         Object mode = jo.get("output_mode");
-        log.info("[resolveOutputMode] output_mode = {}", mode);
         return OutputMode.fromString(mode != null ? mode.toString() : null);
     }
 
-    /**
-     * Reads the {@code data} sub-map from inside the {@code json_output} block.
-     * Returns {@code null} when the block or key is absent.
-     */
     @SuppressWarnings("unchecked")
     private Map<String, Object> resolveTemplate(ValidationRulesConfig rules) {
         Map<String, Object> jo = rules.getJsonOutput();
@@ -660,35 +226,171 @@ public class CiqProcessorImpl implements CiqProcessor {
     }
 
     /**
-     * Returns the unique data-table names referenced in the Index entries, preserving
-     * encounter order.  Auxiliary sheets (e.g. Node_Details, USER_ID) are excluded so
-     * they are not filtered by group/node in filteredRows and can be looked up in full
-     * via {@code store.getSheet()} by the template engine.
+     * Reads the {@code segregate_by} block from {@code json_output}.
+     * Returns {@code null} when absent or incomplete.
+     *
+     * <pre>
+     * segregate_by:
+     *   sheet:  Index      # required — sheet containing the segregation key column
+     *   column: CRGroup    # required — one output file per distinct value of this column
+     *   as:     $cr        # optional — variable name injected into the template (default: $unit)
+     * </pre>
      */
-    private List<String> indexDataSheets(CiqIndex index) {
-        Set<String> seen = new LinkedHashSet<>();
-        for (NodeEntry entry : index.getEntries()) {
-            if (entry.getTables() != null) seen.addAll(entry.getTables());
+    @SuppressWarnings("unchecked")
+    private SegregateByConfig resolveSegregateBy(ValidationRulesConfig rules) {
+        Map<String, Object> jo = rules.getJsonOutput();
+        if (jo == null) return null;
+        Object seg = jo.get("segregate_by");
+        if (!(seg instanceof Map)) return null;
+        Map<String, Object> m = (Map<String, Object>) seg;
+
+        String sheet  = (String) m.get("sheet");
+        String column = (String) m.get("column");
+        if (sheet == null || column == null) {
+            log.warn("segregate_by: 'sheet' and 'column' are required — skipping");
+            return null;
         }
-        return new ArrayList<>(seen);
+        String as      = m.containsKey("as") ? String.valueOf(m.get("as")) : "$unit";
+        String varName = as.startsWith("$") ? as.substring(1) : as;
+        return new SegregateByConfig(sheet, column, varName);
     }
 
-    private Map<String, String> buildNodeCrGroupMap(InMemoryCiqDataStore store) {
-        Map<String, String> map = new LinkedHashMap<>();
-        for (String sheetName : store.getAvailableSheets()) {
-            if (sheetName.replace("_", "").equalsIgnoreCase("index")) {
-                CiqSheet indexSheet = store.getSheet(sheetName);
-                if (indexSheet == null) break;
-                for (CiqRow row : indexSheet.getRows()) {
-                    String node    = row.get("Node");
-                    String crGroup = row.get("CRGroup");
-                    if (node != null && !node.trim().isEmpty()) {
-                        map.put(node.trim(), crGroup != null ? crGroup.trim() : "");
-                    }
-                }
-                break;
-            }
+    // =========================================================================
+    // Row helpers
+    // =========================================================================
+
+    /**
+     * Builds an unfiltered row map containing every sheet in the store.
+     * Used by SINGLE mode so the template engine sees the full workbook.
+     */
+    private Map<String, List<CiqRow>> buildAllRows(InMemoryCiqDataStore store) {
+        Map<String, List<CiqRow>> out = new LinkedHashMap<>();
+        for (String name : store.getAvailableSheets()) {
+            CiqSheet s = store.getSheet(name);
+            if (s != null) out.put(name, s.getRows());
         }
-        return map;
+        if (store.getRawIndexSheet() != null)
+            out.put("Index", store.getRawIndexSheet().getRows());
+        return out;
+    }
+
+    /**
+     * Returns a row map where only {@code sheetName} is present and filtered to rows
+     * whose {@code column} value equals {@code value}.
+     * Column matching is case-insensitive and underscore-insensitive.
+     */
+    private Map<String, List<CiqRow>> filterSheetByColumn(InMemoryCiqDataStore store,
+                                                           String sheetName,
+                                                           String column,
+                                                           String value) {
+        Map<String, List<CiqRow>> out = new LinkedHashMap<>();
+        CiqSheet sheet = resolveSheet(store, sheetName);
+        if (sheet == null) return out;
+        String actualCol = findActualColumnName(sheet.getColumns(), column);
+        List<CiqRow> rows = new ArrayList<>();
+        for (CiqRow row : sheet.getRows()) {
+            if (value.equals(row.get(actualCol))) rows.add(row);
+        }
+        out.put(sheetName, rows);
+        return out;
+    }
+
+    /**
+     * Returns distinct non-blank values of {@code column} in {@code sheetName},
+     * preserving encounter order.
+     */
+    private List<String> distinctValues(InMemoryCiqDataStore store,
+                                        String sheetName, String column) {
+        CiqSheet sheet = resolveSheet(store, sheetName);
+        if (sheet == null) {
+            log.warn("segregate_by: sheet '{}' not found", sheetName);
+            return Collections.emptyList();
+        }
+        String actualCol = findActualColumnName(sheet.getColumns(), column);
+        List<String> values = new ArrayList<>();
+        for (CiqRow row : sheet.getRows()) {
+            String v = row.get(actualCol);
+            if (v != null && !v.trim().isEmpty() && !values.contains(v.trim()))
+                values.add(v.trim());
+        }
+        return values;
+    }
+
+    /**
+     * Resolves a sheet from the store by name.
+     * {@code "Index"} (case-insensitive) maps to the raw Index sheet when present;
+     * all other names use {@link InMemoryCiqDataStore#getSheet(String)}.
+     */
+    private CiqSheet resolveSheet(InMemoryCiqDataStore store, String sheetName) {
+        if ("Index".equalsIgnoreCase(sheetName) && store.getRawIndexSheet() != null)
+            return store.getRawIndexSheet();
+        return store.getSheet(sheetName);
+    }
+
+    /**
+     * Produces a minimal generic JSON for the no-template case.
+     * Contains all workbook sheets with their full row data, plus top-level metadata.
+     */
+    private Map<String, Object> buildDefaultJson(InMemoryCiqDataStore store,
+                                                  String nodeType, String activity,
+                                                  String segColumn, String segValue) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("nodeType", nodeType);
+        out.put("activity", activity);
+        out.put(segColumn, segValue);
+        Map<String, Object> sheets = new LinkedHashMap<>();
+        for (String name : store.getAvailableSheets()) {
+            CiqSheet s = store.getSheet(name);
+            if (s == null) continue;
+            List<Map<String, String>> rows = new ArrayList<>();
+            for (CiqRow row : s.getRows()) rows.add(row.getData());
+            sheets.put(name, rows);
+        }
+        out.put("sheets", sheets);
+        return out;
+    }
+
+    // =========================================================================
+    // Utility
+    // =========================================================================
+
+    /**
+     * Finds the actual column name in {@code columns} that matches {@code canonical}
+     * using case-insensitive, underscore/space-insensitive comparison.
+     * Falls back to {@code canonical} when no match is found.
+     */
+    private static String findActualColumnName(List<String> columns, String canonical) {
+        if (columns == null) return canonical;
+        String target = canonical.replaceAll("[_\\s]", "").toLowerCase();
+        for (String col : columns) {
+            if (col.replaceAll("[_\\s]", "").toLowerCase().equals(target)) return col;
+        }
+        return canonical;
+    }
+
+    /** Replaces characters that are unsafe in file names with underscores. */
+    private static String sanitize(String value) {
+        return value.replaceAll("[^A-Za-z0-9._\\-]", "_");
+    }
+
+    // =========================================================================
+    // SegregateByConfig — parsed 'segregate_by' YAML block
+    // =========================================================================
+
+    private static final class SegregateByConfig {
+        final String sheet;
+        final String column;
+        final String varName;   // the variable name without the leading '$'
+
+        SegregateByConfig(String sheet, String column, String varName) {
+            this.sheet   = sheet;
+            this.column  = column;
+            this.varName = varName;
+        }
+
+        @Override
+        public String toString() {
+            return sheet + "." + column + " as $" + varName;
+        }
     }
 }

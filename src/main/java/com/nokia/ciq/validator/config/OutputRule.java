@@ -13,6 +13,10 @@ package com.nokia.ciq.validator.config;
  *   <li>{@code count} — if {@code column} is set: count of rows where that column is
  *       non-blank; if {@code column} is omitted: total row count for the sheet</li>
  *   <li>{@code sum} — numeric sum of {@code column} values (non-numeric cells ignored)</li>
+ *   <li>{@code group} — groups distinct values of {@code column} by each distinct value of
+ *       {@code groupBy}; produces one parameter per group value named
+ *       {@code <paramName>_<groupValue>} containing the joined {@code column} values.
+ *       Requires both {@code column} and {@code groupBy}.</li>
  * </ul>
  *
  * <h3>YAML example</h3>
@@ -32,6 +36,14 @@ package com.nokia.ciq.validator.config;
  *     sheet: ANNOUNCEMENT_FILES
  *     column: FILE_SIZE_KB
  *     aggregate: sum
+ *
+ *   # Produces NODES_BY_CR_CR001=MRF1,MRF2  NODES_BY_CR_CR002=MRF3
+ *   NODES_BY_CR:
+ *     sheet: Index
+ *     groupBy: CRGroup
+ *     column: Node
+ *     aggregate: group
+ *     separator: ","
  * </pre>
  */
 public class OutputRule {
@@ -59,19 +71,26 @@ public class OutputRule {
 
     /**
      * Column name within the sheet.
-     * Required for {@code distinct} and {@code sum}.
+     * Required for {@code distinct}, {@code sum}, and {@code group}.
      * Optional for {@code count} — when omitted, total row count is returned.
      */
     private String column;
 
-    /** Aggregate function: {@code distinct}, {@code count}, or {@code sum}. */
+    /** Aggregate function: {@code distinct}, {@code count}, {@code sum}, or {@code group}. */
     private String aggregate;
 
     /**
-     * Value separator used when joining multiple values in {@code distinct}.
+     * Value separator used when joining multiple values in {@code distinct} and {@code group}.
      * Defaults to {@code ","} when not specified.
      */
     private String separator;
+
+    /**
+     * Column to group by when {@code aggregate} is {@code group}.
+     * Each distinct value of this column becomes a separate output parameter suffixed
+     * with the group value: {@code <paramName>_<groupValue>}.
+     */
+    private String groupBy;
 
     public String getName()      { return name; }
     public void setName(String name) { this.name = name; }
@@ -87,4 +106,7 @@ public class OutputRule {
 
     public String getSeparator() { return separator; }
     public void setSeparator(String separator) { this.separator = separator; }
+
+    public String getGroupBy()   { return groupBy; }
+    public void setGroupBy(String groupBy) { this.groupBy = groupBy; }
 }

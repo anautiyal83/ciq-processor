@@ -234,9 +234,13 @@ sheets:
 # optional 'name' field overrides it.
 #
 # Supported aggregates:
-#   distinct  — sorted, deduplicated non-blank values joined by 'separator' (default ",")
+#   distinct  — deduplicated non-blank values from 'column' joined by 'separator' (default ",")
 #   count     — number of non-blank rows for 'column'; total row count when 'column' is omitted
 #   sum       — numeric sum of 'column' values (non-numeric cells silently ignored)
+#   group     — groups distinct 'column' values by each distinct 'groupBy' value;
+#               emits one parameter per group: <PARAM_NAME>_<groupValue> = joined column values.
+#               Requires both 'column' and 'groupBy'.
+#               Example: NODES_BY_CR_CR001=MRF1,MRF2  NODES_BY_CR_CR002=MRF3
 # ---------------------------------------------------------------------------
 outputs:
 
@@ -264,6 +268,15 @@ outputs:
     column: <ColumnName>
     aggregate: sum
 
+  # Group: one parameter per distinct groupBy value
+  # Emits <PARAM_NAME>_<groupValue> = joined column values
+  <PARAM_NAME>:
+    sheet: <SheetName>
+    groupBy: <GroupByColumnName>
+    column: <ColumnName>
+    aggregate: group
+    separator: ","              # optional — defaults to ","
+
   # Override the parameter name stored in the report
   <yaml_key>:
     name: <PARAM_NAME>          # emitted as PARAM_NAME instead of yaml_key
@@ -275,16 +288,48 @@ outputs:
 # ---------------------------------------------------------------------------
 # JSON output template
 # ---------------------------------------------------------------------------
-# The json_output block has exactly two top-level keys:
+# The json_output block supports the following top-level keys:
 #
-#   output_mode  — controls how many JSON files are produced (required)
-#   data         — the JSON template tree evaluated by JsonTemplateEvaluator
+#   output_mode   — controls how many JSON files are produced (required)
+#   segregate_by  — required when output_mode=individual; defines the split key
+#   data          — the JSON template tree evaluated by JsonTemplateEvaluator
 #
-# output_mode values:
-#   individual  — one JSON per segregation unit (CR / group / node).
-#                 Grouping is auto-detected from the workbook structure.
-#                 Default when output_mode is absent.
+# ── output_mode ───────────────────────────────────────────────────────────
+#
 #   single      — one JSON file for the entire workbook.
+#                 File name: <NODE_TYPE>_<ACTIVITY>.json
+#
+#   individual  — one JSON file per distinct value of the segregate_by column.
+#                 File name: <NODE_TYPE>_<ACTIVITY>_<value>.json
+#                 Requires a 'segregate_by' block (see below).
+#                 Default when output_mode is absent.
+#
+# ── segregate_by (required for output_mode: individual) ───────────────────
+#
+#   sheet:  <SheetName>   # any sheet in the workbook (use 'Index' for the index sheet)
+#   column: <ColumnName>  # one output file is created per distinct value of this column
+#   as:     $<varname>    # variable injected into the template for the current value
+#                         # optional — defaults to $unit
+#
+#   The named sheet is pre-scoped to matching rows for each iteration value.
+#   All other sheets remain fully accessible so the template can cross-reference
+#   freely using WHERE conditions.
+#
+#   Examples:
+#     segregate_by:            # one file per CRGroup value in the Index sheet
+#       sheet:  Index
+#       column: CRGroup
+#       as:     $cr
+#
+#     segregate_by:            # one file per Node value in the Index sheet
+#       sheet:  Index
+#       column: Node
+#       as:     $node
+#
+#     segregate_by:            # one file per Group value in the Index sheet
+#       sheet:  Index
+#       column: Group
+#       as:     $grp
 #
 # ── Value resolution rules ────────────────────────────────────────────────
 #
@@ -309,14 +354,9 @@ outputs:
 #         email:  "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
 #
 #   $<varname>
-#       Resolves a named variable set by DISTINCT iteration or a legacy directive.
-#       Any name defined via "DISTINCT … AS $varname" is available here.
-#       Legacy built-in variables (set by _each: nodes / groups):
-#         $node        current node name
-#         $niamID      NIAM ID for $node
-#         $group       current group name
-#         $nodes       List of node names in the current group  (JSON array)
-#         $niamMapping { node: niamID, … } map for the current group (JSON object)
+#       Resolves a named variable — either from 'segregate_by.as' or from a
+#       DISTINCT iteration inside the template.
+#       Any name defined via "DISTINCT … AS $varname" is also available here.
 #
 # ── Array directives (_each) ─────────────────────────────────────────────
 #
@@ -345,14 +385,6 @@ outputs:
 #         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
 #         _each: "Index.Node WHERE Index.CRGroup = $cr"   # hint: iterating Node column
 #
-#   _each: nodes   (legacy — use DISTINCT instead for new configurations)
-#       One element per node in the segregation unit.
-#       Sets $node, $niamID, and $group.
-#
-#   _each: groups  (legacy — use DISTINCT instead for new configurations)
-#       One element per group.
-#       Sets $group, $nodes, and $niamMapping.
-#
 # ── Nested objects ────────────────────────────────────────────────────────
 #
 #   Any map without an _each key is treated as a nested object and all
@@ -360,25 +392,31 @@ outputs:
 #
 # ── Examples ──────────────────────────────────────────────────────────────
 #
-# Example 1 — single file, node-wise (single output_mode)
+# Example 1 — one file per CRGroup (individual output_mode)
+#   Produces: MRF_ANNOUNCEMENT_LOADING_CR001.json, MRF_ANNOUNCEMENT_LOADING_CR002.json …
 #
 #   json_output:
-#     output_mode: single
+#     output_mode: individual
+#     segregate_by:
+#       sheet:  Index
+#       column: CRGroup
+#       as:     $cr
 #     data:
 #       nodeType: MRF
 #       activity: ANNOUNCEMENT_LOADING
+#       crGroup:  $cr
+#       email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
 #       nodes:
-#         _each: "DISTINCT Index.Node AS $node"
-#         node:    $node
-#         crGroup: Index.CRGroup
-#         email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
-#         niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#         _each: "Index.Node WHERE Index.CRGroup = $cr"
+#         node:   Node
+#         niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
 #         tableData:
 #           _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
 #           INPUT_FILE:           INPUT_FILE
 #           MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 #
-# Example 2 — single file, CR-wise then node-wise (single output_mode)
+# Example 2 — single file, all CRs and nodes (single output_mode)
+#   Produces: MRF_ANNOUNCEMENT_LOADING.json
 #
 #   json_output:
 #     output_mode: single
@@ -398,31 +436,38 @@ outputs:
 #             INPUT_FILE:           INPUT_FILE
 #             MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 #
-# Example 3 — individual file per node (individual output_mode, legacy directives)
+# Example 3 — one file per Node (individual output_mode, node-wise)
 #
 #   json_output:
 #     output_mode: individual
+#     segregate_by:
+#       sheet:  Index
+#       column: Node
+#       as:     $node
 #     data:
 #       nodeType: MRF
-#       activity: ANNOUNCEMENT_LOADING
-#       nodes:
-#         _each: nodes
-#         node:   $node
-#         niamID: $niamID
-#         tableData:
-#           _each: ANNOUNCEMENT_FILES
-#           INPUT_FILE:           INPUT_FILE
-#           MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+#       node:     $node
+#       niamID:   "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#       tableData:
+#         _each: ANNOUNCEMENT_FILES
+#         INPUT_FILE:           INPUT_FILE
+#         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 #
 # ---------------------------------------------------------------------------
 json_output:
   output_mode: individual      # individual (default) | single
 
+  # Required for output_mode: individual — defines the file-splitting key
+  segregate_by:
+    sheet:  <SheetName>        # any sheet (use 'Index' for the index sheet)
+    column: <ColumnName>       # one file per distinct value of this column
+    as:     $<varname>         # variable injected into the template (default: $unit)
+
   data:
     <jsonKey>: <static value>              # plain string written as-is
     <jsonKey>: <SheetName>.<ColumnName>    # first non-blank value from sheet+column
     <jsonKey>: "<Sheet>.<Col> WHERE [<Sheet>.]<FilterCol> = $var"   # relational lookup
-    <jsonKey>: $<varname>                  # variable set by DISTINCT or legacy directive
+    <jsonKey>: $<varname>                  # variable from segregate_by or DISTINCT
 
     # ── Generic distinct-value array (RECOMMENDED) ─────────────────────────
     <jsonArrayKey>:
@@ -448,3 +493,66 @@ json_output:
     <jsonObjectKey>:
       <jsonKey>: <SheetName>.<ColumnName>
       <jsonKey>: <static value>
+      
+# examples :-
+ 
+# ---------------------------------------------------------------------------
+# JSON output template
+# ---------------------------------------------------------------------------
+# CR wise single JSON file
+#json_output:
+#  output_mode: single
+#  data:
+#    nodeType: MRF
+#    activity: ANNOUNCEMENT_LOADING
+#    crs:
+#      _each: "DISTINCT FROM Index.CRGroup As $cr"
+#      crGroup: $cr
+#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#      nodes:
+#        _each: "Index.Node WHERE Index.CRGroup = $cr"
+#        node:   NODE
+#        niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = NODE"
+#        tableData:
+#          _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#          INPUT_FILE:           INPUT_FILE
+#          MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+ 
+ 
+# CR wise individual JSON file         
+#json_output:
+#  output_mode: individual
+#  segregate_by:
+#    sheet:  Index
+#    column: CRGroup
+#    as:     $cr
+#  data:
+#    nodeType: MRF
+#    activity: ANNOUNCEMENT_LOADING
+#    crGroup:  $cr
+#    email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#    nodes:
+#      _each: "Index.Node WHERE Index.CRGroup = $cr"
+#      node:   Node
+#      niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
+#      tableData:
+#        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#        INPUT_FILE:           INPUT_FILE
+#        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+
+# NODE wise single JSON file 
+#json_output:
+#  output_mode: single
+#  data:
+#    nodeType: MRF
+#    activity: ANNOUNCEMENT_LOADING
+#    nodes:
+#      _each: "DISTINCT Index.Node AS $node"
+#      node:    $node
+#      crGroup: Index.CRGroup
+#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+#      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#      tableData:
+#        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#        INPUT_FILE:           INPUT_FILE
+#        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

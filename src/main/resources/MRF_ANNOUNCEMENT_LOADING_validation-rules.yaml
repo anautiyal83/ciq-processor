@@ -119,50 +119,58 @@ outputs:
     aggregate: count
 
 # ---------------------------------------------------------------------------
-# Node-ID sheet configuration
-# ---------------------------------------------------------------------------
-# Tells the reader which sheet holds the node → NIAM ID mapping and what
-# the two key columns are called.  Defaults: sheet=Node_ID, node=Node,
-# niam=NIAM_ID.  MRF uses a non-standard sheet/column naming.
-# ---------------------------------------------------------------------------
-node_id_config:
-  sheet:      Node_Details
-  nodeColumn: Node_Name
-  niamColumn: "NIAM NAME"
-
-# ---------------------------------------------------------------------------
 # JSON output template
 # ---------------------------------------------------------------------------
-#json_output:
-#  output_mode: single
-#  data:
-#    nodeType: MRF
-#    activity: ANNOUNCEMENT_LOADING
-#    crs:
-#      _each: "DISTINCT FROM Index.CRGroup As $cr"
-#      crGroup: $cr
-#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-#      nodes:
-#        _each: "Index.Node WHERE Index.CRGroup = $cr"
-#        node:   NODE
-#        niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = NODE"
-#        tableData:
-#          _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#          INPUT_FILE:           INPUT_FILE
-#          MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-          
 json_output:
   output_mode: single
   data:
     nodeType: MRF
     activity: ANNOUNCEMENT_LOADING
-    nodes:
-      _each: "DISTINCT Index.Node AS $node"
-      node:    $node
-      crGroup: Index.CRGroup
-      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
-      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-      tableData:
-        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-        INPUT_FILE:           INPUT_FILE
-        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+    crs:
+      _each: "DISTINCT FROM Index.CRGroup As $cr"
+      crGroup: $cr
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+      nodes:
+        _each: "Index.Node WHERE Index.CRGroup = $cr"
+        node:   NODE
+        niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = NODE"
+        tableData:
+          _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+          INPUT_FILE:           INPUT_FILE
+          MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+          
+#json_output:
+#  output_mode: individual
+#  segregate_by:
+#    sheet:  Index
+#    column: CRGroup
+#    as:     $cr
+#  data:
+#    nodeType: MRF
+#    activity: ANNOUNCEMENT_LOADING
+#    crGroup:  $cr
+#    email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#    nodes:
+#      _each: "Index.Node WHERE Index.CRGroup = $cr"
+#      node:   Node
+#      niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
+#      tableData:
+#        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#        INPUT_FILE:           INPUT_FILE
+#        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+
+#json_output:
+#  output_mode: single
+#  data:
+#    nodeType: MRF
+#    activity: ANNOUNCEMENT_LOADING
+#    nodes:
+#      _each: "DISTINCT Index.Node AS $node"
+#      node:    $node
+#      crGroup: Index.CRGroup
+#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+#      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#      tableData:
+#        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#        INPUT_FILE:           INPUT_FILE
+#        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

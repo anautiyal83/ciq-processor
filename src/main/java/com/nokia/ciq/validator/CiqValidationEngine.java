@@ -480,9 +480,19 @@ public class CiqValidationEngine {
                 continue;
             }
 
-            String value = computeAggregate(yamlKey, sheet, rule);
-            report.getParameters().put(paramName, value);
-            log.info("Output {}={}", paramName, value);
+            // 'group' aggregate emits one parameter per distinct groupBy value
+            if ("group".equalsIgnoreCase(rule.getAggregate().trim())) {
+                Map<String, String> grouped = computeGroupAggregate(yamlKey, sheet, rule);
+                for (Map.Entry<String, String> g : grouped.entrySet()) {
+                    String key = paramName + "_" + g.getKey();
+                    report.getParameters().put(key, g.getValue());
+                    log.info("Output {}={}", key, g.getValue());
+                }
+            } else {
+                String value = computeAggregate(yamlKey, sheet, rule);
+                report.getParameters().put(paramName, value);
+                log.info("Output {}={}", paramName, value);
+            }
         }
     }
 
@@ -549,6 +559,38 @@ public class CiqValidationEngine {
                 log.warn("outputs[{}]: unknown aggregate '{}' — returning empty", key, rule.getAggregate());
                 return "";
         }
+    }
+
+    /**
+     * Groups distinct values of {@code rule.getColumn()} by each distinct value of
+     * {@code rule.getGroupBy()}, returning a map of {@code groupValue → joinedColumnValues}.
+     * Insertion order is preserved (first-seen group value comes first).
+     */
+    private Map<String, String> computeGroupAggregate(String key, CiqSheet sheet, OutputRule rule) {
+        String groupByCol = rule.getGroupBy();
+        String valueCol   = rule.getColumn();
+        if (isBlank(groupByCol) || isBlank(valueCol)) {
+            log.warn("outputs[{}]: 'groupBy' and 'column' are required for aggregate 'group' — returning empty", key);
+            return new LinkedHashMap<>();
+        }
+        String sep = (rule.getSeparator() != null) ? rule.getSeparator() : ",";
+
+        // Preserve insertion order; use LinkedHashSet per group to deduplicate while keeping order
+        Map<String, LinkedHashSet<String>> groups = new LinkedHashMap<>();
+        for (CiqRow row : sheet.getRows()) {
+            String groupVal = row.get(groupByCol);
+            String colVal   = row.get(valueCol);
+            if (isBlank(groupVal)) continue;
+            groupVal = groupVal.trim();
+            groups.computeIfAbsent(groupVal, k -> new LinkedHashSet<>());
+            if (!isBlank(colVal)) groups.get(groupVal).add(colVal.trim());
+        }
+
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Map.Entry<String, LinkedHashSet<String>> e : groups.entrySet()) {
+            result.put(e.getKey(), String.join(sep, e.getValue()));
+        }
+        return result;
     }
 
     // -------------------------------------------------------------------------
