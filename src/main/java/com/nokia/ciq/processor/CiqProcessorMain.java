@@ -10,112 +10,73 @@ import java.io.IOException;
  * CLI entry point for the CIQ Processor.
  *
  * <p>Reads a CIQ Excel workbook, validates it against a YAML rules file, writes validation
- * reports, and (when validation passes) exports node/group-specific JSON data for use by the
- * MOP generator.
- *
- * <h2>Operating Modes</h2>
- *
- * <h3>NODE mode (e.g. SBC — FIXED_LINE_CONFIGURATION)</h3>
- * <p>The INDEX sheet has columns {@code Node | CRGroup | Tables}.  Each data sheet has a
- * {@code Node} column that ties every row to a specific node.  When {@code --mop-json-dir} is
- * supplied the processor writes one flat JSON folder per child-order (CRGroup value):
- * <pre>
- *   mop-json/
- *   └── RAJ/
- *       ├── SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_RAJ.json
- *       └── SBC_FIXED_LINE_CONFIGURATION_index_RAJ.json
- * </pre>
- * The validation rules file sets {@code groupByColumnName: NODE} and
- * {@code validateIndexSheets: true}.
- *
- * <h3>GROUP mode (e.g. MRF — ANNOUNCEMENT_LOADING)</h3>
- * <p>The INDEX sheet has columns {@code GROUP | NODE} (no {@code TABLES} column).  Data sheets
- * use a {@code GROUP} column instead of {@code NODE}; every row in a group is identical across
- * all nodes in that group (homogeneous MOP).  The processor detects GROUP mode automatically
- * when {@code groupByColumnName: GROUP} is set in the rules file.  Output is one sub-folder per
- * group containing a {@code GroupIndex} JSON and per-sheet data JSONs:
- * <pre>
- *   mop-json/
- *   ├── A/
- *   │   ├── MRF_ANNOUNCEMENT_LOADING_index_A.json
- *   │   └── MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_A.json
- *   └── B/
- *       ├── MRF_ANNOUNCEMENT_LOADING_index_B.json
- *       └── MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_B.json
- * </pre>
- * The {@code GroupIndex} JSON records the group name, the list of nodes, the NIAM mapping for
- * those nodes, and the data sheet names.  The validation rules file sets
- * {@code groupByColumnName: GROUP}, {@code validateIndexSheets: false}, and
- * {@code validateNodeIds: true}.
+ * reports, and (when validation passes) exports structured JSON data for use by the MOP generator.
  *
  * <h2>Usage</h2>
  * <pre>
  *   java -jar ciq-processor-1.0.0-cli.jar \
- *     --ciq         &lt;ciq-file.xlsx&gt;                                        \
- *     --node-type   &lt;SBC|MRF&gt;                                               \
- *     --activity    &lt;FIXED_LINE_CONFIGURATION|ANNOUNCEMENT_LOADING&gt;        \
- *     --rules       &lt;NODE_TYPE_ACTIVITY_validation-rules.yaml&gt;              \
- *     --output      &lt;report-output-dir&gt;                                     \
- *     [--format     JSON,HTML,MSEXCEL]                                       \
- *     [--mop-json-dir &lt;mop-json-output-dir&gt;]
+ *     --ciq           &lt;ciq-file.xlsx&gt;                          [required] \
+ *     --node-type     &lt;e.g. SBC | MRF&gt;                         [required] \
+ *     --activity      &lt;e.g. FIXED_LINE_CONFIGURATION&gt;          [required] \
+ *     --rules         &lt;NODE_TYPE_ACTIVITY_validation-rules.yaml&gt; [required] \
+ *     --output        &lt;report-output-dir&gt;                       [required] \
+ *     [--format       JSON,HTML,MSEXCEL]                        [optional] \
+ *     [--mop-json-dir &lt;json-output-dir&gt;]                        [optional]
  * </pre>
  *
- * <h2>Validation Rules YAML — Key Fields</h2>
+ * <h2>JSON Output (--mop-json-dir)</h2>
+ * <p>When {@code json_output} is defined in the rules YAML the processor writes one or more
+ * structured JSON files into {@code --mop-json-dir}.  Two output modes are supported:
+ *
+ * <h3>output_mode: individual</h3>
+ * <p>One JSON file per segregation unit (CR / group / node).  The grouping is auto-detected
+ * from the workbook structure.  File name pattern:
+ * {@code <NODE_TYPE>_<ACTIVITY>_<unit>.json}
+ *
+ * <h3>output_mode: single</h3>
+ * <p>One JSON file for the entire workbook.  File name:
+ * {@code <NODE_TYPE>_<ACTIVITY>.json}
+ *
+ * <p>The {@code data} block inside {@code json_output} is a free-form YAML template evaluated
+ * by {@code JsonTemplateEvaluator}.  Key directives:
  * <pre>
- * # NODE mode (SBC):                   # GROUP mode (MRF):
- * validateIndexSheets: true             validateIndexSheets: false
- * validateNodeIds: true                 validateNodeIds: true
- * groupByColumnName: NODE               groupByColumnName: GROUP
+ *   # Iterate distinct values of any column from any sheet
+ *   _each: "DISTINCT &lt;Sheet&gt;.&lt;Column&gt; AS $&lt;varname&gt;"
  *
- * indexSheet:                           indexSheet:
- *   columns:                              columns:
- *     Node:    { required: true }           GROUP: { required: true }
- *     CRGroup: { required: true }           NODE:  { required: true }
- *     Tables:  { required: true }
+ *   # Iterate all rows of a sheet
+ *   _each: &lt;SheetName&gt;
  *
- * nodeIdSheet:                          nodeIdSheet:
- *   columns:                              columns:
- *     Node: { required: true }              NODE:    { required: true }
- *     NIAM: { required: true }              NIAM_ID: { required: true }
+ *   # Iterate filtered rows
+ *   _each: "&lt;Sheet&gt; WHERE &lt;Col&gt; = &lt;value&gt;"
  *
- * sheets:
- *   &lt;SheetName&gt;:
- *     columns:
- *       &lt;Column&gt;:
- *         required: true
- *         pattern: "regex"
- *         patternMessage: "..."
- *         allowedValues: [A, B, C]
- *         integer: true
- *         minValue: 1
- *         maxValue: 100
- *         minLength: 1
- *         maxLength: 128
- *         requiredWhen:
- *           column: Action
- *           value:  MODIFY
- *         crossRef:
- *           sheet:  "_index"
- *           column: node
+ *   # Relational lookup
+ *   key: "&lt;Sheet&gt;.&lt;Col&gt; WHERE &lt;Sheet&gt;.&lt;FilterCol&gt; = $var"
+ *
+ *   # Cross-sheet value (first non-blank, scoped to current DISTINCT value)
+ *   key: &lt;Sheet&gt;.&lt;Column&gt;
+ * </pre>
+ * See {@code Schema.yaml} for the full reference and examples.
+ *
+ * <h2>Validation Report Files</h2>
+ * <p>Written to {@code --output}.  Base name:
+ * {@code <NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT}
+ * <p>One file per requested format; default is all three:
+ * <pre>
+ *   MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.json
+ *   MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.html
+ *   MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.xlsx
  * </pre>
  *
- * <h2>Output Parameters (printed when validation PASSES)</h2>
- * <p>NODE mode:
+ * <h2>Output Parameters (printed to stdout when validation PASSES)</h2>
  * <pre>
- *   NODE_1=SBC1
- *   NIAM_ID_1=sbc1-neid
- *   NODE_2=SBC2
- *   NIAM_ID_2=sbc2-neid
- *   TOTAL_NODES_COUNT=2
- *   CHILD_ORDERS_COUNT=1
- * </pre>
- * <p>GROUP mode:
- * <pre>
- *   GROUP_1=A
- *   GROUP_1_VALUES=MRF1,MRF2
- *   GROUP_2=B
- *   GROUP_2_VALUES=MRF3,MRF4
- *   TOTAL_NODES_COUNT=4
+ *   STATUS=PASSED
+ *   ERRORS=0
+ *   REPORT_FILENAME_JSON=MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.json
+ *   REPORT_FILENAME_HTML=MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.html
+ *   REPORT_FILENAME_MSEXCEL=MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.xlsx
+ *   CR_LIST=CR1,CR2
+ *   CR_COUNT=2
+ *   &lt;any outputs defined in the rules YAML outputs: block&gt;
  * </pre>
  *
  * <p>Exit code: 0 = validation PASSED, 1 = validation FAILED or error.

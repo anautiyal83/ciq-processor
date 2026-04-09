@@ -275,142 +275,145 @@ outputs:
 # ---------------------------------------------------------------------------
 # JSON output template
 # ---------------------------------------------------------------------------
-# When json_output is present, each segregation unit (CR / Group / Node)
-# produces ONE structured JSON file whose shape mirrors this YAML tree.
-# When json_output is absent the default CiqSheet / index format is used.
+# The json_output block has exactly two top-level keys:
 #
-# The entire json_output block is a free-form YAML tree evaluated as a
-# template.  Every key becomes a JSON key; values follow the rules below.
+#   output_mode  — controls how many JSON files are produced (required)
+#   data         — the JSON template tree evaluated by JsonTemplateEvaluator
+#
+# output_mode values:
+#   individual  — one JSON per segregation unit (CR / group / node).
+#                 Grouping is auto-detected from the workbook structure.
+#                 Default when output_mode is absent.
+#   single      — one JSON file for the entire workbook.
 #
 # ── Value resolution rules ────────────────────────────────────────────────
 #
 #   Plain string (no "$", no ".")
-#       → Written as a static string literal.
-#         Inside an _each: <SheetName> block the string is treated as a
-#         column name and the cell value for the current row is used instead.
+#       Inside a row-iteration block (_each: Sheet or _each: "Sheet WHERE…"):
+#         treated as a column name; the cell value for the current row is used.
+#       Outside a row block:
+#         written as a static string literal.
 #
 #   "SheetName.ColumnName"  (contains ".", no WHERE)
-#       → First non-blank cell value from the filtered rows of that
-#         sheet + column combination.
+#       First non-blank value from the (scoped) rows of that sheet + column.
+#       Column names containing spaces must be wrapped in single quotes:
+#         "Node_Details.'NIAM NAME'"
 #
-#   "Sheet.Column WHERE [Sheet.]FilterColumn = $var_or_literal"
-#       → Relational lookup: scans the sheet's filtered rows and returns
-#         the first non-blank Column value where FilterColumn equals the
-#         resolved filter value.  The sheet prefix on the filter column is
-#         optional (defaults to the same sheet as the target).
-#         Column names that contain spaces must be wrapped in single quotes.
-#         Examples:
-#           niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-#           email:  "USER_ID.EMAIL            WHERE USER_ID.CRGroup        = $group"
+#   "Sheet.Column WHERE [Sheet.]FilterCol = value"
+#       Relational lookup: scans the sheet's rows and returns the first
+#       non-blank Column value where FilterCol equals the resolved value.
+#       The sheet prefix on FilterCol is optional.
+#       value may be a $variable, Sheet.Col reference, current-row column, or literal.
+#       Examples:
+#         niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#         email:  "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
 #
-#   "$node"          → Current node name       (set by _each: nodes)
-#   "$niamID"        → NIAM ID for $node       (set by _each: nodes)
-#   "$group"         → Current group name      (set by _each: nodes / groups)
-#   "$nodes"         → List of node names in $group  (set by _each: groups)
-#   "$niamMapping"   → { node: niamID, … } map for $group (set by _each: groups)
+#   $<varname>
+#       Resolves a named variable set by DISTINCT iteration or a legacy directive.
+#       Any name defined via "DISTINCT … AS $varname" is available here.
+#       Legacy built-in variables (set by _each: nodes / groups):
+#         $node        current node name
+#         $niamID      NIAM ID for $node
+#         $group       current group name
+#         $nodes       List of node names in the current group  (JSON array)
+#         $niamMapping { node: niamID, … } map for the current group (JSON object)
 #
-# ── Array blocks ─────────────────────────────────────────────────────────
+# ── Array directives (_each) ─────────────────────────────────────────────
 #
-#   _each: nodes
-#       Expands into one element per node in the current segregation unit.
-#       Sets $node, $niamID, and $group in child context.
-#       Filtered rows inside this block are scoped to the node's group.
-#
-#   _each: groups
-#       Expands into one element per group in the current segregation unit.
-#       Sets $group, $nodes, and $niamMapping in child context.
-#       Filtered rows inside this block are scoped to that group's rows.
+#   _each: "DISTINCT [FROM] <Sheet>.<Column> [AS $<varname>]"
+#       RECOMMENDED — fully generic.
+#       Iterates distinct (deduplicated) values of Column from Sheet.
+#       Sets $varname to each value in the child context.
+#       Scopes Sheet's rows to the current value so that Sheet.AnyColumn
+#       lookups automatically return per-value data without extra WHERE clauses.
+#       "FROM" keyword and "AS $varname" are both optional; $item is used when omitted.
+#       Examples:
+#         _each: "DISTINCT Index.Node AS $node"
+#         _each: "DISTINCT FROM Index.CRGroup AS $cr"
+#         _each: "DISTINCT Index.Group AS $group"
 #
 #   _each: <SheetName>
-#       Expands into one element per filtered row of the named sheet.
-#       Inside this block, plain strings are resolved as column names in
-#       the current row.  Use relational WHERE lookups to fetch related
-#       data from other sheets using the current row's column values.
+#       Iterates every row of SheetName.
+#       Inside this block, plain strings resolve as column names in the current row.
 #
-#   _each: "<SheetName> WHERE [<Sheet>.]FilterCol = value"
-#       Same as above but only iterates rows where FilterCol equals the
-#       resolved value.  The value follows the same resolution rules:
-#       $variable, Sheet.Col, current-row column name, or literal string.
-#       Example:
-#         _each: "ANNOUNCEMENT_FILES WHERE GROUP = GROUP"
-#         (the right-hand GROUP is the current row's GROUP column value)
+#   _each: "[<Sheet>.<Column> |] <SheetName> WHERE [<Sheet>.]FilterCol = value"
+#       Iterates rows of SheetName where FilterCol equals the resolved value.
+#       An optional "Sheet.Column" prefix before WHERE is supported as a column hint
+#       (the sheet name is extracted from it; the column hint itself is ignored).
+#       value follows the same resolution rules: $variable, Sheet.Col, column name, literal.
+#       Examples:
+#         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#         _each: "Index.Node WHERE Index.CRGroup = $cr"   # hint: iterating Node column
+#
+#   _each: nodes   (legacy — use DISTINCT instead for new configurations)
+#       One element per node in the segregation unit.
+#       Sets $node, $niamID, and $group.
+#
+#   _each: groups  (legacy — use DISTINCT instead for new configurations)
+#       One element per group.
+#       Sets $group, $nodes, and $niamMapping.
 #
 # ── Nested objects ────────────────────────────────────────────────────────
 #
 #   Any map without an _each key is treated as a nested object and all
-#   its keys are resolved recursively using the same rules above.
-#
-# ── Segregation modes ─────────────────────────────────────────────────────
-#
-#   NODE mode    — one file per node;  $node / $niamID available at top level
-#   GROUP mode   — one file per group; $group / $nodes / $niamMapping available
-#   CRGROUP mode — one file per CR;    use _each: groups or _each: nodes to
-#                  expand the nested structure
+#   its keys are resolved recursively.
 #
 # ── Examples ──────────────────────────────────────────────────────────────
 #
-# Example 1 — flat per-group file (GROUP mode)
+# Example 1 — single file, node-wise (single output_mode)
 #
 #   json_output:
-#     nodeType:  MRF
-#     activity:  ANNOUNCEMENT_LOADING
-#     nodes:     $nodes
-#     niamMapping: $niamMapping
-#     files:
-#       _each: ANNOUNCEMENT_FILES
-#       inputFile:   INPUT_FILE
-#       destination: MRF_DESTINATION_PATH
+#     output_mode: single
+#     data:
+#       nodeType: MRF
+#       activity: ANNOUNCEMENT_LOADING
+#       nodes:
+#         _each: "DISTINCT Index.Node AS $node"
+#         node:    $node
+#         crGroup: Index.CRGroup
+#         email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+#         niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#         tableData:
+#           _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#           INPUT_FILE:           INPUT_FILE
+#           MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 #
-# Example 2 — per-node expansion within a CR (CRGROUP mode)
-#
-#   json_output:
-#     nodeType: MRF
-#     activity: ANNOUNCEMENT_LOADING
-#     crGroup:  CR1
-#     nodes:
-#       _each: nodes
-#       node:    $node
-#       niamID:  $niamID
-#       tableData:
-#         _each: ANNOUNCEMENT_FILES
-#         INPUT_FILE:           INPUT_FILE
-#         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-#
-# Example 3 — group array within a CR (CRGROUP mode)
+# Example 2 — single file, CR-wise then node-wise (single output_mode)
 #
 #   json_output:
-#     crGroup: CR1
-#     groups:
-#       _each: groups
-#       group:       $group
-#       nodes:       $nodes
-#       niamMapping: $niamMapping
-#       tableData:
-#         _each: ANNOUNCEMENT_FILES
-#         INPUT_FILE:           INPUT_FILE
-#         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+#     output_mode: single
+#     data:
+#       nodeType: MRF
+#       activity: ANNOUNCEMENT_LOADING
+#       crs:
+#         _each: "DISTINCT FROM Index.CRGroup AS $cr"
+#         crGroup: $cr
+#         email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#         nodes:
+#           _each: "Index.Node WHERE Index.CRGroup = $cr"
+#           node:   Node
+#           niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
+#           tableData:
+#             _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#             INPUT_FILE:           INPUT_FILE
+#             MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 #
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# JSON output template
-# ---------------------------------------------------------------------------
-# The json_output block has exactly two top-level keys:
+# Example 3 — individual file per node (individual output_mode, legacy directives)
 #
-#   output_mode  — controls output granularity (required; see values below)
-#   data         — the JSON template tree evaluated by JsonTemplateEvaluator
+#   json_output:
+#     output_mode: individual
+#     data:
+#       nodeType: MRF
+#       activity: ANNOUNCEMENT_LOADING
+#       nodes:
+#         _each: nodes
+#         node:   $node
+#         niamID: $niamID
+#         tableData:
+#           _each: ANNOUNCEMENT_FILES
+#           INPUT_FILE:           INPUT_FILE
+#           MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 #
-# output_mode values:
-#   individual  — one JSON per segregation unit; grouping auto-detected from the
-#                 workbook structure (CRGROUP → per CR, GROUP → per group,
-#                 NODE → per node).  Default when output_mode is absent.
-#   single      — one JSON file for the entire workbook.
-#
-# In single mode the following additional template directives are available:
-#   _each: crs                         iterates all unique CRGroup values; exposes $cr
-#   _each: "Index WHERE CRGroup = $cr" scopes Index rows to the current CR
-#   $cr                                current CRGroup name (set by _each: crs)
 # ---------------------------------------------------------------------------
 json_output:
   output_mode: individual      # individual (default) | single
@@ -418,46 +421,28 @@ json_output:
   data:
     <jsonKey>: <static value>              # plain string written as-is
     <jsonKey>: <SheetName>.<ColumnName>    # first non-blank value from sheet+column
-    <jsonKey>: "<SheetName>.<ColumnName> WHERE [<SheetName>.]<FilterCol> = $var"  # relational lookup
-    <jsonKey>: $node                       # iteration variable (inside _each: nodes)
-    <jsonKey>: $niamID
-    <jsonKey>: $group
-    <jsonKey>: $nodes                      # List<String> — serialised as JSON array
-    <jsonKey>: $niamMapping                # Map<String,String> — serialised as JSON object
-    <jsonKey>: $cr                         # current CRGroup name (set by _each: crs)
+    <jsonKey>: "<Sheet>.<Col> WHERE [<Sheet>.]<FilterCol> = $var"   # relational lookup
+    <jsonKey>: $<varname>                  # variable set by DISTINCT or legacy directive
 
-    # ── Array expanding over all CRGroups (single output_mode) ─────────────
+    # ── Generic distinct-value array (RECOMMENDED) ─────────────────────────
     <jsonArrayKey>:
-      _each: crs
-      <jsonKey>: $cr
+      _each: "DISTINCT <Sheet>.<Column> AS $<varname>"
+      <jsonKey>: $<varname>
+      <jsonKey>: <Sheet>.<Column>          # auto-scoped to current value's rows
+      <jsonKey>: "<Sheet>.<Col> WHERE <Sheet>.<FilterCol> = $<varname>"
       <nestedArrayKey>:
-        _each: "Index WHERE CRGroup = $cr"
+        _each: "<DataSheet> WHERE <Col> = <Sheet>.<Col>"
         <jsonKey>: <ColumnName>
 
-    # ── Array from sheet rows ──────────────────────────────────────────────
+    # ── Row-iteration array ─────────────────────────────────────────────────
     <jsonArrayKey>:
       _each: <SheetName>
       <jsonKey>: <ColumnName>              # column name in the current row
+
+    # ── Filtered row-iteration array ───────────────────────────────────────
+    <jsonArrayKey>:
+      _each: "<SheetName> WHERE [<Sheet>.]<FilterCol> = <value>"
       <jsonKey>: <ColumnName>
-
-    # ── Array expanding over nodes ─────────────────────────────────────────
-    <jsonArrayKey>:
-      _each: nodes
-      <jsonKey>: $node
-      <jsonKey>: $niamID
-      <nestedArrayKey>:                    # nested sheet array per node
-        _each: <SheetName>
-        <jsonKey>: <ColumnName>
-
-    # ── Array expanding over groups ────────────────────────────────────────
-    <jsonArrayKey>:
-      _each: groups
-      <jsonKey>: $group
-      <jsonKey>: $nodes
-      <jsonKey>: $niamMapping
-      <nestedArrayKey>:
-        _each: <SheetName>
-        <jsonKey>: <ColumnName>
 
     # ── Nested object (no _each) ───────────────────────────────────────────
     <jsonObjectKey>:

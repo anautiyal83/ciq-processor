@@ -179,8 +179,7 @@ public class CiqProcessorImpl implements CiqProcessor {
             if (template != null && !template.isEmpty()) {
                 // ── Single structured JSON via template ──
                 Map<String, List<CiqRow>> filteredRows = buildNodeFilteredRows(store, entry, node);
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(
-                        store, filteredRows, store.getIndex().getNiamMapping(), null);
+                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
                 Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
                 mapper.writeValue(new File(childDir, fileName), json);
                 log.info("  [{}] single JSON → {}", childOrder, fileName);
@@ -254,8 +253,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                 Map<String, String> nodeToGroup = new LinkedHashMap<>();
                 for (Map.Entry<String, List<String>> ge : groupToNodes.entrySet())
                     for (String n : ge.getValue()) nodeToGroup.put(n, ge.getKey());
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(
-                        store, filteredRows, index.getNiamMapping(), nodeToGroup);
+                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
                 Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
                 mapper.writeValue(new File(crGroupDir, fileName), json);
                 log.info("CRGROUP {} → single JSON → {}", crGroup, fileName);
@@ -339,8 +337,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                         buildGroupFilteredRows(store, group, dataSheets);
                 Map<String, String> nodeToGroup = new LinkedHashMap<>();
                 for (String n : nodeList) nodeToGroup.put(n, group);
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(
-                        store, filteredRows, index.getNiamMapping(), nodeToGroup);
+                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
                 Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
                 mapper.writeValue(new File(groupDir, fileName), json);
                 log.info("Group {} → single JSON → {}", group, fileName);
@@ -440,8 +437,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                 // ── Single structured JSON via template ──
                 Map<String, List<CiqRow>> filteredRows =
                         buildNodeFilteredRows(store, entry, node);
-                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(
-                        store, filteredRows, store.getIndex().getNiamMapping(), null);
+                JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, filteredRows);
                 Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
                 mapper.writeValue(new File(childDir, fileName), json);
                 log.info("  [{}] single JSON → {}", childOrder, fileName);
@@ -602,9 +598,7 @@ public class CiqProcessorImpl implements CiqProcessor {
         }
 
         Map<String, List<CiqRow>> allRows = buildAllRows(store);
-        JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(
-                store, allRows, store.getIndex().getNiamMapping(),
-                nodeToGroup.isEmpty() ? null : nodeToGroup);
+        JsonTemplateEvaluator.TemplateContext ctx = new JsonTemplateEvaluator.TemplateContext(store, allRows);
 
         Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
 

@@ -133,6 +133,24 @@ node_id_config:
 # ---------------------------------------------------------------------------
 # JSON output template
 # ---------------------------------------------------------------------------
+#json_output:
+#  output_mode: single
+#  data:
+#    nodeType: MRF
+#    activity: ANNOUNCEMENT_LOADING
+#    crs:
+#      _each: "DISTINCT FROM Index.CRGroup As $cr"
+#      crGroup: $cr
+#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#      nodes:
+#        _each: "Index.Node WHERE Index.CRGroup = $cr"
+#        node:   NODE
+#        niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = NODE"
+#        tableData:
+#          _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#          INPUT_FILE:           INPUT_FILE
+#          MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+          
 json_output:
   output_mode: single
   data:
