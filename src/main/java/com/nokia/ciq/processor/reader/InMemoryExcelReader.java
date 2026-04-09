@@ -115,9 +115,18 @@ public class InMemoryExcelReader {
         try (FileInputStream fis = new FileInputStream(ciqFilePath);
              Workbook wb = new XSSFWorkbook(fis)) {
 
-            Map<String, String> niamMapping =
-                    readNiamMapping(wb, "Node_ID", "Node", "NIAM_ID");
-            log.info("NIAM mapping: {} entries", niamMapping.size());
+            // Resolve Node-ID sheet name and column names from config (or fall back to defaults)
+            String niamSheet  = "Node_ID";
+            String niamNodeCol = "Node";
+            String niamNiamCol = "NIAM_ID";
+            if (rules != null && rules.getNodeIdConfig() != null) {
+                com.nokia.ciq.validator.config.NodeIdConfig nc = rules.getNodeIdConfig();
+                if (nc.getSheet()      != null) niamSheet   = nc.getSheet();
+                if (nc.getNodeColumn() != null) niamNodeCol = nc.getNodeColumn();
+                if (nc.getNiamColumn() != null) niamNiamCol = nc.getNiamColumn();
+            }
+            Map<String, String> niamMapping = readNiamMapping(wb, niamSheet, niamNodeCol, niamNiamCol);
+            log.info("NIAM mapping from '{}': {} entries", niamSheet, niamMapping.size());
 
             CiqIndex index = readIndex(wb, nodeType, activity, niamMapping);
             List<String> tables = index.getAllTables();
@@ -131,7 +140,7 @@ public class InMemoryExcelReader {
                 tables = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) {
                     String sName = wb.getSheetName(i);
-                    if (sName.equalsIgnoreCase("Node_ID")) continue;
+                    if (sName.equalsIgnoreCase(niamSheet)) continue;
                     if (groupMode && sName.equalsIgnoreCase(SHEET_INDEX)) continue;
                     tables.add(sName);
                 }
@@ -194,20 +203,21 @@ public class InMemoryExcelReader {
             // and special data extraction (NIAM mapping, CR-email mapping).
             // Stored outside the main sheets map so they don't appear in getAvailableSheets()
             // and cannot interfere with the validateIndexSheets cross-check.
-            Sheet rawIndex = wb.getSheet(SHEET_INDEX);
+            Sheet rawIndex = findSheet(wb, SHEET_INDEX);
             if (rawIndex != null) {
-                Set<String> indexCols = configuredColumns(rules, SHEET_INDEX);
-                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, indexCols,
+                // Read ALL columns (null) so extra columns like GROUP are preserved for the
+                // template engine even if they are not listed in the validation-rules YAML.
+                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, null,
                         effectiveSettings(rules, SHEET_INDEX), true /* stripTrailingBlanks */));
                 log.debug("Captured raw Index sheet ({} rows)",
                         store.getRawIndexSheet().getRows().size());
             }
-            Sheet rawNodeId = wb.getSheet("Node_ID");
+            Sheet rawNodeId = findSheet(wb, niamSheet);
             if (rawNodeId != null) {
                 store.setRawNodeIdSheet(
-                        readNodeIdSheet(rawNodeId, "Node_ID", "Node", "NIAM_ID"));
-                log.debug("Captured raw Node_ID sheet ({} rows)",
-                        store.getRawNodeIdSheet().getRows().size());
+                        readNodeIdSheet(rawNodeId, niamSheet, niamNodeCol, niamNiamCol));
+                log.debug("Captured raw Node-ID sheet '{}' ({} rows)",
+                        niamSheet, store.getRawNodeIdSheet().getRows().size());
             }
 
             return store;

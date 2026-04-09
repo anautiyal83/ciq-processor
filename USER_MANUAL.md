@@ -507,6 +507,72 @@ outputs:
 
 ---
 
+### JSON Output Structure (`json_output:`)
+
+When `json_output:` is configured, each segregation unit (CR / Group / Node) produces a **single structured JSON file** whose shape is defined entirely in the YAML rules file. When absent, the default CiqSheet / index format is used.
+
+#### Fields
+
+| Field | Description |
+|---|---|
+| `fields` | Map of JSON key → `SheetName.ColumnName`. Emits the first non-blank value from the filtered rows of that sheet+column as a scalar string |
+| `rows` | Map of JSON array key → row-array config. Emits all filtered rows from the specified sheet as an array of objects |
+
+Each `rows` entry has:
+
+| Field | Description |
+|---|---|
+| `sheet` | Source sheet name |
+| `fields` | Map of JSON key → column name within that sheet |
+
+#### Example
+
+```yaml
+json_output:
+  fields:
+    crGroup: Index.CRGroup
+    email:   USER_ID.EMAIL
+
+  rows:
+    announcementFiles:
+      sheet: ANNOUNCEMENT_FILES
+      fields:
+        inputFile:   INPUT_FILE
+        destination: MRF_DESTINATION_PATH
+```
+
+**Output JSON** (for CR1, GRP1):
+
+```json
+{
+  "crGroup": "CR1",
+  "email": "engineer@nokia.com",
+  "announcementFiles": [
+    { "inputFile": "audio.tar",    "destination": "/var/opt/clips/raj/" },
+    { "inputFile": "greeting.tar", "destination": "/var/opt/clips/mum/" }
+  ]
+}
+```
+
+#### Filtering per segregation mode
+
+The rows passed to `json_output` are automatically filtered for the current segregation unit:
+
+| Mode | Filter applied to data sheets | Filter applied to Index sheet |
+|---|---|---|
+| CRGROUP | Rows where `GROUP` is in the groups of this CR | Rows where `CRGROUP` matches |
+| GROUP | Rows where `GROUP` matches | Rows where `GROUP` matches |
+| NODE | Rows where `NODE` matches | Rows where `NODE` matches |
+
+Sheets that have no natural filter (e.g. `USER_ID`) are included in full — all their rows are available for scalar `fields` lookups.
+
+#### File name
+
+The single JSON file uses the same naming as the existing index file:
+`{NODE_TYPE}_{ACTIVITY}_{SEGREGATION_KEY}.json`
+
+---
+
 ### `when:` operators
 
 | Operator | Applies to | Description |

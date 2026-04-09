@@ -118,9 +118,33 @@ outputs:
     column: CRGroup
     aggregate: count
 
-  # Example: use 'name' to override the parameter key in the report
-#  af_group_count:
-#    name: UNIQUE_GROUPS_COUNT
-#    sheet: ANNOUNCEMENT_FILES
-#    column: GROUP
-#    aggregate: count
+# ---------------------------------------------------------------------------
+# Node-ID sheet configuration
+# ---------------------------------------------------------------------------
+# Tells the reader which sheet holds the node → NIAM ID mapping and what
+# the two key columns are called.  Defaults: sheet=Node_ID, node=Node,
+# niam=NIAM_ID.  MRF uses a non-standard sheet/column naming.
+# ---------------------------------------------------------------------------
+node_id_config:
+  sheet:      Node_Details
+  nodeColumn: Node_Name
+  niamColumn: "NIAM NAME"
+
+# ---------------------------------------------------------------------------
+# JSON output template
+# ---------------------------------------------------------------------------
+json_output:
+  output_mode: single
+  data:
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

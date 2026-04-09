@@ -65,8 +65,14 @@ public class InMemoryCiqDataStore implements CiqDataStore {
      */
     @Override
     public CiqSheet getSheet(String sheetName) {
+        // Exact match first
         CiqSheet s = sheets.get(sheetName);
         if (s != null) return s;
+        // Case-insensitive fallback over data sheets
+        for (Map.Entry<String, CiqSheet> e : sheets.entrySet()) {
+            if (e.getKey().equalsIgnoreCase(sheetName)) return e.getValue();
+        }
+        // Special sheets stored outside the main map
         if ("Index".equalsIgnoreCase(sheetName) && rawIndexSheet != null)  return rawIndexSheet;
         if ("Node_ID".equalsIgnoreCase(sheetName) && rawNodeIdSheet != null) return rawNodeIdSheet;
         return null;

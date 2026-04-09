@@ -51,11 +51,16 @@ public class ValidationRulesLoader {
 
         // ---- ValidationRulesConfig:
         //      YAML key "workbook_rules" → Java property "workbookRules"
+        //      YAML key "json_output"    → Java property "jsonOutput"
         //      (substituteProperty maps YAML name → getter/setter method names)
         TypeDescription rootDesc = new TypeDescription(ValidationRulesConfig.class);
         rootDesc.addPropertyParameters("workbookRules", WorkbookRule.class);
         rootDesc.substituteProperty("workbook_rules", List.class,
                 "getWorkbookRules", "setWorkbookRules", WorkbookRule.class);
+        rootDesc.substituteProperty("node_id_config", NodeIdConfig.class,
+                "getNodeIdConfig", "setNodeIdConfig");
+        rootDesc.substituteProperty("json_output", Map.class,
+                "getJsonOutput", "setJsonOutput");
         constructor.addTypeDescription(rootDesc);
 
         // ---- ValidatorDefinition: YAML key "class" → Java field "clazz"

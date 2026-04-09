@@ -62,6 +62,12 @@ public class ValidationRulesConfig {
     /** Global workbook reading settings (can be overridden per sheet). */
     private WorkbookSettings settings;
 
+    /** When true, validates that Index sheet entries reference existing data sheets. */
+    private boolean validateIndexSheets = false;
+
+    /** When true, validates that Node column values exist in the Node_ID sheet. */
+    private boolean validateNodeIds = false;
+
     /**
      * List of workbook-level cross-sheet validation rules.
      * YAML key: {@code workbook_rules} (mapped via property alias).
@@ -83,6 +89,24 @@ public class ValidationRulesConfig {
      */
     private Map<String, OutputRule> outputs;
 
+    /**
+     * Identifies the Node-ID sheet and its key columns for NIAM mapping.
+     * When absent the reader defaults to sheet {@code Node_ID}, columns {@code Node}
+     * and {@code NIAM_ID}.
+     *
+     * <p>YAML key: {@code node_id_config}
+     */
+    private NodeIdConfig nodeIdConfig;
+
+    /**
+     * JSON output template for MOP segregation files.
+     * The YAML subtree under {@code json_output:} is loaded as a raw map and evaluated
+     * by {@link com.nokia.ciq.processor.JsonTemplateEvaluator} at segregation time.
+     *
+     * <p>YAML key: {@code json_output}
+     */
+    private Map<String, Object> jsonOutput;
+
     // Getters and setters
 
     public Map<String, SheetRules> getSheets() { return sheets; }
@@ -96,6 +120,12 @@ public class ValidationRulesConfig {
     public WorkbookSettings getSettings() { return settings; }
     public void setSettings(WorkbookSettings settings) { this.settings = settings; }
 
+    public boolean isValidateIndexSheets() { return validateIndexSheets; }
+    public void setValidateIndexSheets(boolean validateIndexSheets) { this.validateIndexSheets = validateIndexSheets; }
+
+    public boolean isValidateNodeIds() { return validateNodeIds; }
+    public void setValidateNodeIds(boolean validateNodeIds) { this.validateNodeIds = validateNodeIds; }
+
     public List<WorkbookRule> getWorkbookRules() { return workbookRules; }
     public void setWorkbookRules(List<WorkbookRule> workbookRules) { this.workbookRules = workbookRules; }
 
@@ -104,4 +134,10 @@ public class ValidationRulesConfig {
 
     public Map<String, OutputRule> getOutputs() { return outputs; }
     public void setOutputs(Map<String, OutputRule> outputs) { this.outputs = outputs; }
+
+    public NodeIdConfig getNodeIdConfig()                        { return nodeIdConfig; }
+    public void         setNodeIdConfig(NodeIdConfig nodeIdConfig) { this.nodeIdConfig = nodeIdConfig; }
+
+    public Map<String, Object> getJsonOutput() { return jsonOutput; }
+    public void setJsonOutput(Map<String, Object> jsonOutput) { this.jsonOutput = jsonOutput; }
 }
