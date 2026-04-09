@@ -61,6 +61,8 @@ public class ValidationRulesLoader {
                 "getNodeIdConfig", "setNodeIdConfig");
         rootDesc.substituteProperty("json_output", Map.class,
                 "getJsonOutput", "setJsonOutput");
+        rootDesc.substituteProperty("report_output", ReportOutputConfig.class,
+                "getReportOutput", "setReportOutput");
         constructor.addTypeDescription(rootDesc);
 
         // ---- ValidatorDefinition: YAML key "class" → Java field "clazz"

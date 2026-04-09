@@ -99,6 +99,13 @@ sheets:
         description: "Email ID"
 
 # ---------------------------------------------------------------------------
+# Validation report output configuration
+# ---------------------------------------------------------------------------
+report_output:
+  formats: [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
+
+# ---------------------------------------------------------------------------
 # Post-validation outputs (computed only when validation passes)
 # ---------------------------------------------------------------------------
 # Each entry key is used as the parameter name unless 'name' is specified.

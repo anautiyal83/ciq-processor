@@ -20,15 +20,21 @@ public interface CiqProcessor {
     /**
      * Process a CIQ Excel file end-to-end.
      *
-     * @param ciqFilePath      absolute path to the .xlsx CIQ workbook
-     * @param nodeType         node type, e.g. {@code "SBC"}
-     * @param activity         activity name, e.g. {@code "FIXED_LINE_CONFIGURATION"}
-     * @param rulesFilePath    absolute path to the YAML validation-rules file
-     * @param outputDir        directory where validation reports are written
-     * @param formatCsv        comma-separated report formats (JSON, HTML, MSEXCEL);
-     *                         {@code null} defaults to all three
-     * @param mopJsonOutputDir optional directory for child-order–segregated JSON files;
-     *                         written only when validation passes; {@code null} = skip
+     * @param ciqFilePath          absolute path to the .xlsx CIQ workbook
+     * @param nodeType             node type, e.g. {@code "SBC"}
+     * @param activity             activity name, e.g. {@code "FIXED_LINE_CONFIGURATION"}
+     * @param rulesFilePath        absolute path to the YAML validation-rules file
+     * @param outputDir            directory where validation reports are written
+     * @param formatCsv            comma-separated report formats (JSON, HTML, MSEXCEL);
+     *                             {@code null} defaults to all three
+     * @param mopJsonOutputDir     optional directory for child-order–segregated JSON files;
+     *                             written only when validation passes; {@code null} = skip
+     * @param reportTemplateName   filename of the HTML report template
+     *                             (e.g. {@code "validation-report-template.html"});
+     *                             {@code null} falls back to the built-in HTML writer
+     * @param reportTemplatePath   directory that contains the HTML report template
+     *                             (e.g. {@code "src/main/resources"});
+     *                             {@code null} treats {@code reportTemplateName} as a full path
      * @return the completed {@link ValidationReport}
      * @throws IOException if the Excel file or rules file cannot be read,
      *                     or if any report file cannot be written
@@ -39,5 +45,7 @@ public interface CiqProcessor {
                              String rulesFilePath,
                              String outputDir,
                              String formatCsv,
-                             String mopJsonOutputDir) throws IOException;
+                             String mopJsonOutputDir,
+                             String reportTemplateName,
+                             String reportTemplatePath) throws IOException;
 }

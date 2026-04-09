@@ -10,8 +10,10 @@ import com.nokia.ciq.validator.CiqValidationEngine;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.ValidationRulesLoader;
 import com.nokia.ciq.validator.model.ValidationReport;
+import com.nokia.ciq.validator.config.ReportOutputConfig;
 import com.nokia.ciq.validator.report.ExcelReportWriter;
 import com.nokia.ciq.validator.report.HtmlReportWriter;
+import com.nokia.ciq.validator.report.HtmlTemplateReportWriter;
 import com.nokia.ciq.validator.report.ReportFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,7 +82,9 @@ public class CiqProcessorImpl implements CiqProcessor {
                                     String rulesFilePath,
                                     String outputDir,
                                     String formatCsv,
-                                    String mopJsonOutputDir) throws IOException {
+                                    String mopJsonOutputDir,
+                                    String reportTemplateName,
+                                    String reportTemplatePath) throws IOException {
 
         List<ReportFormat> formats = ReportFormat.parseList(
                 formatCsv != null ? formatCsv : "JSON,HTML,MSEXCEL");
@@ -106,15 +110,32 @@ public class CiqProcessorImpl implements CiqProcessor {
                 new CiqValidationEngine(store, rules).validate(nodeType, activity);
 
         // Step 4: Write validation reports
-        String baseName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + "_VALIDATION_REPORT";
+        ReportOutputConfig reportOutputConfig = rules.getReportOutput();
+        String baseName = resolveReportBaseName(reportOutputConfig, nodeType, activity);
+        String htmlTemplatePath = buildTemplatePath(reportTemplateName, reportTemplatePath);
+
         for (ReportFormat fmt : formats) {
             String fileName = baseName + "." + fmt.extension();
             String path     = new File(outDir, fileName).getAbsolutePath();
             report.getParameters().put("REPORT_FILENAME_" + fmt.name(), fileName);
             switch (fmt) {
-                case JSON:    mapper.writeValue(new File(path), report);   log.info("JSON report:  {}", path); break;
-                case HTML:    new HtmlReportWriter().write(report, path);  log.info("HTML report:  {}", path); break;
-                case MSEXCEL: new ExcelReportWriter().write(report, path); log.info("Excel report: {}", path); break;
+                case JSON:
+                    mapper.writeValue(new File(path), report);
+                    log.info("JSON report:  {}", path);
+                    break;
+                case HTML:
+                    if (htmlTemplatePath != null && !htmlTemplatePath.trim().isEmpty()) {
+                        new HtmlTemplateReportWriter().write(report, path, htmlTemplatePath);
+                        log.info("HTML report (template):  {}", path);
+                    } else {
+                        new HtmlReportWriter().write(report, path);
+                        log.info("HTML report:  {}", path);
+                    }
+                    break;
+                case MSEXCEL:
+                    new ExcelReportWriter().write(report, path);
+                    log.info("Excel report: {}", path);
+                    break;
             }
         }
 
@@ -143,6 +164,47 @@ public class CiqProcessorImpl implements CiqProcessor {
         }
 
         return report;
+    }
+
+    // =========================================================================
+    // Report output resolution
+    // =========================================================================
+
+    /**
+     * Returns the base name (without extension) for validation report files.
+     * Uses the {@code filename} field from {@code report_output} if configured.
+     * Falls back to {@code {nodeType}_{activity}_VALIDATION_REPORT}.
+     * Both {@code {nodeType}} and {@code {activity}} placeholders are resolved.
+     */
+    private static String resolveReportBaseName(ReportOutputConfig cfg,
+                                                 String nodeType,
+                                                 String activity) {
+        String tmpl = (cfg != null && cfg.getFilename() != null && !cfg.getFilename().trim().isEmpty())
+                ? cfg.getFilename().trim()
+                : "{nodeType}_{activity}_VALIDATION_REPORT";
+        return resolvePlaceholders(tmpl, nodeType, activity);
+    }
+
+    /**
+     * Combines {@code reportTemplatePath} and {@code reportTemplateName} into a full path.
+     * Returns {@code null} when name is absent, so the built-in HTML writer is used.
+     * When path is absent, name is treated as the complete file path.
+     */
+    private static String buildTemplatePath(String reportTemplateName, String reportTemplatePath) {
+        if (reportTemplateName == null || reportTemplateName.trim().isEmpty()) return null;
+        if (reportTemplatePath == null || reportTemplatePath.trim().isEmpty())
+            return reportTemplateName.trim();
+        return reportTemplatePath.trim().replaceAll("[/\\\\]+$", "") + "/" + reportTemplateName.trim();
+    }
+
+    /**
+     * Replaces {@code {nodeType}} and {@code {activity}} in {@code template}
+     * with the upper-cased node type and activity strings.
+     */
+    private static String resolvePlaceholders(String template, String nodeType, String activity) {
+        return template
+                .replace("{nodeType}", nodeType.toUpperCase())
+                .replace("{activity}", activity.toUpperCase());
     }
 
     // =========================================================================

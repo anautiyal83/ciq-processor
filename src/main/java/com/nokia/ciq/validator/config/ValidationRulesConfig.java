@@ -107,6 +107,14 @@ public class ValidationRulesConfig {
      */
     private Map<String, Object> jsonOutput;
 
+    /**
+     * Validation report output configuration: formats, filename template, and optional
+     * HTML template path.
+     *
+     * <p>YAML key: {@code report_output}
+     */
+    private ReportOutputConfig reportOutput;
+
     // Getters and setters
 
     public Map<String, SheetRules> getSheets() { return sheets; }
@@ -140,4 +148,7 @@ public class ValidationRulesConfig {
 
     public Map<String, Object> getJsonOutput() { return jsonOutput; }
     public void setJsonOutput(Map<String, Object> jsonOutput) { this.jsonOutput = jsonOutput; }
+
+    public ReportOutputConfig getReportOutput()                      { return reportOutput; }
+    public void               setReportOutput(ReportOutputConfig v) { this.reportOutput = v; }
 }

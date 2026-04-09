@@ -20,8 +20,10 @@ import java.io.IOException;
  *     --activity      &lt;e.g. FIXED_LINE_CONFIGURATION&gt;          [required] \
  *     --rules         &lt;NODE_TYPE_ACTIVITY_validation-rules.yaml&gt; [required] \
  *     --output        &lt;report-output-dir&gt;                       [required] \
- *     [--format       JSON,HTML,MSEXCEL]                        [optional] \
- *     [--mop-json-dir &lt;json-output-dir&gt;]                        [optional]
+ *     [--format                JSON,HTML,MSEXCEL]               [optional] \
+ *     [--mop-json-dir          &lt;json-output-dir&gt;]               [optional] \
+ *     [--report-template-name  &lt;template-filename&gt;]             [optional] \
+ *     [--report-template-path  &lt;template-directory&gt;]            [optional]
  * </pre>
  *
  * <h2>JSON Output (--mop-json-dir)</h2>
@@ -88,25 +90,29 @@ public class CiqProcessorMain {
     }
 
     static int run(String[] args) {
-        String mode          = "ciq-validate";   // default
-        String ciqFilePath   = null;
-        String nodeType      = null;
-        String activity      = null;
-        String rulesFilePath = null;
-        String output        = null;
-        String formatCsv     = null;
-        String mopJsonDir    = null;
+        String mode                 = "ciq-validate";   // default
+        String ciqFilePath          = null;
+        String nodeType             = null;
+        String activity             = null;
+        String rulesFilePath        = null;
+        String output               = null;
+        String formatCsv            = null;
+        String mopJsonDir           = null;
+        String reportTemplateName   = null;
+        String reportTemplatePath   = null;
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-                case "--mode":          if (i + 1 < args.length) mode          = args[++i]; break;
-                case "--ciq":           if (i + 1 < args.length) ciqFilePath   = args[++i]; break;
-                case "--node-type":     if (i + 1 < args.length) nodeType      = args[++i]; break;
-                case "--activity":      if (i + 1 < args.length) activity      = args[++i]; break;
-                case "--rules":         if (i + 1 < args.length) rulesFilePath = args[++i]; break;
-                case "--output":        if (i + 1 < args.length) output        = args[++i]; break;
-                case "--format":        if (i + 1 < args.length) formatCsv     = args[++i]; break;
-                case "--mop-json-dir":  if (i + 1 < args.length) mopJsonDir    = args[++i]; break;
+                case "--mode":                   if (i + 1 < args.length) mode               = args[++i]; break;
+                case "--ciq":                    if (i + 1 < args.length) ciqFilePath        = args[++i]; break;
+                case "--node-type":              if (i + 1 < args.length) nodeType           = args[++i]; break;
+                case "--activity":               if (i + 1 < args.length) activity           = args[++i]; break;
+                case "--rules":                  if (i + 1 < args.length) rulesFilePath      = args[++i]; break;
+                case "--output":                 if (i + 1 < args.length) output             = args[++i]; break;
+                case "--format":                 if (i + 1 < args.length) formatCsv          = args[++i]; break;
+                case "--mop-json-dir":           if (i + 1 < args.length) mopJsonDir         = args[++i]; break;
+                case "--report-template-name":   if (i + 1 < args.length) reportTemplateName = args[++i]; break;
+                case "--report-template-path":   if (i + 1 < args.length) reportTemplatePath = args[++i]; break;
                 case "--help": case "-h": printUsage(); return 0;
                 default:
                     System.err.println("Unknown argument: " + args[i]);
@@ -119,7 +125,8 @@ public class CiqProcessorMain {
             return runGenerate(nodeType, activity, rulesFilePath, output);
         } else if ("ciq-validate".equalsIgnoreCase(mode)) {
             return runValidate(ciqFilePath, nodeType, activity, rulesFilePath,
-                               output, formatCsv, mopJsonDir);
+                               output, formatCsv, mopJsonDir,
+                               reportTemplateName, reportTemplatePath);
         } else {
             System.err.println("Error: unknown --mode '" + mode
                     + "'. Use 'ciq-validate' or 'ciq-generate'.");
@@ -134,8 +141,9 @@ public class CiqProcessorMain {
 
     private static int runValidate(String ciqFilePath, String nodeType, String activity,
                                    String rulesFilePath, String outputDir,
-                                   String formatCsv, String mopJsonDir) {
-    	
+                                   String formatCsv, String mopJsonDir,
+                                   String reportTemplateName, String reportTemplatePath) {
+
         if (ciqFilePath == null || nodeType == null || activity == null
                 || rulesFilePath == null || outputDir == null) {
             System.out.println("STATUS=FAILED");
@@ -148,7 +156,8 @@ public class CiqProcessorMain {
             ValidationReport report = new CiqProcessorImpl().process(
                     ciqFilePath, nodeType, activity,
                     rulesFilePath, outputDir,
-                    formatCsv, mopJsonDir);
+                    formatCsv, mopJsonDir,
+                    reportTemplateName, reportTemplatePath);
 
             System.out.println("STATUS=" + report.getStatus());
             System.out.println("ERRORS=" + report.getTotalErrors());
@@ -195,13 +204,15 @@ public class CiqProcessorMain {
         System.out.println("  ciq-generate            Generate a blank CIQ template from rules");
         System.out.println();
         System.out.println("ciq-validate options:");
-        System.out.println("  --ciq           <file>   CIQ Excel workbook (.xlsx)               [required]");
-        System.out.println("  --node-type     <type>   Node type, e.g. SBC or MRF               [required]");
-        System.out.println("  --activity      <name>   Activity name                             [required]");
-        System.out.println("  --rules         <file>   YAML validation-rules file                [required]");
-        System.out.println("  --output        <dir>    Output directory for validation reports   [required]");
-        System.out.println("  --format        <csv>    JSON,HTML,MSEXCEL (default: all three)    [optional]");
-        System.out.println("  --mop-json-dir  <dir>    JSON output dir for MOP generation        [optional]");
+        System.out.println("  --ciq                    <file>   CIQ Excel workbook (.xlsx)                    [required]");
+        System.out.println("  --node-type              <type>   Node type, e.g. SBC or MRF                    [required]");
+        System.out.println("  --activity               <name>   Activity name                                  [required]");
+        System.out.println("  --rules                  <file>   YAML validation-rules file                     [required]");
+        System.out.println("  --output                 <dir>    Output directory for validation reports        [required]");
+        System.out.println("  --format                 <csv>    JSON,HTML,MSEXCEL (default: all three)         [optional]");
+        System.out.println("  --mop-json-dir           <dir>    JSON output dir for MOP generation             [optional]");
+        System.out.println("  --report-template-name   <file>   HTML report template filename                  [optional]");
+        System.out.println("  --report-template-path   <dir>    Directory containing the HTML report template  [optional]");
         System.out.println("  Report name is auto-generated: <NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT");
         System.out.println();
         System.out.println("ciq-generate options:");

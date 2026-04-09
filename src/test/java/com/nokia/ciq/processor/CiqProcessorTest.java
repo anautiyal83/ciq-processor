@@ -40,7 +40,7 @@ public class CiqProcessorTest {
 
         ValidationReport report = new CiqProcessorImpl().process(
                 CIQ_FILE, NODE_TYPE, ACTIVITY, RULES_FILE,
-                OUTPUT_DIR, "JSON,HTML,MSEXCEL", MOP_JSON_DIR);
+                OUTPUT_DIR, "JSON,HTML,MSEXCEL", MOP_JSON_DIR, null, null);
 
         assertNotNull("Report must not be null", report);
         assertNotNull("Status must not be null", report.getStatus());
@@ -48,7 +48,7 @@ public class CiqProcessorTest {
                 "PASSED".equals(report.getStatus()) || "FAILED".equals(report.getStatus()));
 
         // All three report files must be written
-        String baseName = NODE_TYPE + "_" + ACTIVITY + "_validation-report";
+        String baseName = NODE_TYPE + "_" + ACTIVITY + "_VALIDATION_REPORT";
         assertTrue("JSON report missing",  new File(OUTPUT_DIR, baseName + ".json").exists());
         assertTrue("HTML report missing",  new File(OUTPUT_DIR, baseName + ".html").exists());
         assertTrue("Excel report missing", new File(OUTPUT_DIR, baseName + ".xlsx").exists());
@@ -69,7 +69,7 @@ public class CiqProcessorTest {
 
         ValidationReport report = new CiqProcessorImpl().process(
                 CIQ_FILE, NODE_TYPE, ACTIVITY, RULES_FILE,
-                OUTPUT_DIR, "JSON", MOP_JSON_DIR);
+                OUTPUT_DIR, "JSON", MOP_JSON_DIR, null, null);
 
         if (!"PASSED".equals(report.getStatus())) {
             System.out.println("Validation did not pass — child-order segregation skipped by processor");
@@ -142,14 +142,14 @@ public class CiqProcessorTest {
 
         ValidationReport report = new CiqProcessorImpl().process(
                 MRF_CIQ_FILE, MRF_NODE_TYPE, MRF_ACTIVITY, MRF_RULES_FILE,
-                MRF_OUTPUT_DIR, "JSON,HTML,MSEXCEL", MRF_MOP_JSON_DIR);
+                MRF_OUTPUT_DIR, "JSON,HTML,MSEXCEL", MRF_MOP_JSON_DIR, null, null);
 
         assertNotNull("Report must not be null", report);
         assertNotNull("Status must not be null", report.getStatus());
         assertTrue("Status must be PASSED or FAILED",
                 "PASSED".equals(report.getStatus()) || "FAILED".equals(report.getStatus()));
 
-        String baseName = MRF_NODE_TYPE + "_" + MRF_ACTIVITY + "_validation-report";
+        String baseName = MRF_NODE_TYPE + "_" + MRF_ACTIVITY + "_VALIDATION_REPORT";
         assertTrue("JSON report missing",  new File(MRF_OUTPUT_DIR, baseName + ".json").exists());
         assertTrue("HTML report missing",  new File(MRF_OUTPUT_DIR, baseName + ".html").exists());
         assertTrue("Excel report missing", new File(MRF_OUTPUT_DIR, baseName + ".xlsx").exists());
