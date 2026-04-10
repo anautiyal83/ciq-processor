@@ -98,14 +98,6 @@ public class ValidationRulesConfig {
      */
     private NodeIdConfig nodeIdConfig;
 
-    /**
-     * JSON output template for MOP segregation files.
-     * The YAML subtree under {@code json_output:} is loaded as a raw map and evaluated
-     * by {@link com.nokia.ciq.processor.JsonTemplateEvaluator} at segregation time.
-     *
-     * <p>YAML key: {@code json_output}
-     */
-    private Map<String, Object> jsonOutput;
 
     /**
      * Validation report output configuration: formats, filename template, and optional
@@ -145,9 +137,6 @@ public class ValidationRulesConfig {
 
     public NodeIdConfig getNodeIdConfig()                        { return nodeIdConfig; }
     public void         setNodeIdConfig(NodeIdConfig nodeIdConfig) { this.nodeIdConfig = nodeIdConfig; }
-
-    public Map<String, Object> getJsonOutput() { return jsonOutput; }
-    public void setJsonOutput(Map<String, Object> jsonOutput) { this.jsonOutput = jsonOutput; }
 
     public ReportOutputConfig getReportOutput()                      { return reportOutput; }
     public void               setReportOutput(ReportOutputConfig v) { this.reportOutput = v; }

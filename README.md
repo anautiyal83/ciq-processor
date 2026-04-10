@@ -23,20 +23,17 @@ InMemoryExcelReader  ──  reads workbook into memory (no disk writes)
 CiqValidationEngine  ──  validates every sheet/row against rules YAML
       │
       ├──►  Validation Report  (<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT.json/html/xlsx)
+      │          └──  HTML report uses built-in layout, or external template
+      │               when --report-template-name / --report-template-path are supplied
       │
       │  validation PASSED + --mop-json-dir supplied?
       │             │ yes
       ▼
-JSON segregation (mode determined by groupByColumnName in YAML)
-  ┌───────────────┬──────────────┐
-CRGROUP         GROUP           NODE
-  │               │               │
-  ▼               ▼               ▼
-mop-json/      mop-json/      mop-json/
-  CR1/             A/             SBC1_CR1/
-  CR2/             B/             SBC2_CR1/
-  │
-  ▼
+JSON segregation  (driven by json_output.segregate_by in YAML rules)
+  one folder per distinct value of the segregation column
+  mop-json/<value>/  ← e.g. CR1/, GRP_A/, SBC-1_CR1/
+      │
+      ▼
 mop-generator-utility
 ```
 
@@ -77,29 +74,38 @@ Required:
   --output        <dir>    Output directory for validation reports
 
 Optional:
-  --format        <csv>    JSON,HTML,MSEXCEL (default: all three)
-  --mop-json-dir  <dir>    JSON output directory for MOP generation (written on PASSED only)
+  --format                 <csv>    JSON,HTML,MSEXCEL (default: all three)
+  --mop-json-dir           <dir>    JSON output directory for MOP generation (written on PASSED only)
+  --report-template-name   <file>   HTML report template filename (enables template-based HTML)
+  --report-template-path   <dir>    Directory containing the HTML report template
 
 Exit code: 0 = PASSED, 1 = FAILED or error
 ```
 
 Report files are auto-named: **`<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT.json/html/xlsx`**
 
-**Example — MRF CRGROUP mode:**
+> **HTML template:** When `--report-template-name` is provided, the HTML report is rendered
+> by substituting `{{placeholders}}` in the template file.  If `--report-template-path` is
+> also given it is combined with the name: `<path>/<name>`.  A ready-to-use default template
+> is provided at `src/main/resources/validation-report-template.html`.
+
+**Example — with external HTML report template:**
 
 ```bash
 java -jar ciq-processor-1.0.0-cli.jar \
-  --mode         ciq-validate \
-  --ciq          MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx \
-  --node-type    MRF \
-  --activity     ANNOUNCEMENT_LOADING \
-  --rules        MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
-  --output       target/reports \
-  --format       JSON,HTML,MSEXCEL \
-  --mop-json-dir target/mop-json
+  --mode                   ciq-validate \
+  --ciq                    MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx \
+  --node-type              MRF \
+  --activity               ANNOUNCEMENT_LOADING \
+  --rules                  MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
+  --output                 target/reports \
+  --format                 JSON,HTML,MSEXCEL \
+  --mop-json-dir           target/mop-json \
+  --report-template-name   validation-report-template.html \
+  --report-template-path   src/main/resources
 ```
 
-**Example — SBC NODE mode:**
+**Example — without HTML template (built-in layout):**
 
 ```bash
 java -jar ciq-processor-1.0.0-cli.jar \
@@ -111,12 +117,14 @@ java -jar ciq-processor-1.0.0-cli.jar \
   --mop-json-dir target/mop-json
 ```
 
-**Console output — PASSED (CRGROUP mode):**
+**Console output — PASSED:**
 
 ```
 STATUS=PASSED
 ERRORS=0
-REPORT_FILENAME=target/reports/MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT
+REPORT_FILENAME_JSON=MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.json
+REPORT_FILENAME_HTML=MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.html
+REPORT_FILENAME_MSEXCEL=MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.xlsx
 CR_LIST=CR1,CR2
 CR_COUNT=2
 ```
@@ -126,7 +134,6 @@ CR_COUNT=2
 ```
 STATUS=FAILED
 ERRORS=5
-REPORT_FILENAME=target/reports/MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT
 ```
 
 **Console output — runtime error:**
@@ -217,33 +224,15 @@ Every invocation prints machine-readable `KEY=VALUE` pairs to stdout.
 | `REPORT_FILENAME` | Always | Full path to report files (without extension) |
 | `ERROR` | Runtime error | Exception message |
 
-Additional parameters on **STATUS=PASSED** depend on grouping mode:
+Additional parameters on **STATUS=PASSED** are those declared in the `outputs:` section of the
+YAML rules file.  There are no hardcoded parameters — every extra key/value comes from the YAML.
 
-**CRGROUP mode:**
+**Example (MRF rules file defines `CR_LIST` and `CR_COUNT`):**
 
 | Parameter | Example |
 |---|---|
 | `CR_LIST` | `CR1,CR2` |
 | `CR_COUNT` | `2` |
-
-**NODE mode:**
-
-| Parameter | Example |
-|---|---|
-| `NODE_1` | `SBC-1` |
-| `NIAM_ID_1` | `sbc1-neid` |
-| `TOTAL_NODES_COUNT` | `2` |
-| `CHILD_ORDERS_COUNT` | `2` |
-
-**GROUP mode:**
-
-| Parameter | Example |
-|---|---|
-| `GROUP_1` | `A` |
-| `GROUP_1_VALUES` | `MRF1,MRF2` |
-| `TOTAL_GROUPS_COUNT` | `2` |
-| `TOTAL_NODES_COUNT` | `3` |
-| `CHILD_ORDERS_COUNT` | `2` |
 
 ---
 
@@ -281,9 +270,8 @@ result.getParameters().forEach((k, v) -> System.out.println(k + "=" + v));
 import com.nokia.ciq.processor.CiqProcessorImpl;
 import com.nokia.ciq.validator.model.ValidationReport;
 
-// Report file name is auto-generated inside CiqProcessorImpl:
-//   <NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT.json/html/xlsx
-// Formats and baseName are resolved internally — pass a CSV string or null for all three.
+// Report file name is resolved from report_output.filename in the YAML rules file.
+// Pass null for reportTemplateName/Path to use the built-in HTML layout.
 ValidationReport report = new CiqProcessorImpl().process(
     "MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx",               // ciqFilePath
     "MRF",                                              // nodeType
@@ -291,17 +279,17 @@ ValidationReport report = new CiqProcessorImpl().process(
     "MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml",  // rulesFilePath
     "target/reports",                                   // outputDir
     "JSON,HTML,MSEXCEL",                                // formatCsv (null = all three)
-    "target/mop-json"                                   // mopJsonOutputDir (null = skip)
+    "target/mop-json",                                  // mopJsonOutputDir (null = skip)
+    "validation-report-template.html",                  // reportTemplateName (null = built-in)
+    "src/main/resources"                                // reportTemplatePath (null = name is full path)
 );
 
 System.out.println(report.getStatus());            // "PASSED" or "FAILED"
 System.out.println(report.getTotalErrors());       // total error count
 
-// Parameters map — always contains REPORT_FILENAME; additional params on PASSED:
+// Parameters map — output params declared in the YAML outputs: section (PASSED only):
 report.getParameters().forEach((k, v) -> System.out.println(k + "=" + v));
-// Always:        REPORT_FILENAME=target/reports/MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT
-// CRGROUP mode:  CR_LIST=CR1,CR2   CR_COUNT=2
-// NODE mode:     NODE_1=SBC-1  NIAM_ID_1=sbc1-neid  TOTAL_NODES_COUNT=2 ...
+// Example:  CR_LIST=CR1,CR2   CR_COUNT=2
 
 // Per-sheet results:
 for (SheetValidationResult sheet : report.getSheets()) {
@@ -311,37 +299,64 @@ for (SheetValidationResult sheet : report.getSheets()) {
 
 ---
 
-## Grouping Modes
+## JSON Segregation (MOP JSON Output)
 
-The mode is set by **`groupByColumnName`** in the validation-rules YAML.
+JSON segregation is **fully YAML-driven** via the `json_output` block in the rules file.
+There are no hardcoded modes — the segregation key, output structure, and file naming
+are all declared in YAML.
 
-| `groupByColumnName` | INDEX sheet columns | JSON output layout |
-|---|---|---|
-| `CRGROUP` | `GROUP \| CRGROUP \| NODE` | `mop-json/<CRGROUP>/` — one JSON per CRGROUP |
-| `GROUP` | `GROUP \| NODE` | `mop-json/<GROUP>/` — index + data files per GROUP |
-| `NODE` | `Node \| CRGroup \| Tables` | `mop-json/<Node>_<CRGroup>/` — index + data per node |
+### `json_output` block
 
----
+```yaml
+json_output:
+  output_mode: single        # single = one JSON file for the whole workbook
+                             # individual = one JSON file per distinct value of segregate_by
 
-### CRGROUP mode
+  segregate_by:              # required when output_mode: individual
+    sheet:  Index
+    column: CRGroup
+    as:     $cr              # variable name used in data template below
 
-**INDEX sheet:**
+  data:                      # free-form YAML template evaluated by JsonTemplateEvaluator
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
 
-| GROUP | CRGROUP | NODE |
-|---|---|---|
-| GRP1 | CR1 | MRF1 |
-| GRP1 | CR1 | MRF2 |
-| GRP2 | CR1 | MRF3 |
-| GRP2 | CR2 | MRF4 |
+**`_each` directive:**
 
-**User_ID sheet:**
-
-| CRGROUP | EMAIL |
+| Syntax | Meaning |
 |---|---|
-| CR1 | user1@nokia.com |
-| CR2 | user2@nokia.com |
+| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | Iterate distinct values of a column |
+| `_each: <SheetName>` | Iterate all rows of a sheet |
+| `_each: "<Sheet> WHERE <Col> = <value>"` | Iterate filtered rows |
 
-**JSON output:**
+**Relational lookups:**
+
+| Syntax | Meaning |
+|---|---|
+| `key: "<Sheet>.<Col> WHERE <Sheet>.<Filter> = $var"` | First matching value from filtered rows |
+| `key: <Sheet>.<Column>` | First non-blank value scoped to current iteration |
+
+### Output file layout
+
+**`output_mode: single`** — one JSON file for the entire workbook:
+
+```
+mop-json/
+└── MRF_ANNOUNCEMENT_LOADING.json
+```
+
+**`output_mode: individual`** — one folder + one JSON file per segregation value:
 
 ```
 mop-json/
@@ -351,64 +366,33 @@ mop-json/
     └── MRF_ANNOUNCEMENT_LOADING_CR2.json
 ```
 
-**CRGroupIndex JSON:**
-
-```json
-{
-  "nodeType": "MRF",
-  "activity": "ANNOUNCEMENT_LOADING",
-  "crGroup": "CR1",
-  "email": "user1@nokia.com",
-  "groups": [
-    {
-      "group": "GRP1",
-      "nodes": ["MRF1", "MRF2"],
-      "niamMapping": { "MRF1": "RJ-NOKIA-MRF-01-CLI", "MRF2": "RJ-NOKIA-MRF-02-CLI" },
-      "tableData": {
-        "ANNOUNCEMENT_FILES": [
-          { "GROUP": "GRP1", "INPUT_FILE": "file1.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/" }
-        ]
-      }
-    }
-  ],
-  "allNodes": ["MRF1", "MRF2", "MRF3"]
-}
-```
-
----
-
-### NODE mode
-
-**INDEX sheet:**
-
-| Node | CRGroup | Tables |
-|---|---|---|
-| SBC-1 | CR1 | CRFTargetList,ServiceProfileTable |
-| SBC-2 | CR1 | CRFTargetList |
-
-**JSON output:**
-
-```
-mop-json/
-├── SBC-1_CR1/
-│   ├── SBC_FIXED_LINE_CONFIGURATION_index_SBC-1_CR1.json
-│   └── SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_SBC-1_CR1.json
-└── SBC-2_CR1/
-    ├── SBC_FIXED_LINE_CONFIGURATION_index_SBC-2_CR1.json
-    └── SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_SBC-2_CR1.json
-```
-
 ---
 
 ## Validation Reports
 
-Written to `--output` with fixed base name `<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT`:
+Written to `--output` with base name configured in `report_output.filename` in the rules YAML
+(defaults to `<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT`):
 
 | Format | File | Contents |
 |---|---|---|
 | `JSON` | `..._VALIDATION_REPORT.json` | Machine-readable; full error list per sheet/row/column |
 | `HTML` | `..._VALIDATION_REPORT.html` | Human-readable; colour-coded per-sheet error tables |
 | `MSEXCEL` | `..._VALIDATION_REPORT.xlsx` | Excel; one sheet per data sheet with errors highlighted |
+
+The HTML report can be rendered with a custom template by passing `--report-template-name` (and
+optionally `--report-template-path`) to the CLI.  When no template is specified the built-in
+layout is used.  The template uses `{{placeholder}}` syntax and `{{#section}}...{{/section}}`
+loops — see `src/main/resources/validation-report-template.html` for a complete example.
+
+### `report_output` YAML block
+
+Controls report file naming and output formats.
+
+```yaml
+report_output:
+  formats:  [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"   # {nodeType} and {activity} are substituted
+```
 
 ---
 
@@ -451,47 +435,38 @@ Every generated template includes a **`Column_Guide`** sheet (last tab) describi
 
 File naming convention: **`{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml`**
 
-### Top-level settings
+### Top-level structure
 
 ```yaml
-groupByColumnName: CRGROUP     # CRGROUP | GROUP | NODE
-validateIndexSheets: false     # true for NODE mode only
-validateNodeIds: true
+settings:               # global read settings
+workbook_rules:         # cross-sheet constraints
+sheets:                 # per-sheet column definitions and row rules
+report_output:          # validation report naming and formats
+outputs:                # post-validation aggregates (PASSED only)
+json_output:            # MOP JSON structure and segregation
 ```
 
-### indexSheet
+### settings
 
 ```yaml
-indexSheet:
-  columns:
-    GROUP:   { required: true }
-    CRGROUP: { required: true, description: "CR Number" }
-    NODE:    { required: true, description: "Hostname" }
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: false
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
 ```
 
-### nodeIdSheet
+### report_output
 
 ```yaml
-nodeIdSheet:
-  name:       Node_Details
-  nodeColumn: Node_Name
-  niamColumn: "NIAM NAME"
-  columns:
-    Node_Name:  { required: true, description: "Hostname of the MRF node" }
-    "NIAM NAME": { required: true, description: "NIAM identifier for SSH/NETCONF access" }
+report_output:
+  formats:  [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
 ```
 
-### userIdSheet
-
-```yaml
-userIdSheet:
-  name:          User_ID
-  crGroupColumn: CRGROUP
-  emailColumn:   EMAIL
-  columns:
-    CRGROUP: { required: true, description: "CR Number — must match Index sheet" }
-    EMAIL:   { required: true, email: true, description: "Responsible user email(s), comma-separated" }
-```
+`{nodeType}` and `{activity}` are substituted from the `--node-type` and `--activity` CLI arguments.
 
 ### sheets
 
@@ -736,11 +711,8 @@ ciq-processor/
 │   │   ├── CiqProcessor.java                  # API interface
 │   │   ├── CiqProcessorImpl.java              # Validation + segregation pipeline
 │   │   ├── CiqProcessorMain.java              # CLI entry point (ciq-validate / ciq-generate)
-│   │   ├── model/
-│   │   │   ├── CRGroupIndex.java              # CRGROUP mode JSON model
-│   │   │   └── GroupIndex.java                # GROUP mode JSON model
 │   │   ├── reader/
-│   │   │   ├── InMemoryExcelReader.java       # Reads CIQ Excel; detects INDEX structure
+│   │   │   ├── InMemoryExcelReader.java       # Reads CIQ Excel workbook into memory
 │   │   │   └── InMemoryCiqDataStore.java      # In-memory data store
 │   │   └── template/
 │   │       ├── CiqTemplateGenerator.java      # Generates blank CIQ Excel from YAML rules
@@ -750,6 +722,8 @@ ciq-processor/
 │       ├── config/
 │       │   ├── ValidationRulesConfig.java     # Top-level rules model
 │       │   ├── ValidationRulesLoader.java     # Loads YAML rules file
+│       │   ├── ReportOutputConfig.java        # report_output block model (formats + filename)
+│       │   ├── OutputRule.java                # outputs: aggregate rule model
 │       │   ├── ColumnRule.java                # Per-column rule (type, required, pattern, sheetRef, etc.)
 │       │   ├── ColumnMessages.java            # Per-column custom error messages
 │       │   ├── SheetRules.java                # Per-sheet rule model
@@ -769,7 +743,8 @@ ciq-processor/
 │       │   └── ValidationError.java           # Single error (sheet, row, column, message)
 │       ├── report/
 │       │   ├── ReportFormat.java              # JSON | HTML | MSEXCEL enum
-│       │   ├── HtmlReportWriter.java          # Writes HTML validation report
+│       │   ├── HtmlReportWriter.java          # Writes HTML validation report (built-in layout)
+│       │   ├── HtmlTemplateReportWriter.java  # Writes HTML report from external template
 │       │   └── ExcelReportWriter.java         # Writes Excel validation report
 │       └── validator/
 │           ├── CellValidator.java             # Validator interface + msg() helper
@@ -792,9 +767,10 @@ ciq-processor/
 │           ├── SumEqualsValidator.java        # sum: [...] equals: <col> row rule
 │           └── Operator.java                 # canonical operator constants + normalize/evaluate
 └── src/main/resources/
-    ├── Schema.yaml                                          # Reference schema template
-    ├── SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml  # NODE mode example
-    └── MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml      # CRGROUP mode example
+    ├── Schema.yaml                                          # Reference schema (full YAML reference)
+    ├── validation-report-template.html                      # Default HTML report template
+    ├── SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml  # Example rules file (SBC)
+    └── MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml      # Example rules file (MRF)
 ```
 
 ---
@@ -804,10 +780,10 @@ ciq-processor/
 No Java changes needed — only a YAML file.
 
 1. Create **`{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml`**
-2. Set `groupByColumnName`: `CRGROUP`, `GROUP`, or `NODE`
-3. Set `validateIndexSheets: true` (NODE mode) or `false` (CRGROUP/GROUP)
-4. Set `validateNodeIds: true`
-5. Define `indexSheet.columns`, `nodeIdSheet`, `userIdSheet` (CRGROUP mode), and `sheets:`
+2. Define `settings:`, `workbook_rules:` (optional), and `sheets:` with column and row rules
+3. Add `report_output:` to control report file naming and formats
+4. Add `outputs:` for any `KEY=VALUE` parameters to emit on PASSED
+5. Add `json_output:` with `output_mode` and `data` template to control MOP JSON structure
 6. Add `description:` to columns — appears in the generated Column_Guide sheet
 
 **Verify the YAML by generating a template first:**

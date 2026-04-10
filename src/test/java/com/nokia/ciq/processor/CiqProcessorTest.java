@@ -11,7 +11,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
@@ -22,7 +21,7 @@ public class CiqProcessorTest {
     private static final String RULES_FILE =
             "D:/Nokia/workspace/ciq-validator/src/main/resources/SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml";
     private static final String OUTPUT_DIR   = "target/processor-output";
-    private static final String MOP_JSON_DIR = "target/processor-mop-json";
+    private static final String JSON_OUTPUT_DIR = "target/processor-mop-json";
     private static final String NODE_TYPE    = "SBC";
     private static final String ACTIVITY     = "FIXED_LINE_CONFIGURATION";
 
@@ -40,7 +39,7 @@ public class CiqProcessorTest {
 
         ValidationReport report = new CiqProcessorImpl().process(
                 CIQ_FILE, NODE_TYPE, ACTIVITY, RULES_FILE,
-                OUTPUT_DIR, "JSON,HTML,MSEXCEL", MOP_JSON_DIR, null, null);
+                OUTPUT_DIR, "JSON,HTML,MSEXCEL", JSON_OUTPUT_DIR, null, null, null);
 
         assertNotNull("Report must not be null", report);
         assertNotNull("Status must not be null", report.getStatus());
@@ -65,33 +64,19 @@ public class CiqProcessorTest {
     @Test
     public void testChildOrderSegregation() throws Exception {
         new File(OUTPUT_DIR).mkdirs();
-        new File(MOP_JSON_DIR).mkdirs();
+        new File(JSON_OUTPUT_DIR).mkdirs();
 
         ValidationReport report = new CiqProcessorImpl().process(
                 CIQ_FILE, NODE_TYPE, ACTIVITY, RULES_FILE,
-                OUTPUT_DIR, "JSON", MOP_JSON_DIR, null, null);
+                OUTPUT_DIR, "JSON", JSON_OUTPUT_DIR, null, null, null);
 
         if (!"PASSED".equals(report.getStatus())) {
-            System.out.println("Validation did not pass — child-order segregation skipped by processor");
+            System.out.println("Validation did not pass — JSON output skipped by processor");
             return;
         }
 
-        // At least one child-order subfolder should exist
-        File mopRoot = new File(MOP_JSON_DIR);
-        String[] subDirs = mopRoot.list((d, n) -> new File(d, n).isDirectory());
-        assertNotNull("mop-json-dir should exist", subDirs);
-        assertTrue("At least one child-order subfolder expected", subDirs.length > 0);
-
-        // Each subfolder must contain at least one JSON
-        for (String subDir : subDirs) {
-            File folder = new File(mopRoot, subDir);
-            String[] jsonFiles = folder.list((d, n) -> n.endsWith(".json"));
-            assertNotNull(jsonFiles);
-            assertTrue("Child-order folder '" + subDir + "' should contain JSON files",
-                    jsonFiles.length > 0);
-        }
-
-        System.out.println("Child-order folders: " + Arrays.toString(subDirs));
+        // No json-output config provided — JSON output is skipped; only reports are written
+        System.out.println("Validation PASSED. JSON output skipped (no --json-output-config-file provided).");
     }
 
     @Test
@@ -125,8 +110,10 @@ public class CiqProcessorTest {
             "D:/Nokia/documents/CR_Automation/MRF/MRF_ANNOUNCEMENT_LOADING_TEST_CIQ.xlsx";
     private static final String MRF_RULES_FILE =
             "src/main/resources/MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml";
+    private static final String MRF_JSON_OUTPUT_CONFIG =
+            "src/main/resources/MRF_ANNOUNCEMENT_LOADING_json-output.yaml";
     private static final String MRF_OUTPUT_DIR   = "target/mrf-processor-output";
-    private static final String MRF_MOP_JSON_DIR = "../mop-generator-utility/target/mrf-mop-json";
+    private static final String MRF_JSON_OUTPUT_DIR = "../mop-generator-utility/target/mrf-mop-json";
     private static final String MRF_NODE_TYPE    = "MRF";
     private static final String MRF_ACTIVITY     = "ANNOUNCEMENT_LOADING";
 
@@ -138,11 +125,12 @@ public class CiqProcessorTest {
                 new File(MRF_RULES_FILE).exists());
 
         new File(MRF_OUTPUT_DIR).mkdirs();
-        new File(MRF_MOP_JSON_DIR).mkdirs();
+        new File(MRF_JSON_OUTPUT_DIR).mkdirs();
 
         ValidationReport report = new CiqProcessorImpl().process(
                 MRF_CIQ_FILE, MRF_NODE_TYPE, MRF_ACTIVITY, MRF_RULES_FILE,
-                MRF_OUTPUT_DIR, "JSON,HTML,MSEXCEL", MRF_MOP_JSON_DIR, null, null);
+                MRF_OUTPUT_DIR, "JSON,HTML,MSEXCEL", MRF_JSON_OUTPUT_DIR,
+                MRF_JSON_OUTPUT_CONFIG, null, null);
 
         assertNotNull("Report must not be null", report);
         assertNotNull("Status must not be null", report.getStatus());
@@ -169,21 +157,15 @@ public class CiqProcessorTest {
                     + e.getColumn() + "] " + e.getMessage()));
         });
 
-        // GROUP mode verification: if PASSED, verify group folder output
+        // JSON output verification: output_mode=single writes one flat JSON file
         if ("PASSED".equals(report.getStatus())) {
-            File mopRoot = new File(MRF_MOP_JSON_DIR);
-            String[] subDirs = mopRoot.list((d, n) -> new File(d, n).isDirectory());
-            if (subDirs != null && subDirs.length > 0) {
-                System.out.println("GROUP mode folders: " + java.util.Arrays.toString(subDirs));
-                for (String subDir : subDirs) {
-                    File folder = new File(mopRoot, subDir);
-                    String[] jsonFiles = folder.list((d, n) -> n.endsWith(".json"));
-                    assertNotNull(jsonFiles);
-                    // Each CRGROUP folder contains exactly one JSON (the CRGroupIndex with embedded data)
-                    assertEquals("Group folder '" + subDir + "' should contain exactly one JSON",
-                            1, jsonFiles.length);
-                }
-            }
+            File mopRoot = new File(MRF_JSON_OUTPUT_DIR);
+            String expectedJson = MRF_NODE_TYPE + "_" + MRF_ACTIVITY + ".json";
+            File jsonFile = new File(mopRoot, expectedJson);
+            assertTrue("Single JSON output file must exist: " + expectedJson, jsonFile.exists());
+            assertTrue("Single JSON output file must not be empty", jsonFile.length() > 0);
+            System.out.println("JSON output file: " + jsonFile.getAbsolutePath()
+                    + " (" + jsonFile.length() + " bytes)");
         }
     }
 
@@ -258,12 +240,14 @@ public class CiqProcessorTest {
                 new File(MRF_RULES_FILE).exists());
 
         int rc = CiqProcessorMain.run(new String[]{
-                "--ciq",        MRF_CIQ_FILE,
-                "--node-type",  MRF_NODE_TYPE,
-                "--activity",   MRF_ACTIVITY,
-                "--rules",      MRF_RULES_FILE,
-                "--output",     MRF_OUTPUT_DIR + "/cli",
-                "--format",     "JSON,HTML"
+                "--ciq",         MRF_CIQ_FILE,
+                "--node-type",   MRF_NODE_TYPE,
+                "--activity",    MRF_ACTIVITY,
+                "--rules",       MRF_RULES_FILE,
+                "--output",      MRF_OUTPUT_DIR + "/cli",
+                "--format",      "JSON,HTML",
+                "--json-output-dir", MRF_JSON_OUTPUT_DIR + "/cli",
+                "--json-output-config-file", MRF_JSON_OUTPUT_CONFIG
         });
         assertTrue("Expected exit code 0 or 1", rc == 0 || rc == 1);
     }

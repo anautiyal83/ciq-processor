@@ -7,6 +7,7 @@ import com.nokia.ciq.processor.reader.InMemoryExcelReader;
 import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.validator.CiqValidationEngine;
+import com.nokia.ciq.validator.config.JsonOutputLoader;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.ValidationRulesLoader;
 import com.nokia.ciq.validator.model.ValidationReport;
@@ -36,7 +37,7 @@ import java.util.Map;
  *       {@link InMemoryCiqDataStore}.</li>
  *   <li>{@link CiqValidationEngine} validates the in-memory data.</li>
  *   <li>Reports are written in the requested formats (JSON, HTML, Excel).</li>
- *   <li>When validation passes and {@code mopJsonOutputDir} is set, JSON output
+ *   <li>When validation passes and {@code jsonOutputDir} is set, JSON output
  *       files are produced according to the {@code json_output} block in the rules YAML.</li>
  * </ol>
  *
@@ -82,7 +83,8 @@ public class CiqProcessorImpl implements CiqProcessor {
                                     String rulesFilePath,
                                     String outputDir,
                                     String formatCsv,
-                                    String mopJsonOutputDir,
+                                    String jsonOutputDir,
+                                    String jsonOutputConfigPath,
                                     String reportTemplateName,
                                     String reportTemplatePath) throws IOException {
 
@@ -139,26 +141,30 @@ public class CiqProcessorImpl implements CiqProcessor {
             }
         }
 
-        // Step 5: JSON output — only when validation passed and output dir provided
-        if ("PASSED".equals(report.getStatus()) && mopJsonOutputDir != null) {
-            File mopOutDir = new File(mopJsonOutputDir);
+        // Step 5: JSON output — only when validation passed and both dirs are provided
+        if ("PASSED".equals(report.getStatus())
+                && jsonOutputDir != null && jsonOutputConfigPath != null) {
+            File mopOutDir = new File(jsonOutputDir);
             if (!mopOutDir.exists()) mopOutDir.mkdirs();
 
-            OutputMode outputMode = resolveOutputMode(rules);
-            Map<String, Object> template = resolveTemplate(rules);
+            log.info("JSON output config: {}", jsonOutputConfigPath);
+            Map<String, Object> jsonOutputConfig = new JsonOutputLoader().load(jsonOutputConfigPath);
+
+            OutputMode outputMode = resolveOutputMode(jsonOutputConfig);
+            Map<String, Object> template = resolveTemplate(jsonOutputConfig);
 
             if (outputMode == OutputMode.SINGLE) {
-                log.info("output_mode=single → {}", mopJsonOutputDir);
-                segregateSingle(store, nodeType, activity, mopJsonOutputDir, template);
+                log.info("output_mode=single → {}", jsonOutputDir);
+                segregateSingle(store, nodeType, activity, jsonOutputDir, template);
             } else {
-                // INDIVIDUAL — driven entirely by 'segregate_by' in the rules YAML
-                SegregateByConfig seg = resolveSegregateBy(rules);
+                // INDIVIDUAL — driven entirely by 'segregate_by' in the json-output config
+                SegregateByConfig seg = resolveSegregateBy(jsonOutputConfig);
                 if (seg == null) {
-                    log.warn("output_mode=individual requires a 'segregate_by' block in json_output — skipping JSON output");
+                    log.warn("output_mode=individual requires a 'segregate_by' block in the json-output config — skipping JSON output");
                 } else {
                     log.info("output_mode=individual — segregating by {}.{} (${}) → {}",
-                            seg.sheet, seg.column, seg.varName, mopJsonOutputDir);
-                    segregateIndividual(store, nodeType, activity, mopJsonOutputDir, template, seg);
+                            seg.sheet, seg.column, seg.varName, jsonOutputDir);
+                    segregateIndividual(store, nodeType, activity, jsonOutputDir, template, seg);
                 }
             }
         }
@@ -272,23 +278,21 @@ public class CiqProcessorImpl implements CiqProcessor {
     // YAML config resolution
     // =========================================================================
 
-    private OutputMode resolveOutputMode(ValidationRulesConfig rules) {
-        Map<String, Object> jo = rules.getJsonOutput();
-        if (jo == null) return OutputMode.INDIVIDUAL;
-        Object mode = jo.get("output_mode");
+    private OutputMode resolveOutputMode(Map<String, Object> jsonOutputConfig) {
+        if (jsonOutputConfig == null) return OutputMode.INDIVIDUAL;
+        Object mode = jsonOutputConfig.get("output_mode");
         return OutputMode.fromString(mode != null ? mode.toString() : null);
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> resolveTemplate(ValidationRulesConfig rules) {
-        Map<String, Object> jo = rules.getJsonOutput();
-        if (jo == null) return null;
-        Object data = jo.get("data");
+    private Map<String, Object> resolveTemplate(Map<String, Object> jsonOutputConfig) {
+        if (jsonOutputConfig == null) return null;
+        Object data = jsonOutputConfig.get("data");
         return (data instanceof Map) ? (Map<String, Object>) data : null;
     }
 
     /**
-     * Reads the {@code segregate_by} block from {@code json_output}.
+     * Reads the {@code segregate_by} block from the json-output config map.
      * Returns {@code null} when absent or incomplete.
      *
      * <pre>
@@ -299,10 +303,9 @@ public class CiqProcessorImpl implements CiqProcessor {
      * </pre>
      */
     @SuppressWarnings("unchecked")
-    private SegregateByConfig resolveSegregateBy(ValidationRulesConfig rules) {
-        Map<String, Object> jo = rules.getJsonOutput();
-        if (jo == null) return null;
-        Object seg = jo.get("segregate_by");
+    private SegregateByConfig resolveSegregateBy(Map<String, Object> jsonOutputConfig) {
+        if (jsonOutputConfig == null) return null;
+        Object seg = jsonOutputConfig.get("segregate_by");
         if (!(seg instanceof Map)) return null;
         Map<String, Object> m = (Map<String, Object>) seg;
 

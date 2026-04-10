@@ -62,36 +62,44 @@ sheets:
       # ── string column ────────────────────────────────────────────────────
       <ColumnName>:
         required: true
-        type: string
-        aliases: []
-        unique: false
-        ignoreCase: false     # case-insensitive comparison for allowedValues / values
+        type: string                           # default when 'type' is omitted
+        aliases: []                            # alternative column header names accepted
+        unique: false                          # values must be distinct within the sheet
+        ignoreCase: false                      # case-insensitive match for allowedValues / values
+        description: "<column description>"   # informational; shown in Column_Guide export sheet
         minLength: 1
         maxLength: 100
-        pattern: "<regex>"
-        allowedValues: [<value>, <value>]    # enforced set of allowed strings
-        ref: <SheetName>.<ColumnName>
-        validator: <validatorName>
+        pattern: "<regex>"                     # full-match regex (java.util.regex syntax)
+        patternMessage: "<human-readable description>"  # prefix prepended to pattern error message
+        allowedValues: [<value>, <value>]      # allowed-values constraint (case-insensitive)
+        crossRef:                              # value must exist in the target sheet+column
+          sheet: <SheetName>                   # target sheet; use "_index" for INDEX node list
+          column: <ColumnName>                 # column whose values form the valid set
+        validator: <validatorName>             # custom validator from the validators: registry
         messages:
-          required:  "<custom message>"
-          minLength: "<custom message>"
-          maxLength: "<custom message>"
-          pattern:   "<custom message>"
-          type:      "<custom message>"      # generic type/format error fallback
+          required:  "<custom message>"        # default: "Column '<name>' is required but is empty"
+          minLength: "<custom message>"        # default: "Value '<v>' is too short (length N); minimum is M"
+          maxLength: "<custom message>"        # default: "Value '<v>' is too long (length N); maximum is M"
+          pattern:   "<custom message>"        # default: "Value '<v>' does not match pattern: <regex>"
+          type:      "<custom message>"        # default: "Value '<v>' not in allowed values: [...]"
 
       # ── integer column ───────────────────────────────────────────────────
       <ColumnName>:
         required: true
         type: integer
-        minValue: 1           # inclusive lower bound
-        maxValue: 100         # inclusive upper bound
-        allowedRanges:        # value must fall within at least one band (OR logic)
+        minValue: 1                            # inclusive lower bound
+        maxValue: 100                          # inclusive upper bound
+        allowedRanges:                         # value must fall within at least one band (OR logic)
           - { min: <min>, max: <max> }
           - { min: <min>, max: <max> }
+        pattern: "<regex>"                     # custom regex applied after integer parse succeeds
+        patternMessage: "<description>"        # prefix for pattern mismatch message
         messages:
-          min:  "<custom message>"
-          max:  "<custom message>"
-          type: "<custom message>"
+          required: "<custom message>"         # default: "Column '<name>' is required but is empty"
+          min:      "<custom message>"         # default: "Value N is below minimum M"
+          max:      "<custom message>"         # default: "Value N exceeds maximum M"
+          type:     "<custom message>"         # default: "Value '<v>' is not a valid integer"
+                                               #          or "Value N is not within any allowed range: [...]"
 
       # ── decimal column ───────────────────────────────────────────────────
       <ColumnName>:
@@ -99,34 +107,43 @@ sheets:
         type: decimal
         minDecimal: 0.00
         maxDecimal: 9999.99
-        precision: 2          # maximum number of decimal places allowed
+        precision: 2                           # maximum number of decimal places allowed
         messages:
-          precision: "<custom message>"
-          type:      "<custom message>"
+          required:  "<custom message>"        # default: "Column '<name>' is required but is empty"
+          min:       "<custom message>"        # default: "Value N is below minimum M"
+          max:       "<custom message>"        # default: "Value N exceeds maximum M"
+          precision: "<custom message>"        # default: "Value '<v>' has N decimal place(s) but maximum allowed is P"
+          type:      "<custom message>"        # default: "Value '<v>' is not a valid decimal number"
 
       # ── datetime column ──────────────────────────────────────────────────
       <ColumnName>:
         required: false
         type: datetime
-        format: "yyyy-MM-dd'T'HH:mm:ss"   # default: yyyy-MM-dd'T'HH:mm:ss
+        format: "yyyy-MM-dd'T'HH:mm:ss"        # default: yyyy-MM-dd'T'HH:mm:ss  (SimpleDateFormat pattern)
         messages:
-          format: "<custom message>"
+          required: "<custom message>"         # default: "Column '<name>' is required but is empty"
+          format:   "<custom message>"         # default: "Value '<v>' is not a valid datetime; expected format: yyyy-MM-dd'T'HH:mm:ss"
 
       # ── email column ─────────────────────────────────────────────────────
       <ColumnName>:
         required: true
         type: email
-        multi: false          # true = comma-separated list of addresses is allowed
+        multi: false                           # true = comma-separated list of addresses accepted
+        pattern: "<regex>"                     # custom regex override for the email format check
+        patternMessage: "<description>"        # prefix prepended to pattern mismatch message
         messages:
-          type: "<custom message>"
+          required: "<custom message>"         # default: "Column '<name>' is required but is empty"
+          type:     "<custom message>"         # default: "'<email>' is not a valid email address"
 
       # ── ip column ────────────────────────────────────────────────────────
       <ColumnName>:
         required: false
         type: ip
-        accepts: both         # ipv4 | ipv6 | both (default: ipv4)
+        accepts: ipv4                          # ipv4 (default) | ipv6 | both
         messages:
-          type: "<custom message>"
+          required: "<custom message>"         # default: "Column '<name>' is required but is empty"
+          type:     "<custom message>"         # default: "Value '<v>' is not a valid IPv4 address"
+                                               #          (or IPv6 / IPv4 or IPv6 depending on accepts)
 
       # ── sheetRef column ──────────────────────────────────────────────────
       # Value must match an existing sheet name in the workbook.
@@ -134,15 +151,17 @@ sheets:
       <ColumnName>:
         required: true
         sheetRef: true
-        sheetRefIgnoreCase: false   # true = "announcement_files" matches "ANNOUNCEMENT_FILES"
+        sheetRefIgnoreCase: false              # true = "announcement_files" matches "ANNOUNCEMENT_FILES"
+        multi: false                           # true = comma-separated list of sheet names accepted
         messages:
-          type: "<custom message>"
+          required: "<custom message>"         # default: "Column '<name>' is required but is empty"
+          type:     "<custom message>"         # default: "Sheet '<v>' does not exist in the workbook (case-sensitive); available sheets: [...]"
 
       # ── custom validator column ──────────────────────────────────────────
       <ColumnName>:
         required: false
         type: custom
-        validator: <validatorName>
+        validator: <validatorName>             # must be declared under validators: at root level
 
 
     # -------------------------------------------------------------------------
@@ -226,6 +245,34 @@ sheets:
 
 
 # ---------------------------------------------------------------------------
+# Validation report output
+# ---------------------------------------------------------------------------
+# Controls the names and formats of the validation report files written to
+# --output.  All fields are optional; defaults are shown below.
+#
+# Fields:
+#   formats        — list of formats to generate.
+#                    Accepted values (case-insensitive): JSON, HTML, MSEXCEL.
+#                    Default: all three.
+#
+#   filename       — base name of the report files, without extension.
+#                    Supports {nodeType} and {activity} placeholders (replaced
+#                    with upper-case values at runtime).
+#                    Default: {nodeType}_{activity}_VALIDATION_REPORT
+#
+# Note: The HTML report template is NOT configured here.
+#       It is passed at runtime via CLI parameters:
+#         --report-template-name  <filename>   (e.g. validation-report-template.html)
+#         --report-template-path  <directory>  (e.g. src/main/resources)
+#       When omitted, the built-in HtmlReportWriter is used.
+#       When both are provided, HtmlTemplateReportWriter renders the template.
+# ---------------------------------------------------------------------------
+report_output:
+  formats: [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
+
+
+# ---------------------------------------------------------------------------
 # Post-validation outputs
 # ---------------------------------------------------------------------------
 # Computed only when validation PASSES.
@@ -286,273 +333,16 @@ outputs:
 
 
 # ---------------------------------------------------------------------------
-# JSON output template
+# JSON output
 # ---------------------------------------------------------------------------
-# The json_output block supports the following top-level keys:
+# The JSON output configuration is a separate file, independent of the
+# validation rules.  It is passed at runtime via:
 #
-#   output_mode   — controls how many JSON files are produced (required)
-#   segregate_by  — required when output_mode=individual; defines the split key
-#   data          — the JSON template tree evaluated by JsonTemplateEvaluator
+#   --json-output-config-file  <NODE_TYPE>_<ACTIVITY>_json-output.yaml
 #
-# ── output_mode ───────────────────────────────────────────────────────────
+# The same file is loaded independently by mop-generator and
+# command-executor, so that the output template is shared
+# across validation, MOP generation, and execution without duplication.
 #
-#   single      — one JSON file for the entire workbook.
-#                 File name: <NODE_TYPE>_<ACTIVITY>.json
-#
-#   individual  — one JSON file per distinct value of the segregate_by column.
-#                 File name: <NODE_TYPE>_<ACTIVITY>_<value>.json
-#                 Requires a 'segregate_by' block (see below).
-#                 Default when output_mode is absent.
-#
-# ── segregate_by (required for output_mode: individual) ───────────────────
-#
-#   sheet:  <SheetName>   # any sheet in the workbook (use 'Index' for the index sheet)
-#   column: <ColumnName>  # one output file is created per distinct value of this column
-#   as:     $<varname>    # variable injected into the template for the current value
-#                         # optional — defaults to $unit
-#
-#   The named sheet is pre-scoped to matching rows for each iteration value.
-#   All other sheets remain fully accessible so the template can cross-reference
-#   freely using WHERE conditions.
-#
-#   Examples:
-#     segregate_by:            # one file per CRGroup value in the Index sheet
-#       sheet:  Index
-#       column: CRGroup
-#       as:     $cr
-#
-#     segregate_by:            # one file per Node value in the Index sheet
-#       sheet:  Index
-#       column: Node
-#       as:     $node
-#
-#     segregate_by:            # one file per Group value in the Index sheet
-#       sheet:  Index
-#       column: Group
-#       as:     $grp
-#
-# ── Value resolution rules ────────────────────────────────────────────────
-#
-#   Plain string (no "$", no ".")
-#       Inside a row-iteration block (_each: Sheet or _each: "Sheet WHERE…"):
-#         treated as a column name; the cell value for the current row is used.
-#       Outside a row block:
-#         written as a static string literal.
-#
-#   "SheetName.ColumnName"  (contains ".", no WHERE)
-#       First non-blank value from the (scoped) rows of that sheet + column.
-#       Column names containing spaces must be wrapped in single quotes:
-#         "Node_Details.'NIAM NAME'"
-#
-#   "Sheet.Column WHERE [Sheet.]FilterCol = value"
-#       Relational lookup: scans the sheet's rows and returns the first
-#       non-blank Column value where FilterCol equals the resolved value.
-#       The sheet prefix on FilterCol is optional.
-#       value may be a $variable, Sheet.Col reference, current-row column, or literal.
-#       Examples:
-#         niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-#         email:  "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-#
-#   $<varname>
-#       Resolves a named variable — either from 'segregate_by.as' or from a
-#       DISTINCT iteration inside the template.
-#       Any name defined via "DISTINCT … AS $varname" is also available here.
-#
-# ── Array directives (_each) ─────────────────────────────────────────────
-#
-#   _each: "DISTINCT [FROM] <Sheet>.<Column> [AS $<varname>]"
-#       RECOMMENDED — fully generic.
-#       Iterates distinct (deduplicated) values of Column from Sheet.
-#       Sets $varname to each value in the child context.
-#       Scopes Sheet's rows to the current value so that Sheet.AnyColumn
-#       lookups automatically return per-value data without extra WHERE clauses.
-#       "FROM" keyword and "AS $varname" are both optional; $item is used when omitted.
-#       Examples:
-#         _each: "DISTINCT Index.Node AS $node"
-#         _each: "DISTINCT FROM Index.CRGroup AS $cr"
-#         _each: "DISTINCT Index.Group AS $group"
-#
-#   _each: <SheetName>
-#       Iterates every row of SheetName.
-#       Inside this block, plain strings resolve as column names in the current row.
-#
-#   _each: "[<Sheet>.<Column> |] <SheetName> WHERE [<Sheet>.]FilterCol = value"
-#       Iterates rows of SheetName where FilterCol equals the resolved value.
-#       An optional "Sheet.Column" prefix before WHERE is supported as a column hint
-#       (the sheet name is extracted from it; the column hint itself is ignored).
-#       value follows the same resolution rules: $variable, Sheet.Col, column name, literal.
-#       Examples:
-#         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#         _each: "Index.Node WHERE Index.CRGroup = $cr"   # hint: iterating Node column
-#
-# ── Nested objects ────────────────────────────────────────────────────────
-#
-#   Any map without an _each key is treated as a nested object and all
-#   its keys are resolved recursively.
-#
-# ── Examples ──────────────────────────────────────────────────────────────
-#
-# Example 1 — one file per CRGroup (individual output_mode)
-#   Produces: MRF_ANNOUNCEMENT_LOADING_CR001.json, MRF_ANNOUNCEMENT_LOADING_CR002.json …
-#
-#   json_output:
-#     output_mode: individual
-#     segregate_by:
-#       sheet:  Index
-#       column: CRGroup
-#       as:     $cr
-#     data:
-#       nodeType: MRF
-#       activity: ANNOUNCEMENT_LOADING
-#       crGroup:  $cr
-#       email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-#       nodes:
-#         _each: "Index.Node WHERE Index.CRGroup = $cr"
-#         node:   Node
-#         niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
-#         tableData:
-#           _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#           INPUT_FILE:           INPUT_FILE
-#           MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-#
-# Example 2 — single file, all CRs and nodes (single output_mode)
-#   Produces: MRF_ANNOUNCEMENT_LOADING.json
-#
-#   json_output:
-#     output_mode: single
-#     data:
-#       nodeType: MRF
-#       activity: ANNOUNCEMENT_LOADING
-#       crs:
-#         _each: "DISTINCT FROM Index.CRGroup AS $cr"
-#         crGroup: $cr
-#         email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-#         nodes:
-#           _each: "Index.Node WHERE Index.CRGroup = $cr"
-#           node:   Node
-#           niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
-#           tableData:
-#             _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#             INPUT_FILE:           INPUT_FILE
-#             MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-#
-# Example 3 — one file per Node (individual output_mode, node-wise)
-#
-#   json_output:
-#     output_mode: individual
-#     segregate_by:
-#       sheet:  Index
-#       column: Node
-#       as:     $node
-#     data:
-#       nodeType: MRF
-#       node:     $node
-#       niamID:   "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-#       tableData:
-#         _each: ANNOUNCEMENT_FILES
-#         INPUT_FILE:           INPUT_FILE
-#         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-#
+# See JsonOutputSchema.yaml for the full reference and examples.
 # ---------------------------------------------------------------------------
-json_output:
-  output_mode: individual      # individual (default) | single
-
-  # Required for output_mode: individual — defines the file-splitting key
-  segregate_by:
-    sheet:  <SheetName>        # any sheet (use 'Index' for the index sheet)
-    column: <ColumnName>       # one file per distinct value of this column
-    as:     $<varname>         # variable injected into the template (default: $unit)
-
-  data:
-    <jsonKey>: <static value>              # plain string written as-is
-    <jsonKey>: <SheetName>.<ColumnName>    # first non-blank value from sheet+column
-    <jsonKey>: "<Sheet>.<Col> WHERE [<Sheet>.]<FilterCol> = $var"   # relational lookup
-    <jsonKey>: $<varname>                  # variable from segregate_by or DISTINCT
-
-    # ── Generic distinct-value array (RECOMMENDED) ─────────────────────────
-    <jsonArrayKey>:
-      _each: "DISTINCT <Sheet>.<Column> AS $<varname>"
-      <jsonKey>: $<varname>
-      <jsonKey>: <Sheet>.<Column>          # auto-scoped to current value's rows
-      <jsonKey>: "<Sheet>.<Col> WHERE <Sheet>.<FilterCol> = $<varname>"
-      <nestedArrayKey>:
-        _each: "<DataSheet> WHERE <Col> = <Sheet>.<Col>"
-        <jsonKey>: <ColumnName>
-
-    # ── Row-iteration array ─────────────────────────────────────────────────
-    <jsonArrayKey>:
-      _each: <SheetName>
-      <jsonKey>: <ColumnName>              # column name in the current row
-
-    # ── Filtered row-iteration array ───────────────────────────────────────
-    <jsonArrayKey>:
-      _each: "<SheetName> WHERE [<Sheet>.]<FilterCol> = <value>"
-      <jsonKey>: <ColumnName>
-
-    # ── Nested object (no _each) ───────────────────────────────────────────
-    <jsonObjectKey>:
-      <jsonKey>: <SheetName>.<ColumnName>
-      <jsonKey>: <static value>
-      
-# examples :-
- 
-# ---------------------------------------------------------------------------
-# JSON output template
-# ---------------------------------------------------------------------------
-# CR wise single JSON file
-#json_output:
-#  output_mode: single
-#  data:
-#    nodeType: MRF
-#    activity: ANNOUNCEMENT_LOADING
-#    crs:
-#      _each: "DISTINCT FROM Index.CRGroup As $cr"
-#      crGroup: $cr
-#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-#      nodes:
-#        _each: "Index.Node WHERE Index.CRGroup = $cr"
-#        node:   NODE
-#        niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = NODE"
-#        tableData:
-#          _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#          INPUT_FILE:           INPUT_FILE
-#          MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
- 
- 
-# CR wise individual JSON file         
-#json_output:
-#  output_mode: individual
-#  segregate_by:
-#    sheet:  Index
-#    column: CRGroup
-#    as:     $cr
-#  data:
-#    nodeType: MRF
-#    activity: ANNOUNCEMENT_LOADING
-#    crGroup:  $cr
-#    email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-#    nodes:
-#      _each: "Index.Node WHERE Index.CRGroup = $cr"
-#      node:   Node
-#      niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
-#      tableData:
-#        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#        INPUT_FILE:           INPUT_FILE
-#        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-
-# NODE wise single JSON file 
-#json_output:
-#  output_mode: single
-#  data:
-#    nodeType: MRF
-#    activity: ANNOUNCEMENT_LOADING
-#    nodes:
-#      _each: "DISTINCT Index.Node AS $node"
-#      node:    $node
-#      crGroup: Index.CRGroup
-#      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
-#      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-#      tableData:
-#        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-#        INPUT_FILE:           INPUT_FILE
-#        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

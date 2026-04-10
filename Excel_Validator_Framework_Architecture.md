@@ -26,10 +26,6 @@ com.nokia.ciq.processor
 │   ├── InMemoryExcelReader   Excel → in-memory CIQ model (Apache POI)
 │   └── InMemoryCiqDataStore  CiqDataStore implementation
 │
-├── model/
-│   ├── CRGroupIndex          CRGROUP-mode segregation JSON model
-│   └── GroupIndex            GROUP-mode segregation JSON model
-│
 └── template/
     ├── CiqTemplateGenerator  Blank .xlsx template generator
     └── CiqTemplateResult     Template generation result
@@ -49,13 +45,14 @@ com.nokia.ciq.validator
 ├── config/
 │   ├── ValidationRulesConfig Root YAML config object
 │   ├── ValidationRulesLoader YAML → config object (SnakeYAML)
+│   ├── ReportOutputConfig    report_output block (formats + filename)
 │   ├── SheetRules            Column rules + row rules for one sheet
 │   ├── ColumnRule            Per-column validation specification
 │   ├── SheetRowRule          Row-level rule (require/forbid/compare/…)
 │   ├── RowCondition          Conditional predicate (when: clause)
 │   ├── WorkbookRule          Cross-sheet workbook-level rule
 │   ├── WorkbookSettings      Sheet reading settings
-│   ├── OutputRule            Post-validation aggregate definition
+│   ├── OutputRule            Post-validation aggregate definition (distinct/count/sum/group)
 │   ├── IntRange              Min/max range for allowedRanges
 │   ├── ColumnMessages        Custom error messages per constraint
 │   ├── ConditionalRequired   requiredWhen shorthand
@@ -68,7 +65,8 @@ com.nokia.ciq.validator
 │   └── ValidationError       Single error (row, column, value, message)
 │
 ├── report/
-│   ├── HtmlReportWriter      HTML report generator
+│   ├── HtmlReportWriter      HTML report generator (built-in layout)
+│   ├── HtmlTemplateReportWriter  HTML report generator (external template)
 │   ├── ExcelReportWriter     Excel report generator
 │   └── ReportFormat          Enum: JSON | HTML | MSEXCEL
 │
@@ -100,6 +98,7 @@ com.nokia.ciq.validator
 │                          CiqProcessorMain (CLI)                         │
 │  --mode ciq-validate / ciq-generate                                     │
 │  --ciq  --node-type  --activity  --rules  --output  --mop-json-dir      │
+│  --report-template-name  --report-template-path                         │
 └───────────────────────────┬─────────────────────────────────────────────┘
                             │
                             ▼
@@ -107,10 +106,11 @@ com.nokia.ciq.validator
 │                        CiqProcessorImpl.process()                       │
 │                                                                         │
 │  ① ValidationRulesLoader.load(yaml)  →  ValidationRulesConfig          │
+│       └─ includes report_output, outputs, json_output config            │
 │                                                                         │
 │  ② InMemoryExcelReader.read(xlsx)    →  CiqDataStore                   │
 │       ├─ readNiamMapping()                                              │
-│       ├─ readIndex()  (detects mode: NODE / GROUP / CRGROUP)            │
+│       ├─ readIndex()                                                    │
 │       └─ readSheet()  per data table                                    │
 │                                                                         │
 │  ③ CiqValidationEngine.validate()   →  ValidationReport                │
@@ -119,11 +119,15 @@ com.nokia.ciq.validator
 │       └─ computeOutputs() [PASSED only]                                 │
 │                                                                         │
 │  ④ ReportWriters (JSON + HTML + Excel)                                  │
+│       ├─ base name from report_output.filename in YAML                  │
+│       └─ HTML: HtmlTemplateReportWriter (if --report-template-name)     │
+│              or HtmlReportWriter (built-in layout, default)             │
 │                                                                         │
-│  ⑤ Segregation [PASSED + --mop-json-dir]                               │
-│       ├─ NODE mode    →  segregateByChildOrder()                        │
-│       ├─ GROUP mode   →  segregateGroupBased()                          │
-│       └─ CRGROUP mode →  segregateCRGroupBased()                       │
+│  ⑤ JSON Segregation [PASSED + --mop-json-dir]                          │
+│       └─ YAML-driven via json_output block:                             │
+│            output_mode: single  →  one JSON file                        │
+│            output_mode: individual + segregate_by  →  one folder/file   │
+│                                    per distinct column value            │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -141,8 +145,22 @@ generator.
 --mode ciq-generate  →  CiqTemplateGenerator.generate()
 ```
 
+Key arguments for `ciq-validate`:
+
+| Argument | Required | Description |
+|---|---|---|
+| `--ciq` | Yes | CIQ Excel workbook |
+| `--node-type` | Yes | Node type (e.g. MRF, SBC) |
+| `--activity` | Yes | Activity name |
+| `--rules` | Yes | YAML validation rules file |
+| `--output` | Yes | Report output directory |
+| `--format` | No | `JSON,HTML,MSEXCEL` (default: all three) |
+| `--mop-json-dir` | No | MOP JSON output directory (written on PASSED only) |
+| `--report-template-name` | No | HTML report template filename |
+| `--report-template-path` | No | Directory containing the template |
+
 Prints `KEY=VALUE` parameters to stdout on completion:
-- Always: `STATUS`, `ERRORS`, `REPORT_FILENAME`
+- Always: `STATUS`, `ERRORS`
 - On PASSED: parameters declared in the `outputs:` YAML section
 
 Exit code: `0` = PASSED/SUCCESS, `1` = FAILED/ERROR.
@@ -346,6 +364,7 @@ Computed only when `status = PASSED`.  Reads aggregates directly from the in-mem
 | `distinct` | Collect non-blank values from column → sort → deduplicate → join with separator |
 | `count` | Count non-blank values in column; or count total rows when column is omitted |
 | `sum` | Parse each cell as double; accumulate; non-numeric cells are silently skipped |
+| `group` | For each distinct value of `column`, emit `<KEY>_<value>` = collected `groupBy` values joined by separator |
 
 Results are stored in `ValidationReport.parameters` and printed to stdout as `KEY=VALUE`.
 
@@ -355,77 +374,83 @@ Results are stored in `ValidationReport.parameters` and printed to stdout as `KE
 
 Runs only when `status = PASSED` and `--mop-json-dir` is provided.
 
-#### Mode: NODE (e.g. SBC)
+The segregation logic is **fully YAML-driven** via the `json_output` block in the rules file.
+`CiqProcessorImpl` reads `json_output.output_mode` and `json_output.segregate_by` to determine
+how to partition and write the output.  No segregation modes are hardcoded.
 
-Index schema: `Node | CRGroup | Tables`
+#### `output_mode: single`
 
-One folder per (Node, CRGroup) combination.
-
-```
-mop-json/
-└── {NODE}_{CRGROUP}/
-    ├── {TYPE}_{ACTIVITY}_index_{NODE}_{CRGROUP}.json     ← single NodeEntry + NIAM
-    └── {TYPE}_{ACTIVITY}_{TABLE}_{NODE}_{CRGROUP}.json   ← rows filtered to this node
-```
-
-#### Mode: GROUP (e.g. MRF without CRGROUP)
-
-Index schema: `GROUP | NODE` (no `TABLES` column)
-
-One folder per GROUP.
+One JSON file for the entire workbook.  The `data` template is evaluated once over the full
+`CiqDataStore` and written to:
 
 ```
 mop-json/
-└── {GROUP}/
-    ├── {TYPE}_{ACTIVITY}_index_{GROUP}.json              ← GroupIndex JSON
-    └── {TYPE}_{ACTIVITY}_{TABLE}_{GROUP}.json            ← rows filtered to this group
+└── {NODE_TYPE}_{ACTIVITY}.json
 ```
 
-`GroupIndex` JSON:
+#### `output_mode: individual`
+
+The `segregate_by` block specifies a sheet and column.  One folder is created per distinct
+value of that column; one JSON file is written per folder.
+
+```yaml
+segregate_by:
+  sheet:  Index
+  column: CRGroup
+  as:     $cr
+```
+
+```
+mop-json/
+├── CR1/
+│   └── {NODE_TYPE}_{ACTIVITY}_CR1.json
+└── CR2/
+    └── {NODE_TYPE}_{ACTIVITY}_CR2.json
+```
+
+The `data` template is evaluated once per segregation value, with `$cr` (or whichever `as:`
+variable is declared) bound to the current value.  All `WHERE` clauses in the template use
+this variable to filter related rows.
+
+#### JSON structure
+
+Defined entirely by the `data:` block in the YAML.  Example:
+
+```yaml
+json_output:
+  output_mode: single
+  data:
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
+
+Produces:
+
 ```json
 {
   "nodeType": "MRF",
   "activity": "ANNOUNCEMENT_LOADING",
-  "group": "A",
-  "nodes": ["MRF1", "MRF2"],
-  "tables": ["ANNOUNCEMENT_FILES"],
-  "niamMapping": { "MRF1": "...", "MRF2": "..." },
-  "groupHomogeneous": true
-}
-```
-
-#### Mode: CRGROUP (e.g. MRF with CR maintenance windows)
-
-Index schema: `GROUP | CRGROUP | NODE`
-
-One folder per CRGROUP.  Table data is **embedded** in the index file (no separate table files).
-
-```
-mop-json/
-└── {CRGROUP}/
-    └── {TYPE}_{ACTIVITY}_index_{CRGROUP}.json            ← CRGroupIndex JSON (self-contained)
-```
-
-`CRGroupIndex` JSON:
-```json
-{
-  "nodeType": "MRF",
-  "activity": "ANNOUNCEMENT_LOADING",
-  "crGroup": "CR1",
-  "email": "engineer@nokia.com",
-  "groups": [
+  "nodes": [
     {
-      "group": "GRP1",
-      "nodes": ["MRF1", "MRF2"],
-      "niamMapping": { "MRF1": "...", "MRF2": "..." },
-      "tableData": {
-        "ANNOUNCEMENT_FILES": [
-          { "GROUP": "GRP1", "INPUT_FILE": "audio.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/" }
-        ]
-      }
+      "node": "MRF1",
+      "crGroup": "CR1",
+      "email": "engineer@nokia.com",
+      "niamID": "RJ-NOKIA-MRF-RJJVRMR01-CLI",
+      "tableData": [
+        { "INPUT_FILE": "audio.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/" }
+      ]
     }
-  ],
-  "allNodes": ["MRF1", "MRF2"]
+  ]
 }
 ```
 
@@ -452,23 +477,29 @@ etc.  This sheet is informational and is not read or validated by the processor.
 
 ---
 
-## 5. Index Mode Detection
+## 5. Index Sheet
 
-`InMemoryExcelReader.readIndex()` inspects the column headers of the `Index` sheet to select
-a processing mode:
+`InMemoryExcelReader.readIndex()` reads the `Index` sheet into the `CiqDataStore`.  The exact
+column structure of the Index sheet is defined in the YAML rules file under `sheets.Index`.
 
-| Columns present | Mode | Description |
-|---|---|---|
-| `Node` + `CRGroup` + `Tables` | **NODE** | Traditional per-node segregation |
-| `GROUP` + `CRGROUP` + `NODE` | **CRGROUP** | Group-level CR maintenance windows |
-| `GROUP` + `NODE` (no `TABLES`) | **GROUP** | Simple group-to-node mapping |
-| None of the above | **No-Index fallback** | Index validation skipped |
+The processor does not enforce a fixed set of column names on the Index sheet.  Any column
+structure can be validated — required columns, patterns, and cross-sheet references are all
+declared in YAML.
 
-Mode affects:
-- How the Index sheet is parsed
-- Which segregation method is called (`segregateByChildOrder`, `segregateGroupBased`,
-  `segregateCRGroupBased`)
-- Which JSON model class is used (`NodeEntry`, `GroupIndex`, `CRGroupIndex`)
+The `json_output.segregate_by` block in the YAML rules controls how the Index data is used
+for JSON output segregation:
+
+```yaml
+json_output:
+  output_mode: individual
+  segregate_by:
+    sheet:  Index
+    column: CRGroup    # any column in any sheet
+    as:     $cr
+```
+
+There are no hardcoded Index modes (NODE / GROUP / CRGROUP) in the processor code.
+All structural assumptions are expressed in the YAML rules file.
 
 ---
 
@@ -536,14 +567,10 @@ different teams.
 |---|---|
 | Rules file | `{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml` |
 | CIQ template | `{NODE_TYPE}_{ACTIVITY}_CIQ.xlsx` |
-| Validation report | `{NODE_TYPE}_{ACTIVITY}_VALIDATION_REPORT.{json\|html\|xlsx}` |
-| NODE segregation folder | `{NODE}_{CRGROUP}/` |
-| NODE index file | `{TYPE}_{ACTIVITY}_index_{NODE}_{CRGROUP}.json` |
-| NODE table file | `{TYPE}_{ACTIVITY}_{TABLE}_{NODE}_{CRGROUP}.json` |
-| GROUP segregation folder | `{GROUP}/` |
-| GROUP index file | `{TYPE}_{ACTIVITY}_index_{GROUP}.json` |
-| CRGROUP segregation folder | `{CRGROUP}/` |
-| CRGROUP index file | `{TYPE}_{ACTIVITY}_index_{CRGROUP}.json` |
+| Validation report | Configured in `report_output.filename` in YAML; default: `{NODE_TYPE}_{ACTIVITY}_VALIDATION_REPORT.{json\|html\|xlsx}` |
+| HTML report template | Any `.html` file — passed via `--report-template-name` / `--report-template-path` |
+| MOP JSON (`output_mode: single`) | `{NODE_TYPE}_{ACTIVITY}.json` inside `--mop-json-dir` |
+| MOP JSON (`output_mode: individual`) | `{NODE_TYPE}_{ACTIVITY}_{VALUE}.json` inside `--mop-json-dir/{VALUE}/` |
 
 ---
 
@@ -584,11 +611,13 @@ different teams.
                                   │                      │
                           ┌───────┼──────────────────────▼──────────┐
                           │       │      Report Writers               │
-                          │       │  JSON / HTML / Excel              │
+                          │       │  JSON / Excel /                   │
+                          │       │  HtmlReportWriter (built-in)      │
+                          │       │  HtmlTemplateReportWriter (tmpl)  │
                           │       └───────────────────────────────────┘
                           │
                           └────────────────────────────────────────────►
-                                       Segregation
-                                  (NODE / GROUP / CRGROUP)
+                                       JSON Segregation
+                                  (YAML-driven via json_output)
                                        mop-json/
 ```

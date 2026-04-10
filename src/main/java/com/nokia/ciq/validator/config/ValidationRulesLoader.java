@@ -10,7 +10,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Loads a {@link ValidationRulesConfig} from a YAML file.
@@ -59,8 +58,6 @@ public class ValidationRulesLoader {
                 "getWorkbookRules", "setWorkbookRules", WorkbookRule.class);
         rootDesc.substituteProperty("node_id_config", NodeIdConfig.class,
                 "getNodeIdConfig", "setNodeIdConfig");
-        rootDesc.substituteProperty("json_output", Map.class,
-                "getJsonOutput", "setJsonOutput");
         rootDesc.substituteProperty("report_output", ReportOutputConfig.class,
                 "getReportOutput", "setReportOutput");
         constructor.addTypeDescription(rootDesc);

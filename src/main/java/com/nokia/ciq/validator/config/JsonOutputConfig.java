@@ -7,7 +7,7 @@ import java.util.Map;
  * Root configuration for the {@code json_output:} YAML section.
  *
  * <p>Controls the structure of the single MOP JSON file written per segregation unit
- * (one file per CR / Group / Node) when validation PASSES and {@code --mop-json-dir}
+ * (one file per CR / Group / Node) when validation PASSES and {@code --json-output-dir}
  * is provided.
  *
  * <p>When this section is absent, existing default behaviour is preserved (CiqSheet files

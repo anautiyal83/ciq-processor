@@ -22,7 +22,11 @@ validators:             ← registry of custom Java validator plug-ins
 
 sheets:                 ← per-sheet column definitions and row rules
 
+report_output:          ← validation report naming and output formats
+
 outputs:                ← post-validation aggregates (computed only on PASSED)
+
+json_output:            ← MOP JSON structure template and segregation config
 ```
 
 ---
@@ -453,7 +457,28 @@ Values (or composite keys across multiple columns) must not appear more than onc
 
 ---
 
-## 6. Post-Validation Outputs (`outputs:`)
+## 6. Validation Report Output (`report_output:`)
+
+Controls the base file name and formats for the generated validation report files.
+
+```yaml
+report_output:
+  formats:  [JSON, HTML, MSEXCEL]                          # one or more
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"      # {nodeType} and {activity} are substituted
+```
+
+`{nodeType}` and `{activity}` are substituted from the `--node-type` and `--activity` CLI arguments.
+When `report_output` is absent, all three formats are written and the filename defaults to
+`{nodeType}_{activity}_VALIDATION_REPORT`.
+
+> **HTML template:** The HTML report file is rendered with a built-in layout by default.  Passing
+> `--report-template-name` (and optionally `--report-template-path`) on the CLI switches to an
+> external template file.  Template location is always a CLI parameter — it is **not** part of
+> `report_output` in the YAML.
+
+---
+
+## 7. Post-Validation Outputs (`outputs:`)
 
 Computed **only when validation PASSES**.  Each entry is added to the validation report's
 `parameters` map and printed to stdout as `KEY=VALUE`.
@@ -463,18 +488,30 @@ outputs:
   <YAML_KEY>:
     name: <PARAM_NAME>     # optional — overrides YAML_KEY as the emitted parameter name
     sheet: <SheetName>     # required
-    column: <ColumnName>   # required for distinct and sum; optional for count
-    aggregate: distinct    # distinct | count | sum
-    separator: ","         # for distinct only; default ","
+    column: <ColumnName>   # required for distinct, sum, and group; optional for count
+    aggregate: distinct    # distinct | count | sum | group
+    separator: ","         # for distinct and group; default ","
+    groupBy: <ColumnName>  # required for group aggregate — column whose values are collected per group
 ```
 
 ### Aggregates
 
-| Aggregate | Column required | Description |
-|---|---|---|
-| `distinct` | Yes | Sorted, deduplicated non-blank values joined by `separator` |
-| `count` | No | Count of non-blank values when `column` given; total row count otherwise |
-| `sum` | Yes | Numeric sum of `column` values; non-numeric cells silently skipped |
+| Aggregate | Column required | `groupBy` required | Description |
+|---|---|---|---|
+| `distinct` | Yes | No | Sorted, deduplicated non-blank values joined by `separator` |
+| `count` | No | No | Count of non-blank values when `column` given; total row count otherwise |
+| `sum` | Yes | No | Numeric sum of `column` values; non-numeric cells silently skipped |
+| `group` | Yes | Yes | For each distinct value of `column`, emit `<KEY>_<value>=<groupBy values>` |
+
+### `group` aggregate detail
+
+For each distinct non-blank value of `column`, one parameter is emitted:
+
+```
+<YAML_KEY>_<columnValue>=<comma-separated groupBy values>
+```
+
+Example: `column: CRGroup`, `groupBy: Node` → emits `NODES_CR1=MRF1,MRF2` and `NODES_CR2=MRF3`.
 
 ### Examples
 
@@ -510,6 +547,14 @@ outputs:
     sheet: Index
     column: Node
     aggregate: distinct
+
+  # Group aggregate → NODES_CR1=MRF1,MRF2   NODES_CR2=MRF3,MRF4
+  NODES:
+    sheet:     Index
+    column:    CRGroup
+    aggregate: group
+    groupBy:   Node
+    separator: ","
 ```
 
 > `REPORT_FILENAME` is always emitted regardless of the `outputs:` section.
@@ -517,7 +562,147 @@ outputs:
 
 ---
 
-## 7. Complete Annotated Example
+## 8. JSON Output Template (`json_output:`)
+
+Defines the structure of the MOP JSON file(s) written when validation passes and
+`--mop-json-dir` is provided.
+
+```yaml
+json_output:
+  output_mode: single          # single | individual
+
+  segregate_by:                # required when output_mode: individual
+    sheet:  Index
+    column: CRGroup
+    as:     $cr                # variable available in data template
+
+  data:                        # free-form YAML template
+    <key>: <value>
+    <key>:
+      _each: "<directive>"
+      <key>: <value>
+```
+
+### `output_mode`
+
+| Value | Output |
+|---|---|
+| `single` | One JSON file for the entire workbook: `{NODE_TYPE}_{ACTIVITY}.json` |
+| `individual` | One folder per distinct `segregate_by` value, one JSON file per folder |
+
+### `_each` directive
+
+| Syntax | Meaning |
+|---|---|
+| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One array element per distinct column value |
+| `_each: <SheetName>` | One array element per row of the sheet |
+| `_each: "<Sheet> WHERE <Col> = <value>"` | One array element per matching row |
+
+### Scalar value expressions
+
+| Syntax | Meaning |
+|---|---|
+| `key: $var` | Inline variable (from enclosing `_each` or `segregate_by`) |
+| `key: <Sheet>.<Column>` | First non-blank value from that sheet+column in the current scope |
+| `key: "<Sheet>.<Col> WHERE <Sheet>.<Filter> = $var"` | First value where filter matches |
+
+### Example
+
+```yaml
+json_output:
+  output_mode: single
+  data:
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
+
+**Output:**
+
+```json
+{
+  "nodeType": "MRF",
+  "activity": "ANNOUNCEMENT_LOADING",
+  "nodes": [
+    {
+      "node": "MRF1",
+      "crGroup": "CR1",
+      "email": "engineer@nokia.com",
+      "niamID": "RJ-NOKIA-MRF-RJJVRMR01-CLI",
+      "tableData": [
+        { "INPUT_FILE": "audio.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/" }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 9. HTML Report Template
+
+The HTML report is rendered from an external template file when `--report-template-name` is
+passed on the CLI.  The template is a plain HTML file with `{{placeholder}}` substitution.
+
+### Scalar placeholders
+
+| Placeholder | Value |
+|---|---|
+| `{{status}}` | `PASSED` or `FAILED` |
+| `{{nodeType}}` | Node type |
+| `{{activity}}` | Activity name |
+| `{{totalErrors}}` | Total error count |
+| `{{sheetsCount}}` | Number of sheets checked |
+| `{{passedSheets}}` | Sheets with no errors |
+| `{{failedSheets}}` | Sheets with errors |
+| `{{totalRows}}` | Total data rows checked |
+| `{{generatedAt}}` | Timestamp |
+| `{{params.KEY}}` | Any parameter from the `outputs:` section |
+
+### Section blocks
+
+| Block | Repeats for |
+|---|---|
+| `{{#sheets}}...{{/sheets}}` | Each sheet result |
+| `{{#errors}}...{{/errors}}` | Each error within a sheet |
+| `{{#globalErrors}}...{{/globalErrors}}` | Global (Index-level) errors |
+| `{{#parameters}}...{{/parameters}}` | Each output parameter |
+
+### Per-sheet placeholders (inside `{{#sheets}}`)
+
+| Placeholder | Value |
+|---|---|
+| `{{sheetName}}` | Sheet name |
+| `{{sheetStatus}}` | `PASS` or `FAIL` |
+| `{{rowsChecked}}` | Number of rows checked |
+| `{{errorCount}}` | Number of errors |
+| `{{sheetHeaderClass}}` | CSS class for the header (`pass-header` or `fail-header`) |
+| `{{sheetBadgeClass}}` | CSS class for the badge (`badge-pass` or `badge-fail`) |
+| `{{sheetPassMsg}}` | Message shown when sheet passes |
+| `{{sheetErrorTableStyle}}` | `display:none` when sheet has no errors |
+
+### Conditionals
+
+| Block | Renders when |
+|---|---|
+| `{{#if_passed}}...{{/if_passed}}` | Status is PASSED |
+| `{{#if_failed}}...{{/if_failed}}` | Status is FAILED |
+
+A ready-to-use template with full styling is provided at
+`src/main/resources/validation-report-template.html`.
+
+---
+
+## 10. Complete Annotated Example
 
 ```yaml
 version: "1.0"
@@ -613,6 +798,11 @@ sheets:
         multi: true
         description: "Responsible engineer email (comma-separated for multiple)"
 
+# ── Validation report output ──────────────────────────────────────────────────
+report_output:
+  formats:  [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
+
 # ── Post-validation outputs ───────────────────────────────────────────────────
 outputs:
   CR_LIST:
@@ -624,17 +814,33 @@ outputs:
   CR_COUNT:
     sheet: Index
     aggregate: count
+
+# ── MOP JSON output template ──────────────────────────────────────────────────
+json_output:
+  output_mode: single
+  data:
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 ```
 
 ---
 
-## 8. Validation Flow Summary
+## 11. Validation Flow Summary
 
 ```
 1. Load YAML rules file
 2. Read Excel workbook into memory
-   ├── Identify Index sheet (determines mode: NODE / CRGROUP)
-   ├── Read each data sheet listed in the rules
+   ├── Read Index sheet and all sheets declared in rules
    └── Read auxiliary sheets (Node_Details, USER_ID, etc.)
 3. Validate each sheet
    ├── Sheet presence check (required: true)
@@ -643,13 +849,13 @@ outputs:
    └── Per-row rule evaluation (require, forbid, compare, one_of, …)
 4. Workbook-level rules (subset, superset, match, unique)
 5. Produce ValidationReport
-   ├── PASSED → compute outputs:, write JSON + HTML + Excel reports, segregate MOP JSON
+   ├── PASSED → compute outputs:, write reports (JSON/HTML/Excel per report_output), segregate MOP JSON per json_output
    └── FAILED → write report only (no MOP JSON written)
 ```
 
 ---
 
-## 9. Error Message Customisation
+## 12. Error Message Customisation
 
 Every column and rule type surfaces a `messages:` map where individual error keys can be
 overridden.  Unspecified keys fall back to the engine default.
@@ -670,7 +876,7 @@ columns:
 
 ---
 
-## 10. Design Constraints and Conventions
+## 13. Design Constraints and Conventions
 
 | Convention | Detail |
 |---|---|

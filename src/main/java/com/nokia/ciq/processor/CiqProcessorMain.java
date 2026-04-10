@@ -15,20 +15,22 @@ import java.io.IOException;
  * <h2>Usage</h2>
  * <pre>
  *   java -jar ciq-processor-1.0.0-cli.jar \
- *     --ciq           &lt;ciq-file.xlsx&gt;                          [required] \
- *     --node-type     &lt;e.g. SBC | MRF&gt;                         [required] \
- *     --activity      &lt;e.g. FIXED_LINE_CONFIGURATION&gt;          [required] \
- *     --rules         &lt;NODE_TYPE_ACTIVITY_validation-rules.yaml&gt; [required] \
- *     --output        &lt;report-output-dir&gt;                       [required] \
- *     [--format                JSON,HTML,MSEXCEL]               [optional] \
- *     [--mop-json-dir          &lt;json-output-dir&gt;]               [optional] \
- *     [--report-template-name  &lt;template-filename&gt;]             [optional] \
- *     [--report-template-path  &lt;template-directory&gt;]            [optional]
+ *     --ciq           &lt;ciq-file.xlsx&gt;                                [required] \
+ *     --node-type     &lt;e.g. SBC | MRF&gt;                               [required] \
+ *     --activity      &lt;e.g. FIXED_LINE_CONFIGURATION&gt;                [required] \
+ *     --rules         &lt;NODE_TYPE_ACTIVITY_validation-rules.yaml&gt;     [required] \
+ *     --output        &lt;report-output-dir&gt;                             [required] \
+ *     [--format                JSON,HTML,MSEXCEL]                     [optional] \
+ *     [--json-output-dir       &lt;json-output-dir&gt;]                     [optional] \
+ *     [--json-output-config-file &lt;NODE_TYPE_ACTIVITY_json-output.yaml&gt;] [optional] \
+ *     [--report-template-name  &lt;template-filename&gt;]                   [optional] \
+ *     [--report-template-path  &lt;template-directory&gt;]                  [optional]
  * </pre>
  *
- * <h2>JSON Output (--mop-json-dir)</h2>
- * <p>When {@code json_output} is defined in the rules YAML the processor writes one or more
- * structured JSON files into {@code --mop-json-dir}.  Two output modes are supported:
+ * <h2>JSON Output (--json-output-dir + --json-output-config-file)</h2>
+ * <p>When both {@code --json-output-dir} and {@code --json-output-config-file} are provided the processor
+ * writes one or more structured JSON files into {@code --json-output-dir} according to the
+ * template defined in the json-output config file.  Two output modes are supported:
  *
  * <h3>output_mode: individual</h3>
  * <p>One JSON file per segregation unit (CR / group / node).  The grouping is auto-detected
@@ -60,14 +62,41 @@ import java.io.IOException;
  * See {@code Schema.yaml} for the full reference and examples.
  *
  * <h2>Validation Report Files</h2>
- * <p>Written to {@code --output}.  Base name:
- * {@code <NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT}
- * <p>One file per requested format; default is all three:
+ * <p>Written to {@code --output}.  Base name controlled by {@code report_output.filename}
+ * in the rules YAML (defaults to {@code <NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT}).
+ * One file per requested format; default is all three:
  * <pre>
  *   MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.json
  *   MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.html
  *   MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT.xlsx
  * </pre>
+ *
+ * <h2>HTML Report Template (--report-template-name / --report-template-path)</h2>
+ * <p>By default the HTML report uses a built-in hardcoded layout.  Passing both
+ * {@code --report-template-name} and {@code --report-template-path} switches to
+ * an external template file rendered by {@code HtmlTemplateReportWriter}.
+ *
+ * <p>The template is a plain HTML file with the following placeholder syntax:
+ * <pre>
+ *   Scalars  : {{status}} {{nodeType}} {{activity}} {{totalErrors}}
+ *              {{sheetsCount}} {{passedSheets}} {{failedSheets}}
+ *              {{totalRows}} {{generatedAt}} {{params.KEY}}
+ *
+ *   Sections : {{#sheets}}...{{/sheets}}
+ *                  {{sheetName}} {{sheetStatus}} {{rowsChecked}} {{errorCount}}
+ *                  {{sheetHeaderClass}} {{sheetBadgeClass}} {{sheetPassMsg}}
+ *                  {{sheetErrorTableStyle}}
+ *                  {{#errors}}...{{/errors}}
+ *                      {{rowNumber}} {{column}} {{value}} {{message}}
+ *
+ *              {{#globalErrors}}{{message}}{{/globalErrors}}
+ *              {{#parameters}}{{key}} {{value}}{{/parameters}}
+ *
+ *   Conditionals: {{#if_passed}}...{{/if_passed}}
+ *                 {{#if_failed}}...{{/if_failed}}
+ * </pre>
+ * <p>A ready-to-use default template is provided at
+ * {@code src/main/resources/validation-report-template.html}.
  *
  * <h2>Output Parameters (printed to stdout when validation PASSES)</h2>
  * <pre>
@@ -97,7 +126,8 @@ public class CiqProcessorMain {
         String rulesFilePath        = null;
         String output               = null;
         String formatCsv            = null;
-        String mopJsonDir           = null;
+        String jsonOutputDir        = null;
+        String jsonOutputConfig     = null;
         String reportTemplateName   = null;
         String reportTemplatePath   = null;
 
@@ -110,7 +140,8 @@ public class CiqProcessorMain {
                 case "--rules":                  if (i + 1 < args.length) rulesFilePath      = args[++i]; break;
                 case "--output":                 if (i + 1 < args.length) output             = args[++i]; break;
                 case "--format":                 if (i + 1 < args.length) formatCsv          = args[++i]; break;
-                case "--mop-json-dir":           if (i + 1 < args.length) mopJsonDir         = args[++i]; break;
+                case "--json-output-dir":        if (i + 1 < args.length) jsonOutputDir      = args[++i]; break;
+                case "--json-output-config-file": if (i + 1 < args.length) jsonOutputConfig  = args[++i]; break;
                 case "--report-template-name":   if (i + 1 < args.length) reportTemplateName = args[++i]; break;
                 case "--report-template-path":   if (i + 1 < args.length) reportTemplatePath = args[++i]; break;
                 case "--help": case "-h": printUsage(); return 0;
@@ -125,7 +156,7 @@ public class CiqProcessorMain {
             return runGenerate(nodeType, activity, rulesFilePath, output);
         } else if ("ciq-validate".equalsIgnoreCase(mode)) {
             return runValidate(ciqFilePath, nodeType, activity, rulesFilePath,
-                               output, formatCsv, mopJsonDir,
+                               output, formatCsv, jsonOutputDir, jsonOutputConfig,
                                reportTemplateName, reportTemplatePath);
         } else {
             System.err.println("Error: unknown --mode '" + mode
@@ -141,7 +172,7 @@ public class CiqProcessorMain {
 
     private static int runValidate(String ciqFilePath, String nodeType, String activity,
                                    String rulesFilePath, String outputDir,
-                                   String formatCsv, String mopJsonDir,
+                                   String formatCsv, String jsonOutputDir, String jsonOutputConfig,
                                    String reportTemplateName, String reportTemplatePath) {
 
         if (ciqFilePath == null || nodeType == null || activity == null
@@ -156,7 +187,7 @@ public class CiqProcessorMain {
             ValidationReport report = new CiqProcessorImpl().process(
                     ciqFilePath, nodeType, activity,
                     rulesFilePath, outputDir,
-                    formatCsv, mopJsonDir,
+                    formatCsv, jsonOutputDir, jsonOutputConfig,
                     reportTemplateName, reportTemplatePath);
 
             System.out.println("STATUS=" + report.getStatus());
@@ -210,7 +241,8 @@ public class CiqProcessorMain {
         System.out.println("  --rules                  <file>   YAML validation-rules file                     [required]");
         System.out.println("  --output                 <dir>    Output directory for validation reports        [required]");
         System.out.println("  --format                 <csv>    JSON,HTML,MSEXCEL (default: all three)         [optional]");
-        System.out.println("  --mop-json-dir           <dir>    JSON output dir for MOP generation             [optional]");
+        System.out.println("  --json-output-dir        <dir>    JSON output dir for MOP generation             [optional]");
+        System.out.println("  --json-output-config-file <file>  JSON output config (*_json-output.yaml)        [optional]");
         System.out.println("  --report-template-name   <file>   HTML report template filename                  [optional]");
         System.out.println("  --report-template-path   <dir>    Directory containing the HTML report template  [optional]");
         System.out.println("  Report name is auto-generated: <NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT");

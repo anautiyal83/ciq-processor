@@ -106,9 +106,12 @@ java -jar ciq-processor-1.0.0-cli.jar --mode <mode> [options]
 | `--rules <file>` | Yes | Path to the YAML validation rules file |
 | `--output <dir>` | Yes | Directory for validation report files |
 | `--format <csv>` | No | `JSON,HTML,MSEXCEL` — default: all three |
-| `--mop-json-dir <dir>` | No | Write per-CR/group JSON here on PASSED |
+| `--mop-json-dir <dir>` | No | Write MOP JSON here on PASSED (segregated per `json_output.segregate_by`) |
+| `--report-template-name <file>` | No | HTML report template filename (enables template-based HTML) |
+| `--report-template-path <dir>` | No | Directory containing the HTML report template |
 
-Report file name is auto-generated: **`<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT`**
+Report file name is configured in `report_output.filename` in the rules YAML
+(default: **`<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT`**)
 
 ### Mode: ciq-generate
 
@@ -182,78 +185,42 @@ CR_COUNT=2
 
 ---
 
-### CRGROUP mode (e.g. MRF — Announcement Loading)
+### CIQ sheet structure
 
-Used when nodes are organized into change requests (CRs). Each CR represents a maintenance window.
+The exact sheet and column layout depends on the YAML rules file for the node type and activity.
+The processor does not enforce a fixed set of sheet names — all sheet names, column names, and
+their relationships are declared in the YAML.
 
-#### Index sheet
+#### Example — Index sheet (MRF — mapped by CRGroup)
 
-| GROUP | CRGROUP | NODE |
+| Node | CRGroup | Tables |
 |---|---|---|
-| GRP1 | CR1 | MRF1 |
-| GRP1 | CR1 | MRF2 |
-| GRP2 | CR1 | MRF3 |
-| GRP2 | CR2 | MRF4 |
+| MRF1 | CR1 | ANNOUNCEMENT_FILES |
+| MRF2 | CR1 | ANNOUNCEMENT_FILES |
+| MRF3 | CR2 | ANNOUNCEMENT_FILES |
 
-- **GROUP** — logical group name. All nodes in a GROUP receive the same configuration rows from data sheets.
-- **CRGROUP** — CR number / change window. Nodes in the same CRGROUP are executed together.
-- A GROUP can appear under multiple CRGROUPs.
+#### Example — data sheet (ANNOUNCEMENT_FILES)
 
-#### Data sheets
+| GROUP | INPUT_FILE | MRF_DESTINATION_PATH |
+|---|---|---|
+| GRP1 | audio1.tar | /var/opt/clips/raj/ |
+| GRP2 | audio3.tar | /var/opt/clips/mum/ |
 
-Use a `GROUP` column (not `NODE`) to associate rows with a group:
-
-| GROUP | Action | INPUT_FILE | MRF_DESTINATION_PATH |
-|---|---|---|---|
-| GRP1 | CREATE | audio1.tar | /var/opt/clips/raj/ |
-| GRP2 | CREATE | audio3.tar | /var/opt/clips/mum/ |
-
-#### Node_Details sheet
+#### Example — Node_Details sheet
 
 | Node_Name | NIAM NAME |
 |---|---|
 | MRF1 | RJ-NOKIA-MRF-RJJVRMR01-CLI |
 | MRF2 | RJ-NOKIA-MRF-RJJVRMR02-CLI |
 
-#### User_ID sheet
+#### Example — User_ID sheet
 
-| CRGROUP | EMAIL |
+| CRGroup | EMAIL |
 |---|---|
 | CR1 | engineer1@nokia.com |
 | CR2 | engineer2@nokia.com |
 
-- One row per CR.
 - EMAIL supports comma-separated multiple addresses: `engineer1@nokia.com,manager@nokia.com`
-- The email is embedded in the output JSON for notification by the MOP generator.
-
----
-
-### NODE mode (e.g. SBC — Fixed Line Configuration)
-
-Used when each node has its own individual configuration rows.
-
-#### Index sheet
-
-| Node | CRGroup | Tables |
-|---|---|---|
-| SBC-1 | CR1 | CRFTargetList,ServiceProfileTable |
-| SBC-2 | CR1 | CRFTargetList |
-
-#### Data sheets
-
-Use a `Node` column to associate rows with a specific node:
-
-| Node | Action | ID | NAME |
-|---|---|---|---|
-| SBC-1 | CREATE | 1 | Target-A |
-| SBC-2 | CREATE | 1 | Target-B |
-
-#### Node_ID sheet
-
-| Node | NIAM_ID |
-|---|---|
-| SBC-1 | sbc1-neid |
-| SBC-2 | sbc2-neid |
 
 ---
 
@@ -285,15 +252,28 @@ Every generated template includes a **`Column_Guide`** sheet as the last tab. Us
 
 ## Validation Reports
 
-After running `ciq-validate`, report files are written to `--output` with the fixed base name:
-
-**`<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT`**
+After running `ciq-validate`, report files are written to `--output` with base name controlled
+by `report_output.filename` in the rules YAML (default: **`<NODE_TYPE>_<ACTIVITY>_VALIDATION_REPORT`**):
 
 | Format | File | Best for |
 |---|---|---|
 | HTML | `..._VALIDATION_REPORT.html` | Sharing with users — colour-coded, readable in any browser |
 | Excel | `..._VALIDATION_REPORT.xlsx` | Reviewing errors in a spreadsheet |
 | JSON | `..._VALIDATION_REPORT.json` | Automated processing / CI pipelines |
+
+### HTML report template
+
+By default the HTML report uses a built-in layout.  To use an external template, pass:
+
+```bash
+--report-template-name  validation-report-template.html \
+--report-template-path  src/main/resources
+```
+
+The template uses `{{placeholder}}` substitution and `{{#section}}...{{/section}}` loops.
+A ready-to-use template is provided at `src/main/resources/validation-report-template.html`.
+
+If only `--report-template-name` is given (no path), the name is treated as a full file path.
 
 ### Reading the HTML report
 
@@ -304,9 +284,45 @@ After running `ciq-validate`, report files are written to `--output` with the fi
 
 ## MOP JSON Output
 
-When `--mop-json-dir` is provided and validation **PASSES**, data is written into subfolders for the MOP generator.
+When `--mop-json-dir` is provided and validation **PASSES**, data is written in the structure
+defined by `json_output` in the rules YAML.  The layout is fully YAML-driven — there are no
+hardcoded modes.
 
-### CRGROUP mode — one folder per CR, one JSON file per folder
+### `json_output` in the rules YAML
+
+```yaml
+json_output:
+  output_mode: single          # single | individual
+  segregate_by:                # required for output_mode: individual
+    sheet:  Index
+    column: CRGroup
+    as:     $cr
+  data:
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
+
+### `output_mode: single` — one JSON file for the entire workbook
+
+```
+mop-json/
+└── MRF_ANNOUNCEMENT_LOADING.json
+```
+
+### `output_mode: individual` — one folder per segregation value
+
+Segregation key is the column specified in `segregate_by`.  For example, segregating by
+`Index.CRGroup`:
 
 ```
 mop-json/
@@ -316,46 +332,23 @@ mop-json/
     └── MRF_ANNOUNCEMENT_LOADING_CR2.json
 ```
 
-Each JSON file contains:
-- CR number and responsible user email
-- For each GROUP: node list, NIAM ID mapping, and all configuration rows from every data sheet
+The JSON structure in each file is exactly what the `data:` template produces for that
+segregation value.
 
-```json
-{
-  "nodeType": "MRF",
-  "activity": "ANNOUNCEMENT_LOADING",
-  "crGroup": "CR1",
-  "email": "engineer1@nokia.com",
-  "groups": [
-    {
-      "group": "GRP1",
-      "nodes": ["MRF1", "MRF2"],
-      "niamMapping": {
-        "MRF1": "RJ-NOKIA-MRF-RJJVRMR01-CLI",
-        "MRF2": "RJ-NOKIA-MRF-RJJVRMR02-CLI"
-      },
-      "tableData": {
-        "ANNOUNCEMENT_FILES": [
-          { "GROUP": "GRP1", "INPUT_FILE": "audio1.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/raj/" }
-        ]
-      }
-    }
-  ],
-  "allNodes": ["MRF1", "MRF2"]
-}
-```
+### `_each` directive — iterating rows
 
-### NODE mode — one folder per node+CR combination
+| Syntax | What it produces |
+|---|---|
+| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One element per distinct column value |
+| `_each: <SheetName>` | One element per row of the sheet |
+| `_each: "<Sheet> WHERE <Col> = <value>"` | One element per matching row |
 
-```
-mop-json/
-├── SBC-1_CR1/
-│   ├── SBC_FIXED_LINE_CONFIGURATION_index_SBC-1_CR1.json
-│   └── SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_SBC-1_CR1.json
-└── SBC-2_CR1/
-    ├── SBC_FIXED_LINE_CONFIGURATION_index_SBC-2_CR1.json
-    └── SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_SBC-2_CR1.json
-```
+### Relational lookups
+
+| Syntax | What it produces |
+|---|---|
+| `key: "<Sheet>.<Col> WHERE <Sheet>.<Filter> = $var"` | First value where filter matches |
+| `key: <Sheet>.<Column>` | First non-blank value scoped to current iteration |
 
 ---
 
@@ -466,6 +459,21 @@ The `outputs:` section declares values to extract from the validated data and em
 | `distinct` | Sorted, deduplicated non-blank values joined by `separator` | `CR1,CR2,CR3` |
 | `count` | Count of non-blank values in `column`; or total row count when `column` is omitted | `6` |
 | `sum` | Numeric sum of `column` values; non-numeric cells are ignored | `1024` |
+| `group` | For each distinct value of `column`, emit a separate `<PARAM>_<value>` parameter listing values from `groupBy` | `NODES_CR1=MRF1,MRF2` |
+
+For the `group` aggregate, the `groupBy` field names the column whose values are collected
+per group:
+
+```yaml
+outputs:
+  NODES:
+    sheet:     Index
+    column:    CRGroup      # one parameter per distinct CRGroup
+    aggregate: group
+    groupBy:   Node         # collect Node values for each CRGroup
+    separator: ","
+# Emits: NODES_CR1=MRF1,MRF2   NODES_CR2=MRF3,MRF4
+```
 
 #### Example
 
@@ -501,6 +509,14 @@ outputs:
     sheet: Index
     column: Node
     aggregate: distinct
+
+  # Group aggregate → emitted as NODES_CR1=MRF1,MRF2  NODES_CR2=MRF3
+  NODES:
+    sheet:     Index
+    column:    CRGroup
+    aggregate: group
+    groupBy:   Node
+    separator: ","
 ```
 
 > **Note:** `REPORT_FILENAME` is always emitted regardless of the `outputs:` section. All other parameters on PASSED require an explicit `outputs:` entry.
@@ -509,67 +525,87 @@ outputs:
 
 ### JSON Output Structure (`json_output:`)
 
-When `json_output:` is configured, each segregation unit (CR / Group / Node) produces a **single structured JSON file** whose shape is defined entirely in the YAML rules file. When absent, the default CiqSheet / index format is used.
+The `json_output:` block defines the complete shape of the output JSON using a free-form YAML
+template.  The template is evaluated by `JsonTemplateEvaluator` which supports iteration,
+relational lookups, and variable substitution.
 
-#### Fields
-
-| Field | Description |
-|---|---|
-| `fields` | Map of JSON key → `SheetName.ColumnName`. Emits the first non-blank value from the filtered rows of that sheet+column as a scalar string |
-| `rows` | Map of JSON array key → row-array config. Emits all filtered rows from the specified sheet as an array of objects |
-
-Each `rows` entry has:
+#### Top-level fields
 
 | Field | Description |
 |---|---|
-| `sheet` | Source sheet name |
-| `fields` | Map of JSON key → column name within that sheet |
+| `output_mode` | `single` — one JSON file for the workbook; `individual` — one file per segregation value |
+| `segregate_by` | Required for `individual` mode — specifies sheet, column, and variable name |
+| `data` | Free-form YAML template defining the JSON output shape |
+
+#### `segregate_by` fields
+
+| Field | Description |
+|---|---|
+| `sheet` | Sheet containing the segregation column |
+| `column` | Column whose distinct values determine the segregation units |
+| `as` | Variable name (e.g. `$cr`) used to reference the current value in `data` |
+
+#### `data` template directives
+
+| Directive | Example | Meaning |
+|---|---|---|
+| `_each: "DISTINCT S.Col AS $var"` | `_each: "DISTINCT Index.Node AS $node"` | Iterate distinct column values |
+| `_each: SheetName` | `_each: ANNOUNCEMENT_FILES` | Iterate all rows of a sheet |
+| `_each: "Sheet WHERE Col = value"` | `_each: "ANNOUNCEMENT_FILES WHERE GROUP = A"` | Iterate filtered rows |
+| `key: S.Col WHERE S.Filter = $var` | `email: "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"` | Relational scalar lookup |
+| `key: S.Col` | `crGroup: Index.CRGroup` | First non-blank value from sheet+column |
+| `key: $var` | `node: $node` | Inline variable reference |
 
 #### Example
 
 ```yaml
 json_output:
-  fields:
-    crGroup: Index.CRGroup
-    email:   USER_ID.EMAIL
-
-  rows:
-    announcementFiles:
-      sheet: ANNOUNCEMENT_FILES
-      fields:
-        inputFile:   INPUT_FILE
-        destination: MRF_DESTINATION_PATH
+  output_mode: individual
+  segregate_by:
+    sheet:  Index
+    column: CRGroup
+    as:     $cr
+  data:
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    crGroup:  $cr
+    email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:   $node
+      niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      files:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 ```
 
-**Output JSON** (for CR1, GRP1):
+**Output JSON** (for CR1):
 
 ```json
 {
+  "nodeType": "MRF",
+  "activity": "ANNOUNCEMENT_LOADING",
   "crGroup": "CR1",
   "email": "engineer@nokia.com",
-  "announcementFiles": [
-    { "inputFile": "audio.tar",    "destination": "/var/opt/clips/raj/" },
-    { "inputFile": "greeting.tar", "destination": "/var/opt/clips/mum/" }
+  "nodes": [
+    {
+      "node": "MRF1",
+      "niamID": "RJ-NOKIA-MRF-RJJVRMR01-CLI",
+      "files": [
+        { "INPUT_FILE": "audio.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/raj/" }
+      ]
+    }
   ]
 }
 ```
 
-#### Filtering per segregation mode
-
-The rows passed to `json_output` are automatically filtered for the current segregation unit:
-
-| Mode | Filter applied to data sheets | Filter applied to Index sheet |
-|---|---|---|
-| CRGROUP | Rows where `GROUP` is in the groups of this CR | Rows where `CRGROUP` matches |
-| GROUP | Rows where `GROUP` matches | Rows where `GROUP` matches |
-| NODE | Rows where `NODE` matches | Rows where `NODE` matches |
-
-Sheets that have no natural filter (e.g. `USER_ID`) are included in full — all their rows are available for scalar `fields` lookups.
-
 #### File name
 
-The single JSON file uses the same naming as the existing index file:
-`{NODE_TYPE}_{ACTIVITY}_{SEGREGATION_KEY}.json`
+**`output_mode: single`** → `{NODE_TYPE}_{ACTIVITY}.json`
+
+**`output_mode: individual`** → `{NODE_TYPE}_{ACTIVITY}_{SEGREGATION_VALUE}.json`
+(inside folder `mop-json/{SEGREGATION_VALUE}/`)
 
 ---
 

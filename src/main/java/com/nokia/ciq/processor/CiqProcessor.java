@@ -27,8 +27,10 @@ public interface CiqProcessor {
      * @param outputDir            directory where validation reports are written
      * @param formatCsv            comma-separated report formats (JSON, HTML, MSEXCEL);
      *                             {@code null} defaults to all three
-     * @param mopJsonOutputDir     optional directory for child-order–segregated JSON files;
+     * @param jsonOutputDir        optional directory for JSON output files;
      *                             written only when validation passes; {@code null} = skip
+     * @param jsonOutputConfigPath path to the standalone {@code *_json-output.yaml} file
+     *                             that defines the JSON output template; {@code null} = skip
      * @param reportTemplateName   filename of the HTML report template
      *                             (e.g. {@code "validation-report-template.html"});
      *                             {@code null} falls back to the built-in HTML writer
@@ -45,7 +47,8 @@ public interface CiqProcessor {
                              String rulesFilePath,
                              String outputDir,
                              String formatCsv,
-                             String mopJsonOutputDir,
+                             String jsonOutputDir,
+                             String jsonOutputConfigPath,
                              String reportTemplateName,
                              String reportTemplatePath) throws IOException;
 }

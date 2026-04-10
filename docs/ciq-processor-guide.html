@@ -289,11 +289,10 @@ footer {
     <li><a href="#overview">Overview</a></li>
     <li><a href="#cli">CLI Usage</a></li>
 
-    <li class="nav-section">Grouping Modes</li>
-    <li><a href="#modes">Mode Summary</a></li>
-    <li class="nav-sub"><a href="#crgroup-mode">CRGROUP Mode</a></li>
-    <li class="nav-sub"><a href="#group-mode">GROUP Mode</a></li>
-    <li class="nav-sub"><a href="#node-mode">NODE Mode</a></li>
+    <li class="nav-section">JSON Output</li>
+    <li><a href="#json-output">json_output Block</a></li>
+    <li class="nav-sub"><a href="#output-single">output_mode: single</a></li>
+    <li class="nav-sub"><a href="#output-individual">output_mode: individual</a></li>
 
     <li class="nav-section">Output</li>
     <li><a href="#output-params">Output Parameters</a></li>
@@ -304,7 +303,8 @@ footer {
     <li class="nav-sub"><a href="#ciq-as-variables">CIQ Columns as Variables</a></li>
     <li><a href="#rules-yaml">Validation Rules YAML</a></li>
     <li class="nav-sub"><a href="#top-level">Top-level Settings</a></li>
-    <li class="nav-sub"><a href="#index-sheet-rules">Index Sheet Rules</a></li>
+    <li class="nav-sub"><a href="#report-output">report_output</a></li>
+    <li class="nav-sub"><a href="#outputs-section">outputs</a></li>
     <li class="nav-sub"><a href="#data-sheet-rules">Data Sheet Rules</a></li>
     <li class="nav-sub"><a href="#column-options">Column Options Reference</a></li>
 
@@ -360,24 +360,58 @@ reports and optional MOP JSON are ready.</p>
 <!-- ───────────────────────────────────────────────────────────────────────── -->
 <h2 id="cli">CLI Usage</h2>
 
-<pre><code>java -jar ciq-processor-1.0.0-cli.jar [options]
+<pre><code>java -jar ciq-processor-1.0.0-cli.jar --mode &lt;mode&gt; [options]
 
-Required:
+Modes:
+  ciq-validate  (default)  Validate a CIQ Excel file against rules
+  ciq-generate             Generate a blank CIQ template from rules
+
+ciq-validate required:
   --ciq           &lt;file&gt;   CIQ Excel workbook (.xlsx)
   --node-type     &lt;type&gt;   Node type, e.g. SBC or MRF
-  --activity      &lt;name&gt;   Activity name, e.g. FIXED_LINE_CONFIGURATION
+  --activity      &lt;name&gt;   Activity name, e.g. ANNOUNCEMENT_LOADING
   --rules         &lt;file&gt;   YAML validation-rules file
   --output        &lt;dir&gt;    Output directory for validation reports
 
-Optional:
-  --format        &lt;csv&gt;    Report formats: JSON,HTML,MSEXCEL  (default: all three)
-  --mop-json-dir  &lt;dir&gt;    JSON output for MOP generation (only written on PASSED)
-  --report-name   &lt;name&gt;   Base file name for reports (no extension)
-                           Default: &lt;node-type&gt;_&lt;activity&gt;_validation-report
+ciq-validate optional:
+  --format                 &lt;csv&gt;    JSON,HTML,MSEXCEL (default: all three)
+  --mop-json-dir           &lt;dir&gt;    JSON output for MOP generation (PASSED only)
+  --report-template-name   &lt;file&gt;   HTML report template filename (enables template HTML)
+  --report-template-path   &lt;dir&gt;    Directory containing the HTML report template
 
-Exit code:  0 = PASSED,  1 = FAILED or error</code></pre>
+ciq-generate required:
+  --node-type   &lt;type&gt;   Node type
+  --activity    &lt;name&gt;   Activity name
+  --rules       &lt;file&gt;   YAML validation-rules file
 
-<h3>Example — SBC NODE mode</h3>
+ciq-generate optional:
+  --output      &lt;dir&gt;    Output directory (default: current directory)
+
+Exit code:  0 = PASSED/SUCCESS,  1 = FAILED/ERROR</code></pre>
+
+<div class="callout callout-info">
+  Report file base name is configured in <code>report_output.filename</code> in the rules YAML
+  (default: <code>{nodeType}_{activity}_VALIDATION_REPORT</code>).
+  <br><br>
+  When <code>--report-template-name</code> is provided the HTML report is rendered from that
+  external template file.  If <code>--report-template-path</code> is also given it is combined
+  as <code>&lt;path&gt;/&lt;name&gt;</code>.  Omit both to use the built-in HTML layout.
+  A ready-to-use template is at <code>src/main/resources/validation-report-template.html</code>.
+</div>
+
+<h3>Example — validate with external HTML template</h3>
+<pre><code>java -jar ciq-processor-1.0.0-cli.jar \
+  --ciq                    MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx              \
+  --node-type              MRF                                             \
+  --activity               ANNOUNCEMENT_LOADING                           \
+  --rules                  MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
+  --output                 target/processor-output                         \
+  --format                 JSON,HTML,MSEXCEL                               \
+  --mop-json-dir           target/mop-json                                 \
+  --report-template-name   validation-report-template.html                 \
+  --report-template-path   src/main/resources</code></pre>
+
+<h3>Example — validate without template (built-in HTML layout)</h3>
 <pre><code>java -jar ciq-processor-1.0.0-cli.jar \
   --ciq         SBC_FIXED_LINE_CONFIGURATION_CIQ.xlsx           \
   --node-type   SBC                                             \
@@ -387,205 +421,112 @@ Exit code:  0 = PASSED,  1 = FAILED or error</code></pre>
   --format      JSON,HTML                                       \
   --mop-json-dir target/mop-json</code></pre>
 
-<h3>Example — MRF CRGROUP mode</h3>
+<h3>Example — generate blank CIQ template</h3>
 <pre><code>java -jar ciq-processor-1.0.0-cli.jar \
-  --ciq         MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx               \
-  --node-type   MRF                                             \
-  --activity    ANNOUNCEMENT_LOADING                            \
-  --rules       MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml  \
-  --output      target/processor-output                         \
-  --mop-json-dir target/mop-json</code></pre>
+  --mode        ciq-generate \
+  --node-type   MRF \
+  --activity    ANNOUNCEMENT_LOADING \
+  --rules       MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
+  --output      target/templates</code></pre>
 
 <hr class="section">
 
 <!-- ───────────────────────────────────────────────────────────────────────── -->
-<h2 id="modes">Grouping Modes</h2>
+<h2 id="json-output">JSON Output (<code>json_output:</code>)</h2>
 
-<p>The mode is controlled by <code>groupByColumnName</code> in the validation-rules YAML.
-It determines the INDEX sheet column structure, the JSON output folder layout, and which
-parameter <strong>mop-generator-utility</strong> expects.</p>
+<p>MOP JSON output is <strong>fully YAML-driven</strong> via the <code>json_output</code> block
+in the rules file. There are no hardcoded modes — the output structure, segregation key, and
+file naming are all declared in YAML. <code>JsonTemplateEvaluator</code> processes the
+<code>data:</code> template recursively, resolving <code>_each</code> directives and relational
+lookups against the in-memory <code>CiqDataStore</code>.</p>
 
+<pre><code>json_output:
+  output_mode: single        # single | individual (see below)
+
+  segregate_by:              # required when output_mode: individual
+    sheet:  Index
+    column: CRGroup          # distinct values of this column → one folder each
+    as:     $cr              # variable name used in data template
+
+  data:                      # free-form YAML template
+    nodeType: MRF
+    activity: ANNOUNCEMENT_LOADING
+    nodes:
+      _each: "DISTINCT Index.Node AS $node"
+      node:    $node
+      crGroup: Index.CRGroup
+      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+      tableData:
+        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+        INPUT_FILE:           INPUT_FILE
+        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH</code></pre>
+
+<h3>_each directive</h3>
 <table>
-  <tr>
-    <th>groupByColumnName</th>
-    <th>INDEX sheet columns</th>
-    <th>JSON output layout</th>
-    <th>mop-generator-utility</th>
-  </tr>
-  <tr>
-    <td><code>CRGROUP</code> <span class="badge badge-crgroup">CRGROUP</span></td>
-    <td><code>GROUP | CRGROUP | NODE</code></td>
-    <td><code>mop-json/&lt;CRGROUP&gt;/</code></td>
-    <td><code>--crgroup &lt;id&gt;</code></td>
-  </tr>
-  <tr>
-    <td><code>GROUP</code> <span class="badge badge-group">GROUP</span></td>
-    <td><code>GROUP | NODE</code></td>
-    <td><code>mop-json/&lt;GROUP&gt;/</code></td>
-    <td><code>--group &lt;name&gt;</code></td>
-  </tr>
-  <tr>
-    <td><code>NODE</code> <span class="badge badge-node">NODE</span></td>
-    <td><code>Node | CRGroup | Tables</code></td>
-    <td><code>mop-json/&lt;Node&gt;_&lt;CRGroup&gt;/</code></td>
-    <td><code>--host &lt;node&gt;</code></td>
-  </tr>
+  <tr><th>Syntax</th><th>Meaning</th></tr>
+  <tr><td><code>"DISTINCT Sheet.Col AS $var"</code></td><td>One array element per distinct column value; <code>$var</code> holds the current value</td></tr>
+  <tr><td><code>SheetName</code></td><td>One array element per row of the sheet</td></tr>
+  <tr><td><code>"Sheet WHERE Col = value"</code></td><td>One array element per matching row</td></tr>
 </table>
 
-<div class="mode-grid">
-  <div class="mode-card crgroup">
-    <h4>CRGROUP</h4>
-    <ul>
-      <li>Change window = CRGROUP</li>
-      <li>MOP content = GROUP</li>
-      <li>One folder per CRGROUP</li>
-      <li>GROUP may span multiple CRs</li>
-    </ul>
-  </div>
-  <div class="mode-card group">
-    <h4>GROUP</h4>
-    <ul>
-      <li>Homogeneous MOP per group</li>
-      <li>All nodes in a GROUP get identical rows</li>
-      <li>One folder per GROUP</li>
-      <li>No CRGROUP concept</li>
-    </ul>
-  </div>
-  <div class="mode-card node">
-    <h4>NODE</h4>
-    <ul>
-      <li>Heterogeneous MOP per node</li>
-      <li>Each node has its own rows</li>
-      <li>One folder per Node+CRGroup</li>
-      <li>Tables listed in INDEX per node</li>
-    </ul>
-  </div>
+<h3>Scalar value expressions</h3>
+<table>
+  <tr><th>Syntax</th><th>Meaning</th></tr>
+  <tr><td><code>$var</code></td><td>Variable bound by an enclosing <code>_each</code> or <code>segregate_by</code></td></tr>
+  <tr><td><code>Sheet.Column</code></td><td>First non-blank value from that sheet+column in the current scope</td></tr>
+  <tr><td><code>"Sheet.Col WHERE Sheet.Filter = $var"</code></td><td>First matching value from filtered rows (relational lookup)</td></tr>
+</table>
+
+<!-- ─── single ─────────────────────────────────────────────────────────── -->
+<h3 id="output-single">output_mode: single</h3>
+
+<p>One JSON file for the entire workbook. The <code>data:</code> template is evaluated once
+over the full data store.</p>
+
+<h4>JSON output layout</h4>
+<div class="file-tree">
+<span class="dir">mop-json/</span>
+└── <span class="file">MRF_ANNOUNCEMENT_LOADING.json</span>
 </div>
 
-<!-- ─── CRGROUP ─────────────────────────────────────────────────────────── -->
-<h3 id="crgroup-mode">CRGROUP Mode <span class="badge badge-crgroup">groupByColumnName: CRGROUP</span></h3>
+<!-- ─── individual ─────────────────────────────────────────────────────── -->
+<h3 id="output-individual">output_mode: individual</h3>
 
-<p>Used when nodes are organised into change requests, each change request spanning one or
-more GROUPs. The CRGROUP drives the change window (maintenance slot); the GROUP drives the
-MOP content (all nodes in a GROUP receive identical configuration rows).</p>
+<p>One folder per distinct value of the <code>segregate_by</code> column; one JSON file per
+folder. The <code>data:</code> template is evaluated once per segregation value, with the
+<code>as:</code> variable bound to the current value.</p>
 
-<h4>CIQ INDEX sheet example</h4>
-<table>
-  <tr><th>GROUP</th><th>CRGROUP</th><th>NODE</th></tr>
-  <tr><td>A</td><td>CR-001</td><td>MRF1</td></tr>
-  <tr><td>A</td><td>CR-001</td><td>MRF2</td></tr>
-  <tr><td>B</td><td>CR-001</td><td>MRF3</td></tr>
-  <tr><td>B</td><td>CR-002</td><td>MRF4</td></tr>
-</table>
+<h4>Example — segregate by CRGroup</h4>
+<pre><code>segregate_by:
+  sheet:  Index
+  column: CRGroup
+  as:     $cr</code></pre>
 
-<h4>JSON output folder structure</h4>
+<h4>JSON output layout</h4>
 <div class="file-tree">
 <span class="dir">mop-json/</span>
 ├── <span class="dir">CR-001/</span>
-│   ├── <span class="file">MRF_ANNOUNCEMENT_LOADING_CRGroupIndex_CR-001.json</span>
-│   ├── <span class="file">MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_A.json</span>   <span class="comment"># rows for GROUP A</span>
-│   └── <span class="file">MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_B.json</span>   <span class="comment"># rows for GROUP B</span>
+│   └── <span class="file">MRF_ANNOUNCEMENT_LOADING_CR-001.json</span>
 └── <span class="dir">CR-002/</span>
-    ├── <span class="file">MRF_ANNOUNCEMENT_LOADING_CRGroupIndex_CR-002.json</span>
-    └── <span class="file">MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_B.json</span>   <span class="comment"># GROUP B appears in both CRs</span>
+    └── <span class="file">MRF_ANNOUNCEMENT_LOADING_CR-002.json</span>
 </div>
 
-<h4>CRGroupIndex JSON structure</h4>
+<h4>Example output JSON (for CR-001)</h4>
 <pre><code>{
   "nodeType": "MRF",
   "activity": "ANNOUNCEMENT_LOADING",
-  "crGroup":  "CR-001",
-  "groups": [
+  "nodes": [
     {
-      "group": "A",
-      "nodes": ["MRF1", "MRF2"],
-      "niamMapping": {
-        "MRF1": "RJ-NOKIA-MRF-RJJVRMR01-2401:4900:24:934::2-CLI",
-        "MRF2": "RJ-NOKIA-MRF-RJJVRMR02-2401:4900:24:934::3-CLI"
-      }
-    },
-    {
-      "group": "B",
-      "nodes": ["MRF3"],
-      "niamMapping": {
-        "MRF3": "RJ-NOKIA-MRF-RJJVRMR03-2401:4900:24:934::4-CLI"
-      }
+      "node":    "MRF1",
+      "crGroup": "CR-001",
+      "email":   "engineer@nokia.com",
+      "niamID":  "RJ-NOKIA-MRF-RJJVRMR01-CLI",
+      "tableData": [
+        { "INPUT_FILE": "audio.tar", "MRF_DESTINATION_PATH": "/var/opt/clips/" }
+      ]
     }
   ]
-}</code></pre>
-
-<!-- ─── GROUP ──────────────────────────────────────────────────────────── -->
-<h3 id="group-mode">GROUP Mode <span class="badge badge-group">groupByColumnName: GROUP</span></h3>
-
-<p>Used when all nodes in a GROUP receive identical configuration. No CRGROUP / change-window
-concept; one folder is written per GROUP.</p>
-
-<h4>CIQ INDEX sheet example</h4>
-<table>
-  <tr><th>GROUP</th><th>NODE</th></tr>
-  <tr><td>A</td><td>MRF1</td></tr>
-  <tr><td>A</td><td>MRF2</td></tr>
-  <tr><td>B</td><td>MRF3</td></tr>
-</table>
-
-<h4>JSON output folder structure</h4>
-<div class="file-tree">
-<span class="dir">mop-json/</span>
-├── <span class="dir">A/</span>
-│   ├── <span class="file">MRF_ANNOUNCEMENT_LOADING_index_A.json</span>
-│   └── <span class="file">MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_A.json</span>
-└── <span class="dir">B/</span>
-    ├── <span class="file">MRF_ANNOUNCEMENT_LOADING_index_B.json</span>
-    └── <span class="file">MRF_ANNOUNCEMENT_LOADING_ANNOUNCEMENT_FILES_B.json</span>
-</div>
-
-<h4>GroupIndex JSON structure</h4>
-<pre><code>{
-  "nodeType":    "MRF",
-  "activity":    "ANNOUNCEMENT_LOADING",
-  "group":       "A",
-  "nodes":       ["MRF1", "MRF2"],
-  "tables":      ["ANNOUNCEMENT_FILES"],
-  "niamMapping": {
-    "MRF1": "RJ-NOKIA-MRF-RJJVRMR01-2401:4900:24:934::2-CLI",
-    "MRF2": "RJ-NOKIA-MRF-RJJVRMR02-2401:4900:24:934::3-CLI"
-  }
-}</code></pre>
-
-<!-- ─── NODE ───────────────────────────────────────────────────────────── -->
-<h3 id="node-mode">NODE Mode <span class="badge badge-node">groupByColumnName: NODE</span></h3>
-
-<p>Used when each node has its own individual configuration rows (heterogeneous MOP).
-The child-order key is <code>&lt;Node&gt;_&lt;CRGroup&gt;</code>. Each data sheet must have
-a <code>Node</code> column; rows are filtered per node when writing JSON.</p>
-
-<h4>CIQ INDEX sheet example</h4>
-<table>
-  <tr><th>Node</th><th>CRGroup</th><th>Tables</th></tr>
-  <tr><td>SBC-1</td><td>CR1</td><td>CRFTargetList, ServiceProfileTable</td></tr>
-  <tr><td>SBC-2</td><td>CR1</td><td>CRFTargetList</td></tr>
-</table>
-
-<h4>JSON output folder structure</h4>
-<div class="file-tree">
-<span class="dir">mop-json/</span>
-├── <span class="dir">SBC-1_CR1/</span>
-│   ├── <span class="file">SBC_FIXED_LINE_CONFIGURATION_index_SBC-1_CR1.json</span>
-│   ├── <span class="file">SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_SBC-1_CR1.json</span>
-│   └── <span class="file">SBC_FIXED_LINE_CONFIGURATION_ServiceProfileTable_SBC-1_CR1.json</span>
-└── <span class="dir">SBC-2_CR1/</span>
-    ├── <span class="file">SBC_FIXED_LINE_CONFIGURATION_index_SBC-2_CR1.json</span>
-    └── <span class="file">SBC_FIXED_LINE_CONFIGURATION_CRFTargetList_SBC-2_CR1.json</span>
-</div>
-
-<h4>CiqIndex JSON structure</h4>
-<pre><code>{
-  "nodeType": "SBC",
-  "activity": "FIXED_LINE_CONFIGURATION",
-  "entries": [
-    { "node": "SBC-1", "crGroup": "CR1", "tables": ["CRFTargetList", "ServiceProfileTable"] }
-  ],
-  "niamMapping": { "SBC-1": "sbc1-neid" }
 }</code></pre>
 
 <hr class="section">
@@ -593,49 +534,48 @@ a <code>Node</code> column; rows are filtered per node when writing JSON.</p>
 <!-- ───────────────────────────────────────────────────────────────────────── -->
 <h2 id="output-params">Output Parameters</h2>
 
-<p>When validation <strong>passes</strong>, parameters are printed to stdout and returned via
-<code>ValidationReport.getParameters()</code>. They can be used by downstream automation
-(e.g. CI pipelines, NCE, mop-generator-utility selection scripts).</p>
+<p>When validation <strong>passes</strong>, parameters are printed to stdout as <code>KEY=VALUE</code>
+and returned via <code>ValidationReport.getParameters()</code>. All parameters (beyond the
+always-present <code>STATUS</code> and <code>ERRORS</code>) are declared in the <code>outputs:</code>
+section of the rules YAML — there are no hardcoded parameters.</p>
 
-<h3>NODE mode</h3>
+<h3>Aggregates</h3>
 <table>
-  <tr><th>Parameter</th><th>Example value</th><th>Description</th></tr>
-  <tr><td><code>NODE_1</code></td><td><code>SBC-1</code></td><td>Node name (1-based index)</td></tr>
-  <tr><td><code>NIAM_ID_1</code></td><td><code>sbc1-neid</code></td><td>NIAM (NE ID) for NODE_1</td></tr>
-  <tr><td><code>NODE_2</code></td><td><code>SBC-2</code></td><td>Second node name</td></tr>
-  <tr><td><code>NIAM_ID_2</code></td><td><code>sbc2-neid</code></td><td>NIAM for NODE_2</td></tr>
-  <tr><td><code>TOTAL_NODES_COUNT</code></td><td><code>2</code></td><td>Total distinct nodes</td></tr>
-  <tr><td><code>CHILD_ORDERS_COUNT</code></td><td><code>2</code></td><td>Total JSON sub-folders written</td></tr>
+  <tr><th>aggregate</th><th>Description</th><th>Example output</th></tr>
+  <tr><td><code>distinct</code></td><td>Sorted, deduplicated non-blank values joined by <code>separator</code></td><td><code>CR_LIST=CR1,CR2</code></td></tr>
+  <tr><td><code>count</code></td><td>Count of non-blank values in <code>column</code>; total rows when <code>column</code> omitted</td><td><code>CR_COUNT=5</code></td></tr>
+  <tr><td><code>sum</code></td><td>Numeric sum; non-numeric cells silently skipped</td><td><code>TOTAL_KB=2048</code></td></tr>
+  <tr><td><code>group</code></td><td>For each distinct <code>column</code> value emit <code>&lt;KEY&gt;_&lt;value&gt;</code> = collected <code>groupBy</code> values</td><td><code>NODES_CR1=MRF1,MRF2</code></td></tr>
 </table>
 
-<h3>GROUP mode</h3>
-<table>
-  <tr><th>Parameter</th><th>Example value</th><th>Description</th></tr>
-  <tr><td><code>GROUP_1</code></td><td><code>A</code></td><td>Group name (1-based index)</td></tr>
-  <tr><td><code>GROUP_1_VALUES</code></td><td><code>MRF1,MRF2</code></td><td>Comma-separated nodes in GROUP_1</td></tr>
-  <tr><td><code>TOTAL_GROUPS_COUNT</code></td><td><code>2</code></td><td>Total distinct groups</td></tr>
-  <tr><td><code>NODE_1</code></td><td><code>MRF1</code></td><td>Node name (1-based across all groups)</td></tr>
-  <tr><td><code>NIAM_ID_1</code></td><td><code>RJ-NOKIA-MRF-01-CLI</code></td><td>NIAM for NODE_1</td></tr>
-  <tr><td><code>TOTAL_NODES_COUNT</code></td><td><code>4</code></td><td>Total distinct nodes</td></tr>
-  <tr><td><code>CHILD_ORDERS_COUNT</code></td><td><code>2</code></td><td>Total JSON sub-folders written (= number of groups)</td></tr>
-</table>
+<h3>Example <code>outputs:</code> YAML</h3>
+<pre><code>outputs:
+  # Distinct CR numbers → CR_LIST=CR1,CR2
+  CR_LIST:
+    sheet: Index
+    column: CRGroup
+    aggregate: distinct
+    separator: ","
 
-<h3>CRGROUP mode</h3>
-<table>
-  <tr><th>Parameter</th><th>Example value</th><th>Description</th></tr>
-  <tr><td><code>CRGROUP_1</code></td><td><code>CR-001</code></td><td>CRGROUP identifier (1-based index)</td></tr>
-  <tr><td><code>CRGROUP_1_GROUPS</code></td><td><code>A,B</code></td><td>Comma-separated GROUPs in CRGROUP_1</td></tr>
-  <tr><td><code>CRGROUP_1_NODES</code></td><td><code>MRF1,MRF2,MRF3</code></td><td>All nodes in CRGROUP_1</td></tr>
-  <tr><td><code>CRGROUP_1_NODES_COUNT</code></td><td><code>3</code></td><td>Node count for CRGROUP_1</td></tr>
-  <tr><td><code>TOTAL_CRGROUPS_COUNT</code></td><td><code>2</code></td><td>Total distinct CRGROUPs</td></tr>
-  <tr><td><code>CHILD_ORDERS_COUNT</code></td><td><code>2</code></td><td>= TOTAL_CRGROUPS_COUNT in CRGROUP mode</td></tr>
-  <tr><td><code>GROUP_1</code></td><td><code>A</code></td><td>Group name (1-based, across all CRGROUPs)</td></tr>
-  <tr><td><code>GROUP_1_VALUES</code></td><td><code>MRF1,MRF2</code></td><td>Nodes in GROUP_1</td></tr>
-  <tr><td><code>TOTAL_GROUPS_COUNT</code></td><td><code>2</code></td><td>Total distinct groups</td></tr>
-  <tr><td><code>NODE_1</code></td><td><code>MRF1</code></td><td>Node name (1-based)</td></tr>
-  <tr><td><code>NIAM_ID_1</code></td><td><code>RJ-NOKIA-MRF-01-CLI</code></td><td>NIAM for NODE_1</td></tr>
-  <tr><td><code>TOTAL_NODES_COUNT</code></td><td><code>3</code></td><td>Total distinct nodes</td></tr>
-</table>
+  # Total rows in Index → CR_COUNT=4
+  CR_COUNT:
+    sheet: Index
+    aggregate: count
+
+  # Nodes per CRGroup → NODES_CR1=MRF1,MRF2   NODES_CR2=MRF3
+  NODES:
+    sheet:     Index
+    column:    CRGroup
+    aggregate: group
+    groupBy:   Node
+    separator: ","</code></pre>
+
+<p>The <code>name:</code> field overrides the YAML key as the emitted parameter name:</p>
+<pre><code>node_output:
+  name: UNIQUE_NODES    # emits UNIQUE_NODES=... instead of NODE_OUTPUT=...
+  sheet: Index
+  column: Node
+  aggregate: distinct</code></pre>
 
 <hr class="section">
 
@@ -663,30 +603,67 @@ a <code>Node</code> column; rows are filtered per node when writing JSON.</p>
   </tr>
 </table>
 
-<p>Default base name: <code>&lt;node-type&gt;_&lt;activity&gt;_validation-report</code><br>
-Override with <code>--report-name</code>.</p>
+<p>Base name is configured in <code>report_output.filename</code> in the rules YAML
+(default: <code>{nodeType}_{activity}_VALIDATION_REPORT</code>).
+<code>{nodeType}</code> and <code>{activity}</code> are substituted from the CLI arguments.</p>
+
+<h3>HTML Report Template</h3>
+<p>By default the HTML report uses a built-in layout. To use a custom template, pass
+<code>--report-template-name</code> (and optionally <code>--report-template-path</code>):</p>
+
+<pre><code>--report-template-name  validation-report-template.html \
+--report-template-path  src/main/resources</code></pre>
+
+<p>The template uses <code>{{placeholder}}</code> substitution and
+<code>{{#section}}...{{/section}}</code> loops. Available placeholders:</p>
+
+<table>
+  <tr><th>Placeholder</th><th>Value</th></tr>
+  <tr><td><code>{{status}}</code>, <code>{{nodeType}}</code>, <code>{{activity}}</code></td><td>Report metadata</td></tr>
+  <tr><td><code>{{totalErrors}}</code>, <code>{{sheetsCount}}</code>, <code>{{passedSheets}}</code>, <code>{{failedSheets}}</code>, <code>{{totalRows}}</code></td><td>Summary counts</td></tr>
+  <tr><td><code>{{generatedAt}}</code></td><td>Timestamp</td></tr>
+  <tr><td><code>{{#sheets}}...{{/sheets}}</code></td><td>Loop over sheet results</td></tr>
+  <tr><td><code>{{sheetName}}</code>, <code>{{sheetStatus}}</code>, <code>{{rowsChecked}}</code>, <code>{{errorCount}}</code></td><td>Per-sheet values</td></tr>
+  <tr><td><code>{{sheetHeaderClass}}</code>, <code>{{sheetBadgeClass}}</code></td><td>CSS class strings (pass/fail)</td></tr>
+  <tr><td><code>{{#errors}}...{{/errors}}</code></td><td>Loop over errors in a sheet</td></tr>
+  <tr><td><code>{{rowNumber}}</code>, <code>{{column}}</code>, <code>{{value}}</code>, <code>{{message}}</code></td><td>Per-error values</td></tr>
+  <tr><td><code>{{#if_passed}}...{{/if_passed}}</code>, <code>{{#if_failed}}...{{/if_failed}}</code></td><td>Conditional blocks</td></tr>
+  <tr><td><code>{{#globalErrors}}{{message}}{{/globalErrors}}</code></td><td>Index-level errors</td></tr>
+</table>
+
+<p>A ready-to-use template is provided at
+<code>src/main/resources/validation-report-template.html</code>.</p>
 
 <hr class="section">
 
 <!-- ───────────────────────────────────────────────────────────────────────── -->
 <h2 id="ciq-structure">CIQ Excel Workbook Structure</h2>
 
+<p>The exact sheet and column structure is defined by the YAML rules file.
+The processor does not enforce a fixed set of sheet or column names.
+Typical structure:</p>
+
 <table>
-  <tr><th>Sheet</th><th>Purpose</th><th>Required columns</th></tr>
+  <tr><th>Sheet</th><th>Purpose</th><th>Typical columns</th></tr>
   <tr>
     <td><code>Index</code></td>
-    <td>Maps nodes → groups → tables</td>
-    <td>Depends on mode — see Grouping Modes above</td>
+    <td>Maps nodes → groups/CRs</td>
+    <td>Declared in <code>sheets.Index</code> in the YAML; any columns</td>
   </tr>
   <tr>
-    <td><code>NODE_ID</code></td>
+    <td><code>Node_Details</code> / <code>NODE_ID</code></td>
     <td>NIAM (NE ID) mapping for every node</td>
-    <td><code>Node</code>/<code>NODE</code> + <code>NIAM</code>/<code>NIAM_ID</code></td>
+    <td>Node name column + NIAM column (names configured in YAML)</td>
   </tr>
   <tr>
     <td><code>&lt;TableName&gt;</code></td>
     <td>Configuration data (one sheet per table)</td>
-    <td><code>Node</code> (NODE mode) or <code>GROUP</code> (GROUP/CRGROUP), <code>Action</code>, record fields</td>
+    <td>Grouping column + record fields; declared in <code>sheets.&lt;TableName&gt;</code></td>
+  </tr>
+  <tr>
+    <td><code>User_ID</code></td>
+    <td>CR → responsible user email (optional)</td>
+    <td>CRGroup + EMAIL</td>
   </tr>
 </table>
 
@@ -740,45 +717,62 @@ entries) may be required depending on the rules.</p>
 <!-- ─── Top-level ─────────────────────────────────────────────────────────── -->
 <h3 id="top-level">Top-level Settings</h3>
 
-<pre><code># Controls JSON segregation mode and INDEX sheet interpretation
-groupByColumnName: CRGROUP     # CRGROUP | GROUP | NODE
+<pre><code>settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: false
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true</code></pre>
 
-# Validate that every table listed in INDEX has a matching data sheet
-# true for NODE mode; false for GROUP/CRGROUP mode (no Tables column)
-validateIndexSheets: false
+<!-- ─── report_output ─────────────────────────────────────────────────────── -->
+<h3 id="report-output">report_output</h3>
 
-# Validate that every node in the INDEX exists in the NODE_ID sheet
-validateNodeIds: true</code></pre>
+<p>Controls report file naming and output formats.
+<code>{nodeType}</code> and <code>{activity}</code> are substituted from the CLI arguments.</p>
 
-<!-- ─── Index sheet ────────────────────────────────────────────────────────── -->
-<h3 id="index-sheet-rules">INDEX Sheet Column Rules</h3>
+<pre><code>report_output:
+  formats:  [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"</code></pre>
 
-<pre><code>indexSheet:
-  columns:
-    # ── CRGROUP mode ──────────────────────────────────
-    GROUP:   { required: true }
-    CRGROUP: { required: true }
-    NODE:    { required: true }
+<div class="callout callout-info">
+  HTML template is NOT part of <code>report_output</code> — it is passed via CLI parameters
+  <code>--report-template-name</code> and <code>--report-template-path</code>.
+</div>
 
-    # ── GROUP mode ────────────────────────────────────
-    # GROUP: { required: true }
-    # NODE:  { required: true }
+<!-- ─── outputs ──────────────────────────────────────────────────────────── -->
+<h3 id="outputs-section">outputs</h3>
 
-    # ── NODE mode ─────────────────────────────────────
-    # Node:    { required: true }
-    # CRGroup: { required: true }
-    # Tables:  { required: true }</code></pre>
+<p>Post-validation aggregates computed only when validation PASSES. Each entry is added to
+<code>ValidationReport.getParameters()</code> and printed to stdout.</p>
 
-<h3>NODE_ID Sheet Column Rules</h3>
+<pre><code>outputs:
+  # Distinct values → CR_LIST=CR1,CR2
+  CR_LIST:
+    sheet: Index
+    column: CRGroup
+    aggregate: distinct
+    separator: ","
 
-<pre><code>nodeIdSheet:
-  columns:
-    NODE:    { required: true }   # CRGROUP / GROUP mode
-    NIAM_ID: { required: true }   # CRGROUP / GROUP mode
+  # Row count → CR_COUNT=4
+  CR_COUNT:
+    sheet: Index
+    aggregate: count
 
-    # NODE mode uses:
-    # Node: { required: true }
-    # NIAM: { required: true }</code></pre>
+  # Group aggregate → NODES_CR1=MRF1,MRF2   NODES_CR2=MRF3
+  NODES:
+    sheet:     Index
+    column:    CRGroup
+    aggregate: group
+    groupBy:   Node
+    separator: ","
+
+  # name: overrides the YAML key → UNIQUE_NODES=MRF1,MRF2
+  node_output:
+    name: UNIQUE_NODES
+    sheet: Index
+    column: Node
+    aggregate: distinct</code></pre>
 
 <!-- ─── Data sheets ────────────────────────────────────────────────────────── -->
 <h3 id="data-sheet-rules">Data Sheet Rules</h3>
@@ -1029,19 +1023,20 @@ Symbol aliases (<code>==</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=
     "ANNOUNCEMENT_LOADING",                        // activity
     "/path/to/MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml", // rulesFilePath
     "/path/to/output",                             // outputDir
-    List.of(ReportFormat.JSON, ReportFormat.HTML), // formats
+    "JSON,HTML,MSEXCEL",                           // formatCsv  (null = all three)
     "/path/to/mop-json",                           // mopJsonOutputDir (null = skip)
-    null                                           // reportFileName   (null = default)
+    "validation-report-template.html",             // reportTemplateName (null = built-in)
+    "src/main/resources"                           // reportTemplatePath (null = name is full path)
 );
 
 System.out.println(report.getStatus());        // "PASSED" or "FAILED"
 System.out.println(report.getTotalErrors());   // total error count
 
-// Output parameters (populated on PASSED)
+// Output parameters declared in outputs: YAML section (populated on PASSED)
 report.getParameters().forEach((k, v) -&gt; System.out.println(k + "=" + v));
 
 // Per-sheet errors
-for (SheetValidationResult r : report.getSheetResults()) {
+for (SheetValidationResult r : report.getSheets()) {
     System.out.println(r.getSheetName() + ": " + r.getErrors().size() + " error(s)");
 }</code></pre>
 
@@ -1056,12 +1051,9 @@ for (SheetValidationResult r : report.getSheetResults()) {
     ├── <span class="dir">processor/</span>
     │   ├── <span class="file">CiqProcessor.java</span>                  <span class="comment"># API interface</span>
     │   ├── <span class="file">CiqProcessorImpl.java</span>              <span class="comment"># Validation + segregation pipeline</span>
-    │   ├── <span class="file">CiqProcessorMain.java</span>              <span class="comment"># CLI entry point (--ciq, --rules, --mop-json-dir …)</span>
-    │   ├── <span class="dir">model/</span>
-    │   │   ├── <span class="file">CRGroupIndex.java</span>              <span class="comment"># CRGROUP mode index model (written per CRGROUP)</span>
-    │   │   └── <span class="file">GroupIndex.java</span>                <span class="comment"># GROUP mode index model (written per GROUP)</span>
+    │   ├── <span class="file">CiqProcessorMain.java</span>              <span class="comment"># CLI entry point (--ciq, --rules, --mop-json-dir, --report-template-name …)</span>
     │   └── <span class="dir">reader/</span>
-    │       ├── <span class="file">InMemoryExcelReader.java</span>       <span class="comment"># Reads CIQ Excel; detects INDEX structure</span>
+    │       ├── <span class="file">InMemoryExcelReader.java</span>       <span class="comment"># Reads CIQ Excel workbook into memory</span>
     │       └── <span class="file">InMemoryCiqDataStore.java</span>      <span class="comment"># In-memory data store (sheets + index)</span>
     └── <span class="dir">validator/</span>
         ├── <span class="file">CiqValidationEngine.java</span>           <span class="comment"># Row-level validation + output parameters</span>
@@ -1080,14 +1072,17 @@ for (SheetValidationResult r : report.getSheetResults()) {
         │   ├── <span class="file">ConditionalRequired.java</span>       <span class="comment"># requiredWhen model</span>
         │   ├── <span class="file">CrossRef.java</span>                  <span class="comment"># crossRef model</span>
         │   ├── <span class="file">IntRange.java</span>                  <span class="comment"># allowedRanges entry model</span>
-        │   └── <span class="file">ValidatorDefinition.java</span>       <span class="comment"># Custom validator registry entry</span>
+        │   ├── <span class="file">ValidatorDefinition.java</span>       <span class="comment"># Custom validator registry entry</span>
+        │   ├── <span class="file">ReportOutputConfig.java</span>        <span class="comment"># report_output block model (formats + filename)</span>
+        │   └── <span class="file">OutputRule.java</span>                <span class="comment"># outputs: aggregate rule model (key, type, groupBy, etc.)</span>
         ├── <span class="dir">model/</span>
         │   ├── <span class="file">ValidationReport.java</span>          <span class="comment"># Report model (status, errors, parameters)</span>
         │   ├── <span class="file">SheetValidationResult.java</span>     <span class="comment"># Per-sheet error list</span>
         │   └── <span class="file">ValidationError.java</span>           <span class="comment"># Single error (sheet, row, column, message)</span>
         ├── <span class="dir">report/</span>
         │   ├── <span class="file">ReportFormat.java</span>              <span class="comment"># JSON | HTML | MSEXCEL enum</span>
-        │   ├── <span class="file">HtmlReportWriter.java</span>          <span class="comment"># Writes HTML validation report</span>
+        │   ├── <span class="file">HtmlReportWriter.java</span>          <span class="comment"># Writes HTML validation report (built-in)</span>
+        │   ├── <span class="file">HtmlTemplateReportWriter.java</span>  <span class="comment"># Template-based HTML report writer</span>
         │   └── <span class="file">ExcelReportWriter.java</span>         <span class="comment"># Writes Excel validation report</span>
         └── <span class="dir">validator/</span>
             ├── <span class="file">CellValidator.java</span>             <span class="comment"># Validator interface + msg() helper</span>
@@ -1122,37 +1117,50 @@ for (SheetValidationResult r : report.getSheetResults()) {
 
 <ol>
   <li>Create <strong><code>{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml</code></strong>.</li>
-  <li>Set <code>groupByColumnName</code> to match the CIQ INDEX sheet column structure
-      (<code>CRGROUP</code>, <code>GROUP</code>, or <code>NODE</code>).</li>
-  <li>Set <code>validateIndexSheets</code> and <code>validateNodeIds</code> for the chosen mode.</li>
+  <li>Configure the <code>settings:</code> block — set <code>validateIndexSheets</code> and <code>validateNodeIds</code> as needed.</li>
   <li>Define <code>indexSheet.columns</code> and <code>nodeIdSheet.columns</code> for the workbook layout.</li>
   <li>Define <code>sheets:</code> with column-level rules for each data sheet.</li>
+  <li>Add a <code>report_output:</code> block to control the report file name and formats.</li>
+  <li>Add an <code>outputs:</code> block to declare any console/post-validation aggregates (e.g. <code>group</code>, <code>set</code>, <code>map</code>).</li>
+  <li>Add a <code>json_output:</code> block to describe how validated data is written to MOP JSON — set <code>output_mode</code>, <code>segregate_by</code>, and define the <code>data</code> template with <code>_each</code> directives.</li>
   <li>Pass the YAML path via <code>--rules</code> on the CLI, or as <code>rulesFilePath</code> in the API.</li>
 </ol>
 
 <h3>Validation rules YAML skeleton</h3>
 <pre><code># {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
 
-groupByColumnName: CRGROUP   # CRGROUP | GROUP | NODE
-validateIndexSheets: false
-validateNodeIds: true
+settings:
+  validateIndexSheets: false
+  validateNodeIds: true
 
 indexSheet:
   columns:
-    GROUP:   { required: true }
-    CRGROUP: { required: true }
     NODE:    { required: true }
+    NIAM_ID: { required: true }
 
 nodeIdSheet:
   columns:
     NODE:    { required: true }
     NIAM_ID: { required: true }
 
+report_output:
+  filename: "{nodeType}_{activity}_validation-report"
+  formats:
+    - JSON
+    - HTML
+    - MSEXCEL
+
+outputs:
+  - key: NODE_LIST
+    type: set
+    source: MyFirstTable
+    column: NODE
+
 sheets:
 
   MyFirstTable:
     columns:
-      GROUP:
+      NODE:
         required: true
       Action:
         required: true
@@ -1170,7 +1178,18 @@ sheets:
           operator: equals
           value: MODIFY
       # require cross-sheet (SheetName.ColumnName)
-      - require: Node_Details.Node_Name</code></pre>
+      - require: Node_Details.Node_Name
+
+json_output:
+  output_mode: individual
+  segregate_by:
+    sheet: NODE_ID
+    column: NODE
+    as: $node
+  data:
+    _each: "MyFirstTable WHERE NODE = $node"
+    action: "Action"
+    myField: "Record.MY_FIELD"</code></pre>
 
 <footer>
   CIQ Processor — Nokia CIQ Toolchain &nbsp;|&nbsp;
