@@ -26,11 +26,12 @@ CiqValidationEngine  ──  validates every sheet/row against rules YAML
       │          └──  HTML report uses built-in layout, or external template
       │               when --report-template-name / --report-template-path are supplied
       │
-      │  validation PASSED + --mop-json-dir supplied?
+      │  validation PASSED + --json-output-dir + --json-output-config-file supplied?
       │             │ yes
       ▼
-JSON segregation  (driven by json_output.segregate_by in YAML rules)
-  one folder per distinct value of the segregation column
+JSON output  (driven by *_json-output.yaml config file)
+  output_mode: single     → one JSON file for the whole workbook
+  output_mode: individual → one folder per distinct segregation value
   mop-json/<value>/  ← e.g. CR1/, GRP_A/, SBC-1_CR1/
       │
       ▼
@@ -74,10 +75,11 @@ Required:
   --output        <dir>    Output directory for validation reports
 
 Optional:
-  --format                 <csv>    JSON,HTML,MSEXCEL (default: all three)
-  --mop-json-dir           <dir>    JSON output directory for MOP generation (written on PASSED only)
-  --report-template-name   <file>   HTML report template filename (enables template-based HTML)
-  --report-template-path   <dir>    Directory containing the HTML report template
+  --format                  <csv>    JSON,HTML,MSEXCEL (default: all three)
+  --json-output-dir         <dir>    Output directory for JSON files (written on PASSED only)
+  --json-output-config-file <file>   JSON output config (*_json-output.yaml)
+  --report-template-name    <file>   HTML report template filename (enables template-based HTML)
+  --report-template-path    <dir>    Directory containing the HTML report template
 
 Exit code: 0 = PASSED, 1 = FAILED or error
 ```
@@ -99,10 +101,11 @@ java -jar ciq-processor-1.0.0-cli.jar \
   --activity               ANNOUNCEMENT_LOADING \
   --rules                  MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
   --output                 target/reports \
-  --format                 JSON,HTML,MSEXCEL \
-  --mop-json-dir           target/mop-json \
-  --report-template-name   validation-report-template.html \
-  --report-template-path   src/main/resources
+  --format                  JSON,HTML,MSEXCEL \
+  --json-output-dir         target/mop-json \
+  --json-output-config-file MRF_ANNOUNCEMENT_LOADING_json-output.yaml \
+  --report-template-name    validation-report-template.html \
+  --report-template-path    src/main/resources
 ```
 
 **Example — without HTML template (built-in layout):**
@@ -112,9 +115,10 @@ java -jar ciq-processor-1.0.0-cli.jar \
   --ciq          SBC_FIXED_LINE_CONFIGURATION_CIQ.xlsx \
   --node-type    SBC \
   --activity     FIXED_LINE_CONFIGURATION \
-  --rules        SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml \
-  --output       target/reports \
-  --mop-json-dir target/mop-json
+  --rules                   SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml \
+  --output                  target/reports \
+  --json-output-dir         target/mop-json \
+  --json-output-config-file SBC_FIXED_LINE_CONFIGURATION_json-output.yaml
 ```
 
 **Console output — PASSED:**
@@ -279,7 +283,8 @@ ValidationReport report = new CiqProcessorImpl().process(
     "MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml",  // rulesFilePath
     "target/reports",                                   // outputDir
     "JSON,HTML,MSEXCEL",                                // formatCsv (null = all three)
-    "target/mop-json",                                  // mopJsonOutputDir (null = skip)
+    "target/mop-json",                                  // jsonOutputDir (null = skip)
+    "MRF_ANNOUNCEMENT_LOADING_json-output.yaml",        // jsonOutputConfigPath (null = skip)
     "validation-report-template.html",                  // reportTemplateName (null = built-in)
     "src/main/resources"                                // reportTemplatePath (null = name is full path)
 );
@@ -299,37 +304,46 @@ for (SheetValidationResult sheet : report.getSheets()) {
 
 ---
 
-## JSON Segregation (MOP JSON Output)
+## JSON Output (MOP JSON)
 
-JSON segregation is **fully YAML-driven** via the `json_output` block in the rules file.
-There are no hardcoded modes — the segregation key, output structure, and file naming
-are all declared in YAML.
+JSON output is **fully YAML-driven** via a standalone `*_json-output.yaml` config file that is
+completely independent of the validation-rules YAML. Both parameters must be provided; JSON output
+is produced only when validation **passes**.
 
-### `json_output` block
+```
+--json-output-dir         <dir>    # where to write the JSON file(s)
+--json-output-config-file <file>   # e.g. MRF_ANNOUNCEMENT_LOADING_json-output.yaml
+```
+
+File naming convention: **`{NODE_TYPE}_{ACTIVITY}_json-output.yaml`**
+
+The same config file is shared by `ciq-processor`, `mop-generator-utility`, and
+`network-command-executor-utility`.
+
+### Config file structure
 
 ```yaml
-json_output:
-  output_mode: single        # single = one JSON file for the whole workbook
-                             # individual = one JSON file per distinct value of segregate_by
+output_mode: single        # single = one JSON file for the whole workbook
+                           # individual = one JSON file per distinct value of segregate_by
 
-  segregate_by:              # required when output_mode: individual
-    sheet:  Index
-    column: CRGroup
-    as:     $cr              # variable name used in data template below
+segregate_by:              # required when output_mode: individual
+  sheet:  Index
+  column: CRGroup
+  as:     $cr              # variable name used in data template below
 
-  data:                      # free-form YAML template evaluated by JsonTemplateEvaluator
-    nodeType: MRF
-    activity: ANNOUNCEMENT_LOADING
-    nodes:
-      _each: "DISTINCT Index.Node AS $node"
-      node:    $node
-      crGroup: Index.CRGroup
-      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
-      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-      tableData:
-        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-        INPUT_FILE:           INPUT_FILE
-        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+data:                      # free-form YAML template evaluated by JsonTemplateEvaluator
+  nodeType: MRF
+  activity: ANNOUNCEMENT_LOADING
+  nodes:
+    _each: "DISTINCT Index.Node AS $node"
+    node:    $node
+    crGroup: Index.CRGroup
+    email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+    tableData:
+      _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+      INPUT_FILE:           INPUT_FILE
+      MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 ```
 
 **`_each` directive:**
@@ -443,7 +457,6 @@ workbook_rules:         # cross-sheet constraints
 sheets:                 # per-sheet column definitions and row rules
 report_output:          # validation report naming and formats
 outputs:                # post-validation aggregates (PASSED only)
-json_output:            # MOP JSON structure and segregation
 ```
 
 ### settings
@@ -767,10 +780,12 @@ ciq-processor/
 │           ├── SumEqualsValidator.java        # sum: [...] equals: <col> row rule
 │           └── Operator.java                 # canonical operator constants + normalize/evaluate
 └── src/main/resources/
-    ├── Schema.yaml                                          # Reference schema (full YAML reference)
+    ├── Schema.yaml                                          # Reference schema (validation-rules YAML)
+    ├── JsonOutputSchema.yaml                                # Reference schema (*_json-output.yaml)
     ├── validation-report-template.html                      # Default HTML report template
     ├── SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml  # Example rules file (SBC)
-    └── MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml      # Example rules file (MRF)
+    ├── MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml      # Example rules file (MRF)
+    └── MRF_ANNOUNCEMENT_LOADING_json-output.yaml           # Example JSON output config (MRF)
 ```
 
 ---
@@ -783,8 +798,9 @@ No Java changes needed — only a YAML file.
 2. Define `settings:`, `workbook_rules:` (optional), and `sheets:` with column and row rules
 3. Add `report_output:` to control report file naming and formats
 4. Add `outputs:` for any `KEY=VALUE` parameters to emit on PASSED
-5. Add `json_output:` with `output_mode` and `data` template to control MOP JSON structure
-6. Add `description:` to columns — appears in the generated Column_Guide sheet
+5. Add `description:` to columns — appears in the generated Column_Guide sheet
+6. Create **`{NODE_TYPE}_{ACTIVITY}_json-output.yaml`** with `output_mode` and `data` template;
+   pass via `--json-output-config-file` at runtime
 
 **Verify the YAML by generating a template first:**
 

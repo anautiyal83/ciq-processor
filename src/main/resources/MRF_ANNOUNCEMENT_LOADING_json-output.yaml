@@ -22,7 +22,7 @@ data:
     crGroup: Index.CRGroup
     email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
     niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-    tableData:
+    configData:
       _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
       INPUT_FILE:           INPUT_FILE
       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

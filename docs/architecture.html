@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIQ Processor — Architecture</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6f9; color: #1a2a3a; font-size: 14px; }
+
+    .page-header {
+      background: linear-gradient(135deg, #1a3a5c 0%, #2a5a8c 100%);
+      padding: 28px 40px 22px;
+      border-bottom: 3px solid #1a3a5c;
+    }
+    .page-header h1 { font-size: 24px; color: #ffffff; font-weight: 700; letter-spacing: 0.5px; }
+    .page-header p  { color: #b0c8e8; margin-top: 6px; font-size: 13px; }
+
+    .section {
+      padding: 36px 40px;
+      border-bottom: 1px solid #dce6f0;
+      background: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a3a5c;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 28px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #1a3a5c;
+    }
+
+    svg { overflow: visible; display: block; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin-top: 20px;
+      padding: 14px 18px;
+      background: #f0f4f8;
+      border-radius: 6px;
+      border: 1px solid #dce6f0;
+    }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4a6a8a; }
+    .legend-swatch { width: 18px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+    .note {
+      margin-top: 14px;
+      padding: 12px 16px;
+      background: #f0f4f8;
+      border-radius: 6px;
+      border: 1px solid #dce6f0;
+      font-size: 12px;
+      color: #4a6a8a;
+      line-height: 1.6;
+    }
+    .note code { color: #1a3a5c; font-weight: 600; }
+
+    footer {
+      padding: 16px 40px;
+      color: #8aa8c0;
+      font-size: 11px;
+      border-top: 1px solid #dce6f0;
+      background: #f4f6f9;
+    }
+  </style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>CIQ Processor — Architecture</h1>
+  <p>Visual reference: end-to-end data flow, component layers, validation pipeline, and output modes</p>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 1 — End-to-End Data Flow                                  -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">1 &nbsp; End-to-End Data Flow</div>
+
+  <svg width="1000" height="260" viewBox="0 0 1000 260">
+    <defs>
+      <marker id="arr"   markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#2a6496"/></marker>
+      <marker id="arr-g" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#2e7d52"/></marker>
+      <marker id="arr-o" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#b07820"/></marker>
+      <marker id="arr-r" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#c04040"/></marker>
+    </defs>
+
+    <!-- Row 1: main pipeline -->
+
+    <!-- CIQ Excel -->
+    <rect x="10"  y="40" width="130" height="60" rx="7" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.8"/>
+    <text x="75"  y="65" text-anchor="middle" fill="#1a3a5c" font-size="12" font-weight="700" font-family="Arial">CIQ Excel</text>
+    <text x="75"  y="83" text-anchor="middle" fill="#4a6a8a" font-size="11" font-family="Arial">Source workbook</text>
+
+    <line x1="140" y1="70" x2="175" y2="70" stroke="#2a6496" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <!-- ciq-processor box -->
+    <rect x="176" y="22" width="160" height="96" rx="8" fill="#1a3a5c" stroke="#1a3a5c" stroke-width="1.5"/>
+    <text x="256" y="54"  text-anchor="middle" fill="#ffffff"  font-size="13" font-weight="700" font-family="Arial">ciq-processor</text>
+    <text x="256" y="73"  text-anchor="middle" fill="#7ec0f0"  font-size="11" font-family="Arial">Validate CIQ</text>
+    <text x="256" y="89"  text-anchor="middle" fill="#b0c8e8"  font-size="11" font-family="Arial">Export JSON</text>
+    <text x="256" y="108" text-anchor="middle" fill="#b0c8e8"  font-size="10" font-family="Arial">CiqProcessorImpl</text>
+
+    <!-- fork: two outputs from processor -->
+    <line x1="336" y1="55" x2="380" y2="42"  stroke="#c04040" stroke-width="1.5" marker-end="url(#arr-r)"/>
+    <line x1="336" y1="85" x2="380" y2="148" stroke="#2e7d52" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+    <!-- Validation Reports -->
+    <rect x="381" y="18" width="155" height="60" rx="7" fill="#fde8e8" stroke="#c04040" stroke-width="1.8"/>
+    <text x="459" y="43"  text-anchor="middle" fill="#7a1a1a" font-size="12" font-weight="700" font-family="Arial">Validation Reports</text>
+    <text x="459" y="61"  text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">.json  .html  .xlsx</text>
+
+    <!-- MOP JSON -->
+    <rect x="381" y="124" width="155" height="60" rx="7" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.8"/>
+    <text x="459" y="149" text-anchor="middle" fill="#1a4a2a" font-size="12" font-weight="700" font-family="Arial">MOP JSON Files</text>
+    <text x="459" y="167" text-anchor="middle" fill="#3a7a54" font-size="10" font-family="Arial">individual or single mode</text>
+
+    <!-- downstream arrow from JSON -->
+    <line x1="536" y1="154" x2="575" y2="154" stroke="#2e7d52" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+    <!-- mop-generator -->
+    <rect x="576" y="124" width="155" height="60" rx="7" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.5"/>
+    <text x="654" y="149" text-anchor="middle" fill="#1a4a2a" font-size="12" font-weight="700" font-family="Arial">mop-generator</text>
+    <text x="654" y="167" text-anchor="middle" fill="#3a7a54" font-size="10" font-family="Arial">reads JSON → MOP docs</text>
+
+    <!-- stdout params -->
+    <line x1="536" y1="48" x2="575" y2="48"  stroke="#c04040" stroke-width="1.5" marker-end="url(#arr-r)"/>
+    <rect x="576" y="18"  width="155" height="60" rx="7" fill="#fde8e8" stroke="#c04040" stroke-width="1.5"/>
+    <text x="654" y="43"  text-anchor="middle" fill="#7a1a1a" font-size="12" font-weight="700" font-family="Arial">stdout params</text>
+    <text x="654" y="61"  text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">STATUS, ERRORS, CR_LIST…</text>
+
+    <!-- YAML inputs (bottom strip) -->
+    <text x="10" y="200" fill="#7a5800" font-size="11" font-weight="700" font-family="Arial">Config inputs (passed via CLI):</text>
+
+    <rect x="10"  y="215" width="148" height="40" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1.5"/>
+    <text x="84"  y="233" text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">*_validation-rules.yaml</text>
+    <text x="84"  y="248" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">column + row rules</text>
+
+    <rect x="176" y="215" width="148" height="40" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1.5"/>
+    <text x="250" y="233" text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">*_json-output.yaml</text>
+    <text x="250" y="248" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">JSON template config</text>
+
+    <rect x="342" y="215" width="148" height="40" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1.5"/>
+    <text x="416" y="233" text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">report-template.html</text>
+    <text x="416" y="248" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">HTML report layout (opt.)</text>
+
+    <!-- dotted lines from config inputs to processor -->
+    <line x1="84"  y1="215" x2="220" y2="118" stroke="#c0820a" stroke-width="1" stroke-dasharray="5,3"/>
+    <line x1="250" y1="215" x2="260" y2="118" stroke="#c0820a" stroke-width="1" stroke-dasharray="5,3"/>
+    <line x1="416" y1="215" x2="300" y2="118" stroke="#c0820a" stroke-width="1" stroke-dasharray="5,3"/>
+  </svg>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch" style="background:#1a3a5c"></div>Core processor</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#e8f0fe;border:1px solid #2a6496"></div>Input / data</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#fde8e8;border:1px solid #c04040"></div>Validation output</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#e6f4ec;border:1px solid #2e7d52"></div>JSON output / downstream</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#fff8e6;border:1px solid #c0820a"></div>YAML config files</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 2 — Internal Component Layers                             -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">2 &nbsp; Internal Component Layers</div>
+
+  <svg width="1000" height="380" viewBox="0 0 1000 380">
+    <defs>
+      <marker id="d2arr" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#4a6a8a"/></marker>
+    </defs>
+
+    <!-- Layer labels (left gutter) -->
+    <text x="0" y="60"  fill="#8aa0b8" font-size="10" font-weight="700" font-family="Arial" transform="rotate(-90,0,60)" text-anchor="middle">CLI</text>
+
+    <!-- ── Layer 1: CLI ── -->
+    <rect x="18" y="18" width="962" height="56" rx="8" fill="#f0f4f8" stroke="#c8d8e8" stroke-width="1"/>
+    <text x="30" y="37" fill="#8aa0b8" font-size="10" font-weight="700" font-family="Arial">CLI</text>
+
+    <rect x="376" y="28" width="248" height="36" rx="6" fill="#1a3a5c"/>
+    <text x="500" y="44" text-anchor="middle" fill="#ffffff"   font-size="12" font-weight="700" font-family="Arial">CiqProcessorMain</text>
+    <text x="500" y="57" text-anchor="middle" fill="#b0c8e8"   font-size="10" font-family="Arial">ciq-validate  |  ciq-generate</text>
+
+    <!-- ── Layer 2: Orchestration ── -->
+    <rect x="18" y="88" width="962" height="56" rx="8" fill="#f0f4f8" stroke="#c8d8e8" stroke-width="1"/>
+    <text x="30" y="107" fill="#8aa0b8" font-size="10" font-weight="700" font-family="Arial">ORCHESTRATION</text>
+
+    <rect x="100" y="98" width="220" height="36" rx="6" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.5"/>
+    <text x="210" y="114" text-anchor="middle" fill="#1a3a5c" font-size="12" font-weight="700" font-family="Arial">CiqProcessorImpl</text>
+    <text x="210" y="127" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">validation + JSON export pipeline</text>
+
+    <rect x="390" y="98" width="220" height="36" rx="6" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.5"/>
+    <text x="500" y="114" text-anchor="middle" fill="#1a3a5c" font-size="12" font-weight="700" font-family="Arial">JsonTemplateEvaluator</text>
+    <text x="500" y="127" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">_each · lookups · $variables</text>
+
+    <rect x="680" y="98" width="220" height="36" rx="6" fill="#fff0f8" stroke="#a020a0" stroke-width="1.5"/>
+    <text x="790" y="114" text-anchor="middle" fill="#6a006a" font-size="12" font-weight="700" font-family="Arial">CiqTemplateGenerator</text>
+    <text x="790" y="127" text-anchor="middle" fill="#8a108a" font-size="10" font-family="Arial">blank CIQ Excel (ciq-generate)</text>
+
+    <!-- ── Layer 3: Readers ── -->
+    <rect x="18" y="158" width="962" height="56" rx="8" fill="#f0f4f8" stroke="#c8d8e8" stroke-width="1"/>
+    <text x="30" y="177" fill="#8aa0b8" font-size="10" font-weight="700" font-family="Arial">READERS</text>
+
+    <rect x="100" y="168" width="220" height="36" rx="6" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.5"/>
+    <text x="210" y="184" text-anchor="middle" fill="#1a4a2a" font-size="12" font-weight="700" font-family="Arial">InMemoryExcelReader</text>
+    <text x="210" y="197" text-anchor="middle" fill="#3a7a54" font-size="10" font-family="Arial">Apache POI workbook parser</text>
+
+    <rect x="390" y="168" width="220" height="36" rx="6" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.5"/>
+    <text x="500" y="184" text-anchor="middle" fill="#1a4a2a" font-size="12" font-weight="700" font-family="Arial">InMemoryCiqDataStore</text>
+    <text x="500" y="197" text-anchor="middle" fill="#3a7a54" font-size="10" font-family="Arial">sheet + index data in memory</text>
+
+    <rect x="680" y="168" width="220" height="36" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1.5"/>
+    <text x="790" y="184" text-anchor="middle" fill="#7a4a00" font-size="12" font-weight="700" font-family="Arial">ValidationRulesLoader</text>
+    <text x="790" y="197" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">SnakeYAML → config model</text>
+
+    <!-- ── Layer 4: Validation Engine ── -->
+    <rect x="18" y="228" width="962" height="56" rx="8" fill="#f0f4f8" stroke="#c8d8e8" stroke-width="1"/>
+    <text x="30" y="247" fill="#8aa0b8" font-size="10" font-weight="700" font-family="Arial">VALIDATION</text>
+
+    <rect x="60" y="238" width="190" height="36" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1.5"/>
+    <text x="155" y="254" text-anchor="middle" fill="#7a4a00" font-size="12" font-weight="700" font-family="Arial">CiqValidationEngine</text>
+    <text x="155" y="267" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">coordinates all validators</text>
+
+    <rect x="278" y="238" width="164" height="36" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1"/>
+    <text x="360" y="255" text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">Cell Validators</text>
+    <text x="360" y="268" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">String·Int·Email·IP·…</text>
+
+    <rect x="460" y="238" width="164" height="36" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1"/>
+    <text x="542" y="255" text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">Row Validators</text>
+    <text x="542" y="268" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">require·forbid·compare·…</text>
+
+    <rect x="642" y="238" width="200" height="36" rx="6" fill="#fff8e6" stroke="#c0820a" stroke-width="1"/>
+    <text x="742" y="255" text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">WorkbookRuleValidator</text>
+    <text x="742" y="268" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">subset·superset·unique·match</text>
+
+    <!-- ── Layer 5: Report Writers ── -->
+    <rect x="18" y="298" width="962" height="56" rx="8" fill="#f0f4f8" stroke="#c8d8e8" stroke-width="1"/>
+    <text x="30" y="317" fill="#8aa0b8" font-size="10" font-weight="700" font-family="Arial">WRITERS</text>
+
+    <rect x="100" y="308" width="200" height="36" rx="6" fill="#fde8e8" stroke="#c04040" stroke-width="1.5"/>
+    <text x="200" y="324" text-anchor="middle" fill="#7a1a1a" font-size="12" font-weight="700" font-family="Arial">HtmlReportWriter</text>
+    <text x="200" y="337" text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">built-in layout</text>
+
+    <rect x="320" y="308" width="230" height="36" rx="6" fill="#fde8e8" stroke="#c04040" stroke-width="1.5"/>
+    <text x="435" y="324" text-anchor="middle" fill="#7a1a1a" font-size="12" font-weight="700" font-family="Arial">HtmlTemplateReportWriter</text>
+    <text x="435" y="337" text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">external {{token}} template</text>
+
+    <rect x="570" y="308" width="200" height="36" rx="6" fill="#fde8e8" stroke="#c04040" stroke-width="1.5"/>
+    <text x="670" y="324" text-anchor="middle" fill="#7a1a1a" font-size="12" font-weight="700" font-family="Arial">ExcelReportWriter</text>
+    <text x="670" y="337" text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">Apache POI .xlsx</text>
+
+    <!-- vertical arrows between layers -->
+    <line x1="500" y1="74"  x2="500" y2="88"  stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+    <line x1="210" y1="144" x2="210" y2="158" stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+    <line x1="500" y1="144" x2="500" y2="158" stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+    <line x1="210" y1="214" x2="155" y2="228" stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+    <line x1="155" y1="284" x2="200" y2="298" stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+    <line x1="155" y1="284" x2="435" y2="298" stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+    <line x1="155" y1="284" x2="670" y2="298" stroke="#4a6a8a" stroke-width="1.5" marker-end="url(#d2arr)"/>
+  </svg>
+
+  <div class="note">
+    Data flows top-down through the layers. <code>CiqProcessorImpl</code> drives the full pipeline: it calls the reader, hands the loaded store to the validation engine, and dispatches to the appropriate report writers. <code>JsonTemplateEvaluator</code> is invoked only when validation passes and <code>--json-output-dir</code> is supplied. <code>CiqTemplateGenerator</code> runs only in <code>ciq-generate</code> mode.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 3 — Validation Pipeline Steps                             -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">3 &nbsp; Validation Pipeline — Step by Step</div>
+
+  <svg width="1000" height="200" viewBox="0 0 1000 200">
+    <defs>
+      <marker id="d3arr" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#2a6496"/></marker>
+      <marker id="d3fail" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#c04040"/></marker>
+    </defs>
+
+    <!-- step boxes -->
+    <!-- Step 1 -->
+    <rect x="10" y="50" width="148" height="80" rx="8" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.8"/>
+    <text x="84" y="80"  text-anchor="middle" fill="#2a6496" font-size="20" font-weight="700" font-family="Arial">1</text>
+    <text x="84" y="98"  text-anchor="middle" fill="#1a3a5c" font-size="11" font-weight="700" font-family="Arial">Load Rules</text>
+    <text x="84" y="113" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">YAML → config model</text>
+
+    <line x1="158" y1="90" x2="188" y2="90" stroke="#2a6496" stroke-width="1.5" marker-end="url(#d3arr)"/>
+
+    <!-- Step 2 -->
+    <rect x="189" y="50" width="148" height="80" rx="8" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.8"/>
+    <text x="263" y="80"  text-anchor="middle" fill="#2a6496" font-size="20" font-weight="700" font-family="Arial">2</text>
+    <text x="263" y="98"  text-anchor="middle" fill="#1a3a5c" font-size="11" font-weight="700" font-family="Arial">Read Workbook</text>
+    <text x="263" y="113" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">Excel → in-memory store</text>
+
+    <line x1="337" y1="90" x2="367" y2="90" stroke="#2a6496" stroke-width="1.5" marker-end="url(#d3arr)"/>
+
+    <!-- Step 3 -->
+    <rect x="368" y="50" width="148" height="80" rx="8" fill="#fff8e6" stroke="#c0820a" stroke-width="1.8"/>
+    <text x="442" y="80"  text-anchor="middle" fill="#c0820a" font-size="20" font-weight="700" font-family="Arial">3</text>
+    <text x="442" y="98"  text-anchor="middle" fill="#7a4a00" font-size="11" font-weight="700" font-family="Arial">Validate</text>
+    <text x="442" y="113" text-anchor="middle" fill="#a06820" font-size="10" font-family="Arial">columns · rows · workbook</text>
+
+    <line x1="516" y1="90" x2="546" y2="90" stroke="#2a6496" stroke-width="1.5" marker-end="url(#d3arr)"/>
+
+    <!-- Step 4 -->
+    <rect x="547" y="50" width="148" height="80" rx="8" fill="#fde8e8" stroke="#c04040" stroke-width="1.8"/>
+    <text x="621" y="80"  text-anchor="middle" fill="#c04040" font-size="20" font-weight="700" font-family="Arial">4</text>
+    <text x="621" y="98"  text-anchor="middle" fill="#7a1a1a" font-size="11" font-weight="700" font-family="Arial">Write Reports</text>
+    <text x="621" y="113" text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">.json  .html  .xlsx</text>
+
+    <!-- conditional fork after step 4 -->
+    <line x1="695" y1="75" x2="725" y2="55"  stroke="#c04040" stroke-width="1.5" marker-end="url(#d3fail)"/>
+    <line x1="695" y1="105" x2="725" y2="125" stroke="#2a6496" stroke-width="1.5" marker-end="url(#d3arr)"/>
+
+    <!-- FAILED path -->
+    <rect x="726" y="25"  width="120" height="40" rx="7" fill="#fde8e8" stroke="#c04040" stroke-width="1.5"/>
+    <text x="786" y="42"  text-anchor="middle" fill="#7a1a1a" font-size="11" font-weight="700" font-family="Arial">STATUS=FAILED</text>
+    <text x="786" y="57"  text-anchor="middle" fill="#9a3030" font-size="10" font-family="Arial">exit code 1</text>
+
+    <!-- PASSED path -->
+    <rect x="726" y="105" width="120" height="40" rx="7" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.5"/>
+    <text x="786" y="122" text-anchor="middle" fill="#1a4a2a" font-size="11" font-weight="700" font-family="Arial">STATUS=PASSED</text>
+    <text x="786" y="137" text-anchor="middle" fill="#3a7a54" font-size="10" font-family="Arial">exit code 0</text>
+
+    <!-- PASSED → Step 5 -->
+    <line x1="846" y1="125" x2="876" y2="125" stroke="#2e7d52" stroke-width="1.5" marker-end="url(#d3arr)"/>
+
+    <!-- Step 5 -->
+    <rect x="877" y="95"  width="115" height="60" rx="8" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.8"/>
+    <text x="934" y="120" text-anchor="middle" fill="#2e7d52" font-size="20" font-weight="700" font-family="Arial">5</text>
+    <text x="934" y="139" text-anchor="middle" fill="#1a4a2a" font-size="11" font-weight="700" font-family="Arial">Export JSON</text>
+    <text x="934" y="153" text-anchor="middle" fill="#3a7a54" font-size="10" font-family="Arial">if --json-output-dir</text>
+
+    <!-- labels on the fork lines -->
+    <text x="703" y="52"  fill="#c04040" font-size="10" font-family="Arial">errors</text>
+    <text x="703" y="128" fill="#2a6496" font-size="10" font-family="Arial">clean</text>
+  </svg>
+
+  <div class="note">
+    Step 3 runs three validator tiers in order: (a) per-column validators on every cell, (b) row-rule validators on every data row, (c) workbook-level validators across sheets. Errors are accumulated — all sheets are always validated regardless of earlier failures. Step 5 runs only when validation passes and both <code>--json-output-dir</code> and <code>--json-output-config-file</code> are provided.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 4 — JSON Template Evaluation                              -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">4 &nbsp; JSON Template Evaluation (_each Directives)</div>
+
+  <svg width="1000" height="280" viewBox="0 0 1000 280">
+    <defs>
+      <marker id="d4arr" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#2a6496"/></marker>
+      <marker id="d4g" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#2e7d52"/></marker>
+    </defs>
+
+    <!-- YAML template input -->
+    <rect x="10" y="30" width="165" height="210" rx="8" fill="#fff8e6" stroke="#c0820a" stroke-width="1.8"/>
+    <text x="93" y="55" text-anchor="middle" fill="#7a4a00" font-size="12" font-weight="700" font-family="Arial">json-output.yaml</text>
+    <line x1="18" y1="64" x2="167" y2="64" stroke="#e0b060" stroke-width="1"/>
+    <text x="18" y="82"  fill="#a06820" font-size="10" font-family="Arial">output_mode: individual</text>
+    <text x="18" y="99"  fill="#a06820" font-size="10" font-family="Arial">segregate_by:</text>
+    <text x="28" y="115" fill="#a06820" font-size="10" font-family="Arial">sheet: Index</text>
+    <text x="28" y="131" fill="#a06820" font-size="10" font-family="Arial">column: CRGroup</text>
+    <text x="28" y="147" fill="#a06820" font-size="10" font-family="Arial">as: $cr</text>
+    <text x="18" y="164" fill="#a06820" font-size="10" font-family="Arial">data:</text>
+    <text x="28" y="180" fill="#a06820" font-size="10" font-family="Arial">nodes:</text>
+    <text x="38" y="196" fill="#a06820" font-size="10" font-family="Arial">_each: "DISTINCT</text>
+    <text x="38" y="212" fill="#a06820" font-size="10" font-family="Arial">  Index.Node AS $node"</text>
+    <text x="38" y="228" fill="#a06820" font-size="10" font-family="Arial">niamID: Node_Details</text>
+    <text x="38" y="244" fill="#a06820" font-size="10" font-family="Arial">  .'NIAM NAME' WHERE…</text>
+
+    <line x1="175" y1="135" x2="210" y2="135" stroke="#c0820a" stroke-width="1.5" marker-end="url(#d4arr)"/>
+
+    <!-- Evaluator box -->
+    <rect x="211" y="80" width="190" height="110" rx="8" fill="#1a3a5c"/>
+    <text x="306" y="110" text-anchor="middle" fill="#ffffff"  font-size="13" font-weight="700" font-family="Arial">JsonTemplate</text>
+    <text x="306" y="128" text-anchor="middle" fill="#ffffff"  font-size="13" font-weight="700" font-family="Arial">Evaluator</text>
+    <text x="306" y="150" text-anchor="middle" fill="#7ec0f0"  font-size="11" font-family="Arial">resolves _each</text>
+    <text x="306" y="165" text-anchor="middle" fill="#7ec0f0"  font-size="11" font-family="Arial">expands arrays</text>
+    <text x="306" y="180" text-anchor="middle" fill="#b0c8e8"  font-size="10" font-family="Arial">resolves values</text>
+
+    <!-- three _each forms branching down -->
+    <line x1="306" y1="190" x2="306" y2="225" stroke="#2a6496" stroke-width="1.5"/>
+    <line x1="306" y1="225" x2="160" y2="225" stroke="#2a6496" stroke-width="1"/>
+    <line x1="306" y1="225" x2="306" y2="225" stroke="#2a6496" stroke-width="1"/>
+    <line x1="306" y1="225" x2="453" y2="225" stroke="#2a6496" stroke-width="1"/>
+
+    <!-- DISTINCT box -->
+    <line x1="160" y1="225" x2="160" y2="240" stroke="#2a6496" stroke-width="1" marker-end="url(#d4arr)"/>
+    <rect x="80" y="240" width="160" height="32" rx="6" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.5"/>
+    <text x="160" y="254" text-anchor="middle" fill="#1a3a5c" font-size="11" font-weight="700" font-family="Arial">DISTINCT …AS $var</text>
+    <text x="160" y="267" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">unique values + scope</text>
+
+    <!-- All rows box -->
+    <line x1="306" y1="225" x2="306" y2="240" stroke="#2a6496" stroke-width="1" marker-end="url(#d4arr)"/>
+    <rect x="222" y="240" width="168" height="32" rx="6" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.5"/>
+    <text x="306" y="254" text-anchor="middle" fill="#1a3a5c" font-size="11" font-weight="700" font-family="Arial">SheetName</text>
+    <text x="306" y="267" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">all rows of sheet</text>
+
+    <!-- WHERE box -->
+    <line x1="453" y1="225" x2="453" y2="240" stroke="#2a6496" stroke-width="1" marker-end="url(#d4arr)"/>
+    <rect x="370" y="240" width="166" height="32" rx="6" fill="#e8f0fe" stroke="#2a6496" stroke-width="1.5"/>
+    <text x="453" y="254" text-anchor="middle" fill="#1a3a5c" font-size="11" font-weight="700" font-family="Arial">Sheet WHERE col=val</text>
+    <text x="453" y="267" text-anchor="middle" fill="#4a6a8a" font-size="10" font-family="Arial">filtered rows</text>
+
+    <!-- output arrow -->
+    <line x1="401" y1="135" x2="456" y2="135" stroke="#2e7d52" stroke-width="1.5" marker-end="url(#d4g)"/>
+
+    <!-- Output JSON -->
+    <rect x="457" y="80" width="175" height="110" rx="8" fill="#e6f4ec" stroke="#2e7d52" stroke-width="1.8"/>
+    <text x="545" y="106" text-anchor="middle" fill="#1a4a2a" font-size="12" font-weight="700" font-family="Arial">Output JSON</text>
+    <line x1="465" y1="114" x2="624" y2="114" stroke="#b0d8b8" stroke-width="1"/>
+    <text x="465" y="130" fill="#3a7a54" font-size="10" font-family="Arial">{</text>
+    <text x="475" y="146" fill="#3a7a54" font-size="10" font-family="Arial">"nodeType": "MRF",</text>
+    <text x="475" y="161" fill="#3a7a54" font-size="10" font-family="Arial">"nodes": [</text>
+    <text x="485" y="176" fill="#3a7a54" font-size="10" font-family="Arial">{ "node": "MRF1",</text>
+    <text x="485" y="191" fill="#3a7a54" font-size="10" font-family="Arial">  "niamID": "…" }</text>
+
+    <!-- Value resolution table -->
+    <rect x="670" y="20" width="320" height="240" rx="8" fill="#f8fafb" stroke="#d0dbe8" stroke-width="1.5"/>
+    <text x="830" y="44" text-anchor="middle" fill="#1a3a5c" font-size="12" font-weight="700" font-family="Arial">Scalar Value Resolution</text>
+    <line x1="678" y1="52" x2="982" y2="52" stroke="#d0dbe8" stroke-width="1"/>
+
+    <text x="690" y="71"  fill="#4a6a8a" font-size="10" font-weight="700" font-family="Arial">Expression</text>
+    <text x="870" y="71"  fill="#4a6a8a" font-size="10" font-weight="700" font-family="Arial">Resolves to</text>
+    <line x1="678" y1="78" x2="982" y2="78" stroke="#e8eef4" stroke-width="1"/>
+
+    <text x="690" y="97"  fill="#1a3a5c" font-size="11" font-family="Arial">ColumnName</text>
+    <text x="870" y="97"  fill="#4a6a8a" font-size="11" font-family="Arial">Cell value (current row)</text>
+    <line x1="678" y1="105" x2="982" y2="105" stroke="#f0f4f8" stroke-width="1"/>
+
+    <text x="690" y="124" fill="#1a3a5c" font-size="11" font-family="Arial">Sheet.Column</text>
+    <text x="870" y="124" fill="#4a6a8a" font-size="11" font-family="Arial">First non-blank (scoped)</text>
+    <line x1="678" y1="132" x2="982" y2="132" stroke="#f0f4f8" stroke-width="1"/>
+
+    <text x="690" y="151" fill="#1a3a5c" font-size="11" font-family="Arial">Sheet.Col WHERE…</text>
+    <text x="870" y="151" fill="#4a6a8a" font-size="11" font-family="Arial">Relational lookup</text>
+    <line x1="678" y1="159" x2="982" y2="159" stroke="#f0f4f8" stroke-width="1"/>
+
+    <text x="690" y="178" fill="#1a3a5c" font-size="11" font-family="Arial">$varname</text>
+    <text x="870" y="178" fill="#4a6a8a" font-size="11" font-family="Arial">Named variable</text>
+    <line x1="678" y1="186" x2="982" y2="186" stroke="#f0f4f8" stroke-width="1"/>
+
+    <text x="690" y="205" fill="#1a3a5c" font-size="11" font-family="Arial">"literal string"</text>
+    <text x="870" y="205" fill="#4a6a8a" font-size="11" font-family="Arial">Written as-is</text>
+    <line x1="678" y1="213" x2="982" y2="213" stroke="#f0f4f8" stroke-width="1"/>
+
+    <text x="690" y="232" fill="#4a6a8a" font-size="10" font-style="italic" font-family="Arial">Column names with spaces: 'NIAM NAME'</text>
+  </svg>
+
+  <div class="note">
+    <code>JsonTemplateEvaluator</code> is fully domain-agnostic — it has no hardcoded column or sheet names. The <code>DISTINCT</code> form is recommended: it deduplicates values and auto-scopes the named sheet's rows so that plain <code>Sheet.Column</code> lookups return per-value data without needing extra <code>WHERE</code> clauses.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 5 — OUTPUT MODES                                          -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">5 &nbsp; Output Modes</div>
+
+  <svg width="1000" height="240" viewBox="0 0 1000 240">
+    <defs>
+      <marker id="d5arr" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,9 3,0 6" fill="#2a6496"/></marker>
+    </defs>
+
+    <!-- ── LEFT: individual mode ── -->
+    <rect x="10" y="10" width="460" height="220" rx="10" fill="#f8fafb" stroke="#c8d8e8" stroke-width="1.5"/>
+    <rect x="10" y="10" width="460" height="36" rx="10" fill="#1a3a5c"/>
+    <!-- cover bottom-radius of header -->
+    <rect x="10" y="30" width="460" height="16" fill="#1a3a5c"/>
+    <text x="240" y="33" text-anchor="middle" fill="#fff" font-size="13" font-weight="700" font-family="Arial">output_mode: individual</text>
+
+    <text x="30" y="68" fill="#4a6a8a" font-size="11" font-family="Arial">segregate_by: { sheet: Index, column: CRGroup, as: $cr }</text>
+    <text x="30" y="86" fill="#4a6a8a" font-size="11" font-family="Arial">One JSON file + sub-directory per distinct value:</text>
+
+    <!-- directory tree -->
+    <text x="50"  y="113" fill="#7a4a00" font-size="11" font-family="Arial" font-weight="700">json-output-dir/</text>
+    <text x="70"  y="132" fill="#2e7d52" font-size="11" font-family="Arial">├── CR001/</text>
+    <text x="90"  y="150" fill="#4a6a8a" font-size="11" font-family="Arial">│   └── MRF_ACTIVITY_CR001.json</text>
+    <text x="70"  y="168" fill="#2e7d52" font-size="11" font-family="Arial">└── CR002/</text>
+    <text x="90"  y="186" fill="#4a6a8a" font-size="11" font-family="Arial">    └── MRF_ACTIVITY_CR002.json</text>
+
+    <text x="30"  y="215" fill="#8aa0b8" font-size="10" font-family="Arial">File name: {NODE_TYPE}_{ACTIVITY}_{unit}.json</text>
+
+    <!-- ── RIGHT: single mode ── -->
+    <rect x="530" y="10" width="460" height="220" rx="10" fill="#f8fafb" stroke="#c8d8e8" stroke-width="1.5"/>
+    <rect x="530" y="10" width="460" height="36" rx="10" fill="#2e7d52"/>
+    <rect x="530" y="30" width="460" height="16" fill="#2e7d52"/>
+    <text x="760" y="33" text-anchor="middle" fill="#fff" font-size="13" font-weight="700" font-family="Arial">output_mode: single</text>
+
+    <text x="550" y="68" fill="#4a6a8a" font-size="11" font-family="Arial">No segregate_by required.</text>
+    <text x="550" y="86" fill="#4a6a8a" font-size="11" font-family="Arial">Entire workbook → one JSON file:</text>
+
+    <!-- directory tree -->
+    <text x="570" y="113" fill="#7a4a00" font-size="11" font-family="Arial" font-weight="700">json-output-dir/</text>
+    <text x="590" y="132" fill="#2e7d52" font-size="11" font-family="Arial">└── MRF_ACTIVITY.json</text>
+
+    <text x="550" y="215" fill="#8aa0b8" font-size="10" font-family="Arial">File name: {NODE_TYPE}_{ACTIVITY}.json</text>
+
+    <!-- Also: validation report naming (below both) -->
+  </svg>
+
+  <div class="note">
+    Validation reports are always written to <code>--output</code> regardless of mode: <code>{NODE_TYPE}_{ACTIVITY}_VALIDATION_REPORT.json</code> / <code>.html</code> / <code>.xlsx</code>. The base name can be overridden with <code>report_output.filename</code> in the rules YAML.
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 6 — INDEX Sheet Modes                                     -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">6 &nbsp; CIQ INDEX Sheet — Three Detection Modes</div>
+
+  <svg width="1000" height="290" viewBox="0 0 1000 290">
+
+    <!-- Mode 1 -->
+    <rect x="10" y="10" width="300" height="270" rx="10" fill="#f8fafb" stroke="#2a6496" stroke-width="1.8"/>
+    <rect x="10" y="10" width="300" height="38" rx="10" fill="#1a3a5c"/>
+    <rect x="10" y="32" width="300" height="16" fill="#1a3a5c"/>
+    <text x="160" y="35" text-anchor="middle" fill="#fff"    font-size="13" font-weight="700" font-family="Arial">Mode 1 — Proper Index</text>
+
+    <text x="30" y="72"  fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">INDEX columns:</text>
+    <text x="30" y="90"  fill="#1a3a5c" font-size="11" font-family="Arial">Node  |  CRGroup  |  Tables</text>
+    <line x1="18" y1="100" x2="302" y2="100" stroke="#d0dbe8" stroke-width="1"/>
+
+    <text x="30" y="120" fill="#8aa0b8" font-size="10" font-family="Arial">MRF1  | CR001 | ANNOUNCEMENT_FILES</text>
+    <text x="30" y="137" fill="#8aa0b8" font-size="10" font-family="Arial">MRF2  | CR001 | ANNOUNCEMENT_FILES</text>
+    <text x="30" y="154" fill="#8aa0b8" font-size="10" font-family="Arial">MRF3  | CR002 | ANNOUNCEMENT_FILES</text>
+
+    <line x1="18" y1="168" x2="302" y2="168" stroke="#d0dbe8" stroke-width="1"/>
+    <text x="30" y="188" fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">Data sheet columns:</text>
+    <text x="30" y="205" fill="#1a3a5c" font-size="11" font-family="Arial">Node  |  Action  |  fields…</text>
+
+    <line x1="18" y1="218" x2="302" y2="218" stroke="#d0dbe8" stroke-width="1"/>
+    <text x="30" y="238" fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">JSON segregation:</text>
+    <text x="30" y="256" fill="#2e7d52" font-size="11" font-family="Arial">one file per Node (or CRGroup)</text>
+
+    <!-- Mode 2 -->
+    <rect x="350" y="10" width="300" height="270" rx="10" fill="#f8fafb" stroke="#2e7d52" stroke-width="1.8"/>
+    <rect x="350" y="10" width="300" height="38" rx="10" fill="#1a5a2a"/>
+    <rect x="350" y="32" width="300" height="16" fill="#1a5a2a"/>
+    <text x="500" y="35" text-anchor="middle" fill="#fff"    font-size="13" font-weight="700" font-family="Arial">Mode 2 — CRGROUP Mode</text>
+
+    <text x="370" y="72"  fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">INDEX columns:</text>
+    <text x="370" y="90"  fill="#1a3a5c" font-size="11" font-family="Arial">Group  |  CRGroup  |  Node</text>
+    <line x1="358" y1="100" x2="642" y2="100" stroke="#d0dbe8" stroke-width="1"/>
+
+    <text x="370" y="120" fill="#8aa0b8" font-size="10" font-family="Arial">A  |  CR001  |  MRF1</text>
+    <text x="370" y="137" fill="#8aa0b8" font-size="10" font-family="Arial">A  |  CR001  |  MRF2</text>
+    <text x="370" y="154" fill="#8aa0b8" font-size="10" font-family="Arial">B  |  CR002  |  MRF3</text>
+
+    <line x1="358" y1="168" x2="642" y2="168" stroke="#d0dbe8" stroke-width="1"/>
+    <text x="370" y="188" fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">Data sheet columns:</text>
+    <text x="370" y="205" fill="#1a3a5c" font-size="11" font-family="Arial">Node  |  Action  |  fields…</text>
+
+    <line x1="358" y1="218" x2="642" y2="218" stroke="#d0dbe8" stroke-width="1"/>
+    <text x="370" y="238" fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">JSON segregation:</text>
+    <text x="370" y="256" fill="#2e7d52" font-size="11" font-family="Arial">one file per CRGroup</text>
+
+    <!-- Mode 3 -->
+    <rect x="690" y="10" width="300" height="270" rx="10" fill="#f8fafb" stroke="#a020a0" stroke-width="1.8"/>
+    <rect x="690" y="10" width="300" height="38" rx="10" fill="#6a006a"/>
+    <rect x="690" y="32" width="300" height="16" fill="#6a006a"/>
+    <text x="840" y="35" text-anchor="middle" fill="#fff"    font-size="13" font-weight="700" font-family="Arial">Mode 3 — GROUP Mode</text>
+
+    <text x="710" y="72"  fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">INDEX columns:</text>
+    <text x="710" y="90"  fill="#1a3a5c" font-size="11" font-family="Arial">Group  |  Node  <tspan fill="#8aa0b8" font-size="10">(no Tables, no CRGroup)</tspan></text>
+    <line x1="698" y1="100" x2="982" y2="100" stroke="#d0dbe8" stroke-width="1"/>
+
+    <text x="710" y="120" fill="#8aa0b8" font-size="10" font-family="Arial">A  |  MRF1</text>
+    <text x="710" y="137" fill="#8aa0b8" font-size="10" font-family="Arial">A  |  MRF2</text>
+    <text x="710" y="154" fill="#8aa0b8" font-size="10" font-family="Arial">B  |  MRF3</text>
+
+    <line x1="698" y1="168" x2="982" y2="168" stroke="#d0dbe8" stroke-width="1"/>
+    <text x="710" y="188" fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">Data sheet columns:</text>
+    <text x="710" y="205" fill="#1a3a5c" font-size="11" font-family="Arial">Group  |  Action  |  fields…</text>
+
+    <line x1="698" y1="218" x2="982" y2="218" stroke="#d0dbe8" stroke-width="1"/>
+    <text x="710" y="238" fill="#4a6a8a" font-size="11" font-family="Arial" font-weight="700">JSON segregation:</text>
+    <text x="710" y="256" fill="#2e7d52" font-size="11" font-family="Arial">group-wise folder per Group</text>
+  </svg>
+
+  <div class="note">
+    The INDEX mode is auto-detected by <code>InMemoryExcelReader</code> based on which column headers are present. Mode 1 is the original per-node format. Mode 2 and Mode 3 support large multi-node rollouts where many nodes share the same configuration data.
+  </div>
+</div>
+
+
+<footer>CIQ Processor — Architecture Reference</footer>
+</body>
+</html>

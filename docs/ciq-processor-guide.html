@@ -290,7 +290,7 @@ footer {
     <li><a href="#cli">CLI Usage</a></li>
 
     <li class="nav-section">JSON Output</li>
-    <li><a href="#json-output">json_output Block</a></li>
+    <li><a href="#json-output">JSON Output Config File</a></li>
     <li class="nav-sub"><a href="#output-single">output_mode: single</a></li>
     <li class="nav-sub"><a href="#output-individual">output_mode: individual</a></li>
 
@@ -347,7 +347,7 @@ validation passes — segregates the data into per-scope JSON folders consumed b
 <div class="pipeline" style="margin-top:0;">
   <div style="width:260px;"></div>
   <div class="pipeline-arrow" style="visibility:hidden;">▶</div>
-  <div style="font-size:0.82em;color:#555;padding:0 0.5em;">validation PASSED + <code>--mop-json-dir</code></div>
+  <div style="font-size:0.82em;color:#555;padding:0 0.5em;">validation PASSED + <code>--json-output-dir</code></div>
   <div class="pipeline-arrow">▶</div>
   <div class="pipeline-step light">mop-json/ folders</div>
   <div class="pipeline-arrow">▶</div>
@@ -374,10 +374,11 @@ ciq-validate required:
   --output        &lt;dir&gt;    Output directory for validation reports
 
 ciq-validate optional:
-  --format                 &lt;csv&gt;    JSON,HTML,MSEXCEL (default: all three)
-  --mop-json-dir           &lt;dir&gt;    JSON output for MOP generation (PASSED only)
-  --report-template-name   &lt;file&gt;   HTML report template filename (enables template HTML)
-  --report-template-path   &lt;dir&gt;    Directory containing the HTML report template
+  --format                  &lt;csv&gt;    JSON,HTML,MSEXCEL (default: all three)
+  --json-output-dir         &lt;dir&gt;    Output directory for JSON files (PASSED only)
+  --json-output-config-file &lt;file&gt;   JSON output config (*_json-output.yaml)
+  --report-template-name    &lt;file&gt;   HTML report template filename (enables template HTML)
+  --report-template-path    &lt;dir&gt;    Directory containing the HTML report template
 
 ciq-generate required:
   --node-type   &lt;type&gt;   Node type
@@ -406,10 +407,11 @@ Exit code:  0 = PASSED/SUCCESS,  1 = FAILED/ERROR</code></pre>
   --activity               ANNOUNCEMENT_LOADING                           \
   --rules                  MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
   --output                 target/processor-output                         \
-  --format                 JSON,HTML,MSEXCEL                               \
-  --mop-json-dir           target/mop-json                                 \
-  --report-template-name   validation-report-template.html                 \
-  --report-template-path   src/main/resources</code></pre>
+  --format                  JSON,HTML,MSEXCEL                               \
+  --json-output-dir         target/mop-json                                 \
+  --json-output-config-file MRF_ANNOUNCEMENT_LOADING_json-output.yaml      \
+  --report-template-name    validation-report-template.html                 \
+  --report-template-path    src/main/resources</code></pre>
 
 <h3>Example — validate without template (built-in HTML layout)</h3>
 <pre><code>java -jar ciq-processor-1.0.0-cli.jar \
@@ -418,8 +420,9 @@ Exit code:  0 = PASSED/SUCCESS,  1 = FAILED/ERROR</code></pre>
   --activity    FIXED_LINE_CONFIGURATION                        \
   --rules       SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml \
   --output      target/processor-output                         \
-  --format      JSON,HTML                                       \
-  --mop-json-dir target/mop-json</code></pre>
+  --format                  JSON,HTML                                       \
+  --json-output-dir         target/mop-json                                 \
+  --json-output-config-file SBC_FIXED_LINE_CONFIGURATION_json-output.yaml</code></pre>
 
 <h3>Example — generate blank CIQ template</h3>
 <pre><code>java -jar ciq-processor-1.0.0-cli.jar \
@@ -432,35 +435,44 @@ Exit code:  0 = PASSED/SUCCESS,  1 = FAILED/ERROR</code></pre>
 <hr class="section">
 
 <!-- ───────────────────────────────────────────────────────────────────────── -->
-<h2 id="json-output">JSON Output (<code>json_output:</code>)</h2>
+<h2 id="json-output">JSON Output Config File</h2>
 
-<p>MOP JSON output is <strong>fully YAML-driven</strong> via the <code>json_output</code> block
-in the rules file. There are no hardcoded modes — the output structure, segregation key, and
-file naming are all declared in YAML. <code>JsonTemplateEvaluator</code> processes the
-<code>data:</code> template recursively, resolving <code>_each</code> directives and relational
-lookups against the in-memory <code>CiqDataStore</code>.</p>
+<p>MOP JSON output is <strong>fully YAML-driven</strong> via a standalone
+<code>*_json-output.yaml</code> file that is completely independent of the validation-rules YAML.
+It is passed at runtime via two CLI parameters — both must be provided for JSON output to run:</p>
 
-<pre><code>json_output:
-  output_mode: single        # single | individual (see below)
+<pre><code>--json-output-dir         &lt;dir&gt;    # where to write the JSON file(s)
+--json-output-config-file &lt;file&gt;   # e.g. MRF_ANNOUNCEMENT_LOADING_json-output.yaml</code></pre>
 
-  segregate_by:              # required when output_mode: individual
-    sheet:  Index
-    column: CRGroup          # distinct values of this column → one folder each
-    as:     $cr              # variable name used in data template
+<p>JSON output is produced only when validation <strong>passes</strong>. There are no hardcoded
+modes — the output structure, segregation key, and file naming are all declared in the config file.
+<code>JsonTemplateEvaluator</code> processes the <code>data:</code> template recursively,
+resolving <code>_each</code> directives and relational lookups against the in-memory
+<code>CiqDataStore</code>. The same config file is read by <code>mop-generator-utility</code>
+and <code>network-command-executor-utility</code>.</p>
 
-  data:                      # free-form YAML template
-    nodeType: MRF
-    activity: ANNOUNCEMENT_LOADING
-    nodes:
-      _each: "DISTINCT Index.Node AS $node"
-      node:    $node
-      crGroup: Index.CRGroup
-      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
-      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-      tableData:
-        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-        INPUT_FILE:           INPUT_FILE
-        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH</code></pre>
+<p>File naming convention: <code>{NODE_TYPE}_{ACTIVITY}_json-output.yaml</code></p>
+
+<pre><code>output_mode: single        # single | individual (see below)
+
+segregate_by:              # required when output_mode: individual
+  sheet:  Index
+  column: CRGroup          # distinct values of this column → one folder each
+  as:     $cr              # variable name used in data template
+
+data:                      # free-form YAML template
+  nodeType: MRF
+  activity: ANNOUNCEMENT_LOADING
+  nodes:
+    _each: "DISTINCT Index.Node AS $node"
+    node:    $node
+    crGroup: Index.CRGroup
+    email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+    tableData:
+      _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+      INPUT_FILE:           INPUT_FILE
+      MRF_DESTINATION_PATH: MRF_DESTINATION_PATH</code></pre>
 
 <h3>_each directive</h3>
 <table>
@@ -1051,7 +1063,7 @@ for (SheetValidationResult r : report.getSheets()) {
     ├── <span class="dir">processor/</span>
     │   ├── <span class="file">CiqProcessor.java</span>                  <span class="comment"># API interface</span>
     │   ├── <span class="file">CiqProcessorImpl.java</span>              <span class="comment"># Validation + segregation pipeline</span>
-    │   ├── <span class="file">CiqProcessorMain.java</span>              <span class="comment"># CLI entry point (--ciq, --rules, --mop-json-dir, --report-template-name …)</span>
+    │   ├── <span class="file">CiqProcessorMain.java</span>              <span class="comment"># CLI entry point (--ciq, --rules, --json-output-dir, --json-output-config-file …)</span>
     │   └── <span class="dir">reader/</span>
     │       ├── <span class="file">InMemoryExcelReader.java</span>       <span class="comment"># Reads CIQ Excel workbook into memory</span>
     │       └── <span class="file">InMemoryCiqDataStore.java</span>      <span class="comment"># In-memory data store (sheets + index)</span>
@@ -1122,8 +1134,8 @@ for (SheetValidationResult r : report.getSheets()) {
   <li>Define <code>sheets:</code> with column-level rules for each data sheet.</li>
   <li>Add a <code>report_output:</code> block to control the report file name and formats.</li>
   <li>Add an <code>outputs:</code> block to declare any console/post-validation aggregates (e.g. <code>group</code>, <code>set</code>, <code>map</code>).</li>
-  <li>Add a <code>json_output:</code> block to describe how validated data is written to MOP JSON — set <code>output_mode</code>, <code>segregate_by</code>, and define the <code>data</code> template with <code>_each</code> directives.</li>
-  <li>Pass the YAML path via <code>--rules</code> on the CLI, or as <code>rulesFilePath</code> in the API.</li>
+  <li>Create <strong><code>{NODE_TYPE}_{ACTIVITY}_json-output.yaml</code></strong> to describe how validated data is written to MOP JSON — set <code>output_mode</code>, <code>segregate_by</code>, and define the <code>data</code> template with <code>_each</code> directives. Pass it via <code>--json-output-config-file</code>.</li>
+  <li>Pass the rules YAML path via <code>--rules</code> on the CLI, or as <code>rulesFilePath</code> in the API.</li>
 </ol>
 
 <h3>Validation rules YAML skeleton</h3>
@@ -1178,18 +1190,20 @@ sheets:
           operator: equals
           value: MODIFY
       # require cross-sheet (SheetName.ColumnName)
-      - require: Node_Details.Node_Name
+      - require: Node_Details.Node_Name</code></pre>
 
-json_output:
-  output_mode: individual
-  segregate_by:
-    sheet: NODE_ID
-    column: NODE
-    as: $node
-  data:
-    _each: "MyFirstTable WHERE NODE = $node"
-    action: "Action"
-    myField: "Record.MY_FIELD"</code></pre>
+<h3>JSON output config skeleton (<code>{NODE_TYPE}_{ACTIVITY}_json-output.yaml</code>)</h3>
+<pre><code>output_mode: individual     # individual | single
+
+segregate_by:               # required when output_mode: individual
+  sheet:  NODE_ID
+  column: NODE
+  as:     $node
+
+data:
+  _each: "MyFirstTable WHERE NODE = $node"
+  action:  Action
+  myField: Record.MY_FIELD</code></pre>
 
 <footer>
   CIQ Processor — Nokia CIQ Toolchain &nbsp;|&nbsp;

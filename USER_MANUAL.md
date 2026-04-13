@@ -63,9 +63,10 @@ java -jar ciq-processor-1.0.0-cli.jar \
   --ciq          MRF_ANNOUNCEMENT_LOADING_CIQ.xlsx \
   --node-type    MRF \
   --activity     ANNOUNCEMENT_LOADING \
-  --rules        MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
-  --output       reports/ \
-  --mop-json-dir mop-json/
+  --rules                   MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml \
+  --output                  reports/ \
+  --json-output-dir         mop-json/ \
+  --json-output-config-file MRF_ANNOUNCEMENT_LOADING_json-output.yaml
 ```
 
 **Console output on PASSED:**
@@ -86,7 +87,7 @@ REPORT_FILENAME=reports/MRF_ANNOUNCEMENT_LOADING_VALIDATION_REPORT
 
 When validation **FAILS**: share `REPORT_FILENAME.html` with the user to fix the errors, then re-validate.
 
-When validation **PASSES**: JSON data is segregated into `mop-json/` for the MOP generator.
+When validation **PASSES**: JSON data is written to `mop-json/` according to the JSON output config file.
 
 ---
 
@@ -106,7 +107,8 @@ java -jar ciq-processor-1.0.0-cli.jar --mode <mode> [options]
 | `--rules <file>` | Yes | Path to the YAML validation rules file |
 | `--output <dir>` | Yes | Directory for validation report files |
 | `--format <csv>` | No | `JSON,HTML,MSEXCEL` — default: all three |
-| `--mop-json-dir <dir>` | No | Write MOP JSON here on PASSED (segregated per `json_output.segregate_by`) |
+| `--json-output-dir <dir>` | No | Output directory for JSON files (written on PASSED only) |
+| `--json-output-config-file <file>` | No | JSON output config file (`*_json-output.yaml`) |
 | `--report-template-name <file>` | No | HTML report template filename (enables template-based HTML) |
 | `--report-template-path <dir>` | No | Directory containing the HTML report template |
 
@@ -284,32 +286,36 @@ If only `--report-template-name` is given (no path), the name is treated as a fu
 
 ## MOP JSON Output
 
-When `--mop-json-dir` is provided and validation **PASSES**, data is written in the structure
-defined by `json_output` in the rules YAML.  The layout is fully YAML-driven — there are no
-hardcoded modes.
+When **both** `--json-output-dir` and `--json-output-config-file` are provided and validation
+**PASSES**, data is written according to the standalone JSON output config file. The layout is
+fully YAML-driven — there are no hardcoded modes.
 
-### `json_output` in the rules YAML
+The config file is independent of the validation-rules YAML and is shared by `ciq-processor`,
+`mop-generator-utility`, and `network-command-executor-utility`.
+
+File naming convention: **`{NODE_TYPE}_{ACTIVITY}_json-output.yaml`**
+
+### JSON output config file
 
 ```yaml
-json_output:
-  output_mode: single          # single | individual
-  segregate_by:                # required for output_mode: individual
-    sheet:  Index
-    column: CRGroup
-    as:     $cr
-  data:
-    nodeType: MRF
-    activity: ANNOUNCEMENT_LOADING
-    nodes:
-      _each: "DISTINCT Index.Node AS $node"
-      node:    $node
-      crGroup: Index.CRGroup
-      email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
-      niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-      tableData:
-        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-        INPUT_FILE:           INPUT_FILE
-        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+output_mode: single          # single | individual
+segregate_by:                # required for output_mode: individual
+  sheet:  Index
+  column: CRGroup
+  as:     $cr
+data:
+  nodeType: MRF
+  activity: ANNOUNCEMENT_LOADING
+  nodes:
+    _each: "DISTINCT Index.Node AS $node"
+    node:    $node
+    crGroup: Index.CRGroup
+    email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+    tableData:
+      _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+      INPUT_FILE:           INPUT_FILE
+      MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 ```
 
 ### `output_mode: single` — one JSON file for the entire workbook
@@ -364,7 +370,7 @@ segregation value.
 | `'X' is not a valid email address` | Incorrectly formatted email in User_ID sheet | Fix the format; multiple emails must be comma-separated without spaces |
 | `Value 'X' is not a valid integer` | Numeric column contains text or a decimal | Enter a whole number |
 | `Node 'X' not found in Node_ID sheet` | Node name mismatch between sheets | Check for spelling differences or trailing spaces |
-| Validation PASSED but `mop-json/` is empty | `--mop-json-dir` not specified | Add `--mop-json-dir <dir>` to the command |
+| Validation PASSED but `mop-json/` is empty | `--json-output-dir` or `--json-output-config-file` not specified | Add both `--json-output-dir <dir>` and `--json-output-config-file <file>` to the command |
 
 ---
 
@@ -523,10 +529,10 @@ outputs:
 
 ---
 
-### JSON Output Structure (`json_output:`)
+### JSON Output Config File (`*_json-output.yaml`)
 
-The `json_output:` block defines the complete shape of the output JSON using a free-form YAML
-template.  The template is evaluated by `JsonTemplateEvaluator` which supports iteration,
+The JSON output config file defines the complete shape of the output JSON using a free-form YAML
+template. The template is evaluated by `JsonTemplateEvaluator` which supports iteration,
 relational lookups, and variable substitution.
 
 #### Top-level fields
@@ -556,28 +562,27 @@ relational lookups, and variable substitution.
 | `key: S.Col` | `crGroup: Index.CRGroup` | First non-blank value from sheet+column |
 | `key: $var` | `node: $node` | Inline variable reference |
 
-#### Example
+#### Example (`MRF_ANNOUNCEMENT_LOADING_json-output.yaml`)
 
 ```yaml
-json_output:
-  output_mode: individual
-  segregate_by:
-    sheet:  Index
-    column: CRGroup
-    as:     $cr
-  data:
-    nodeType: MRF
-    activity: ANNOUNCEMENT_LOADING
-    crGroup:  $cr
-    email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
-    nodes:
-      _each: "DISTINCT Index.Node AS $node"
-      node:   $node
-      niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-      files:
-        _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
-        INPUT_FILE:           INPUT_FILE
-        MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+output_mode: individual
+segregate_by:
+  sheet:  Index
+  column: CRGroup
+  as:     $cr
+data:
+  nodeType: MRF
+  activity: ANNOUNCEMENT_LOADING
+  crGroup:  $cr
+  email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+  nodes:
+    _each: "DISTINCT Index.Node AS $node"
+    node:   $node
+    niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+    files:
+      _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+      INPUT_FILE:           INPUT_FILE
+      MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 ```
 
 **Output JSON** (for CR1):
@@ -600,7 +605,7 @@ json_output:
 }
 ```
 
-#### File name
+#### Output file name
 
 **`output_mode: single`** → `{NODE_TYPE}_{ACTIVITY}.json`
 
