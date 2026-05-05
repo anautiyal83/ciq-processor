@@ -142,7 +142,14 @@ public class CiqProcessorImpl implements CiqProcessor {
             }
         }
 
-        // Step 5: JSON output — only when validation passed and both dirs are provided
+        // Step 5: Post-validation consolidation — merge multi-row Index values per CRGroup
+        // (e.g. EMAIL consolidate: true) so templates see the full consolidated string.
+        // Must run AFTER validation so per-row multi: false checks see original values.
+        if (store.getRawIndexSheet() != null) {
+            new InMemoryExcelReader().consolidateIndexColumns(store.getRawIndexSheet(), rules);
+        }
+
+        // Step 6: JSON output — only when validation passed and both dirs are provided
         if ("PASSED".equals(report.getStatus())
                 && jsonOutputDir != null && jsonOutputConfigPath != null) {
             File mopOutDir = new File(jsonOutputDir);

@@ -211,6 +211,11 @@ public class InMemoryExcelReader {
                         effectiveSettings(rules, SHEET_INDEX), true /* stripTrailingBlanks */));
                 log.debug("Captured raw Index sheet ({} rows)",
                         store.getRawIndexSheet().getRows().size());
+
+                // NOTE: consolidateIndexColumns is intentionally NOT called here.
+                // It must be applied AFTER validation so that multi: false rules check
+                // the original per-row values. Call consolidateIndexColumns(rawIndexSheet, rules)
+                // from CiqProcessorImpl after the validation step.
             }
             Sheet rawNodeId = findSheet(wb, niamSheet);
             if (rawNodeId != null) {
@@ -592,6 +597,101 @@ public class InMemoryExcelReader {
         if (sheetRules == null || sheetRules.getColumns() == null
                 || sheetRules.getColumns().isEmpty()) return null;
         return sheetRules.getColumns().keySet();
+    }
+
+    // -------------------------------------------------------------------------
+    // Index column consolidation
+    // -------------------------------------------------------------------------
+
+    /**
+     * For each column in the Index sheet rules that has {@code consolidate: true},
+     * accumulates all values across rows sharing the same CRGroup, splits any
+     * comma-separated tokens, deduplicates, and writes the merged string back into
+     * every row for that CRGroup.  This ensures template expressions like
+     * {@code INDEX.EMAIL} always resolve to the complete CRGroup-level value.
+     *
+     * <p>The CRGroup column is located using the same normalised (case + underscore
+     * insensitive) matching used elsewhere in this class.
+     */
+    public void consolidateIndexColumns(com.nokia.ciq.reader.model.CiqSheet indexSheet,
+                                        ValidationRulesConfig rules) {
+        if (rules == null || rules.getSheets() == null) return;
+        com.nokia.ciq.validator.config.SheetRules indexRules = rules.getSheets().get(SHEET_INDEX);
+        if (indexRules == null || indexRules.getColumns() == null) return;
+
+        // Collect columns that need consolidation
+        List<String> consolidateCols = new ArrayList<>();
+        for (Map.Entry<String, com.nokia.ciq.validator.config.ColumnRule> e
+                : indexRules.getColumns().entrySet()) {
+            if (e.getValue() != null && e.getValue().isConsolidate()) {
+                consolidateCols.add(e.getKey());
+            }
+        }
+        if (consolidateCols.isEmpty()) return;
+
+        // Find the actual CRGroup column name in the sheet (normalised match)
+        String crGroupActual = findActualCol(indexSheet.getColumns(), "CRGroup");
+        if (crGroupActual == null) {
+            log.warn("consolidateIndexColumns: CRGroup column not found in Index sheet — skipping");
+            return;
+        }
+
+        // Pass 1: accumulate tokens per CRGroup per column
+        // crGroup → colName → ordered set of tokens
+        Map<String, Map<String, LinkedHashSet<String>>> acc = new LinkedHashMap<>();
+        for (com.nokia.ciq.reader.model.CiqRow row : indexSheet.getRows()) {
+            String crGroup = row.get(crGroupActual);
+            if (crGroup == null || crGroup.trim().isEmpty()) continue;
+            crGroup = crGroup.trim();
+            for (String colKey : consolidateCols) {
+                String actual = findActualCol(indexSheet.getColumns(), colKey);
+                if (actual == null) continue;
+                String cellVal = row.get(actual);
+                if (cellVal == null || cellVal.trim().isEmpty()) continue;
+                Map<String, LinkedHashSet<String>> colMap =
+                        acc.computeIfAbsent(crGroup, k -> new LinkedHashMap<>());
+                LinkedHashSet<String> tokens =
+                        colMap.computeIfAbsent(colKey, k -> new LinkedHashSet<>());
+                for (String token : cellVal.split(",")) {
+                    String t = token.trim();
+                    if (!t.isEmpty()) tokens.add(t);
+                }
+            }
+        }
+        if (acc.isEmpty()) return;
+
+        // Pass 2: write consolidated value back into every row
+        for (com.nokia.ciq.reader.model.CiqRow row : indexSheet.getRows()) {
+            String crGroup = row.get(crGroupActual);
+            if (crGroup == null || crGroup.trim().isEmpty()) continue;
+            crGroup = crGroup.trim();
+            Map<String, LinkedHashSet<String>> colMap = acc.get(crGroup);
+            if (colMap == null) continue;
+            for (String colKey : consolidateCols) {
+                String actual = findActualCol(indexSheet.getColumns(), colKey);
+                if (actual == null) continue;
+                LinkedHashSet<String> tokens = colMap.get(colKey);
+                if (tokens != null && !tokens.isEmpty()) {
+                    row.getData().put(actual, String.join(",", tokens));
+                }
+            }
+        }
+        log.debug("consolidateIndexColumns: consolidated {} column(s) across {} CRGroup(s)",
+                consolidateCols.size(), acc.size());
+    }
+
+    /**
+     * Returns the actual column name in {@code columns} that matches {@code canonical}
+     * using normalised (case + underscore-insensitive) comparison, or {@code null} if
+     * no match is found.
+     */
+    private static String findActualCol(List<String> columns, String canonical) {
+        if (columns == null || canonical == null) return null;
+        String target = normalize(canonical);
+        for (String col : columns) {
+            if (normalize(col).equals(target)) return col;
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------

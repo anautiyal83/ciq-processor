@@ -41,6 +41,16 @@ public class EmailValidator implements CellValidator {
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
 
         List<ValidationError> errors = new ArrayList<>();
+
+        // multi: false (default) — a comma in the value means multiple addresses, which is not allowed
+        if (!rule.isMulti() && value.contains(",")) {
+            errors.add(new ValidationError(row.getRowNumber(), colName, value,
+                    CellValidator.msg(rule.getMessages(), "multi",
+                        "Multiple email addresses are not allowed (multi: false) — "
+                        + "provide one email per row")));
+            return errors;
+        }
+
         for (String part : value.split(",")) {
             String email = part.trim();
             if (!email.isEmpty() && !EMAIL_PATTERN.matcher(email).matches()) {

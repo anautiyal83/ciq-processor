@@ -319,4 +319,17 @@ public class ColumnRule {
 
     public MinOnePerGroup getMinOnePerGroup() { return minOnePerGroup; }
     public void setMinOnePerGroup(MinOnePerGroup minOnePerGroup) { this.minOnePerGroup = minOnePerGroup; }
+
+    /**
+     * For Index-sheet columns only: when {@code true}, values from this column are
+     * accumulated across all rows that share the same CRGroup key. Comma-separated
+     * tokens within a single cell are split individually (honouring {@code multi: true}).
+     * The final result is a deduplicated, comma-separated string. Each row in the raw
+     * Index sheet is updated with the full consolidated value so that template expressions
+     * such as {@code INDEX.EMAIL} always resolve to the complete CRGroup email list.
+     */
+    private boolean consolidate;
+
+    public boolean isConsolidate() { return consolidate; }
+    public void setConsolidate(boolean consolidate) { this.consolidate = consolidate; }
 }

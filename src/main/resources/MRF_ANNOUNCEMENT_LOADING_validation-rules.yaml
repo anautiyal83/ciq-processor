@@ -53,8 +53,9 @@ sheets:
 #        sheetRefIgnoreCase: true
       EMAIL:    
         type: email
-        multi: false
+        multi: true
         description: "Email ID"
+        consolidate: true
         minOnePerGroup:
             groupByColumn: CRGroup
   # ---------------------------------------------------------------------------
