@@ -236,6 +236,7 @@ public class CiqProcessorImpl implements CiqProcessor {
         JsonTemplateEvaluator.TemplateContext ctx =
                 new JsonTemplateEvaluator.TemplateContext(store, buildAllRows(store));
         Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
+        fillNullEmailsByGroup(json);
         String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + ".json";
         mapper.writeValue(new File(outputDir, fileName), json);
         log.info("Single JSON → {}", fileName);
@@ -271,6 +272,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                         new JsonTemplateEvaluator.TemplateContext(store, scopedRows)
                                 .withVar(seg.varName, value, scopedRows);
                 json = new JsonTemplateEvaluator().evaluate(template, ctx);
+                fillNullEmailsByGroup(json);
             } else {
                 // No template: produce a minimal generic JSON of all sheets with full row data
                 json = buildDefaultJson(store, nodeType, activity, seg.column, value);
@@ -447,6 +449,48 @@ public class CiqProcessorImpl implements CiqProcessor {
     /** Replaces characters that are unsafe in file names with underscores. */
     private static String sanitize(String value) {
         return value.replaceAll("[^A-Za-z0-9._\\-]", "_");
+    }
+
+    // =========================================================================
+    // Post-processing — fill null emails within the same crGroup
+    // =========================================================================
+
+    /**
+     * For any node whose email is null, borrows the email from another node in
+     * the same crGroup that does have a value.  Operates in-place on the JSON
+     * object produced by the template evaluator before it is written to disk.
+     */
+    @SuppressWarnings("unchecked")
+    private void fillNullEmailsByGroup(Object json) {
+        if (!(json instanceof Map)) return;
+        Map<String, Object> root = (Map<String, Object>) json;
+        Object nodesObj = root.get("nodes");
+        if (!(nodesObj instanceof List)) return;
+        List<Map<String, Object>> nodes = (List<Map<String, Object>>) nodesObj;
+
+        // First pass: collect the first non-null email per crGroup
+        Map<String, String> groupEmail = new LinkedHashMap<>();
+        for (Map<String, Object> node : nodes) {
+            Object crGroup = node.get("crGroup");
+            Object email   = node.get("email");
+            if (crGroup != null && email != null && !email.toString().trim().isEmpty()) {
+                groupEmail.putIfAbsent(crGroup.toString(), email.toString());
+            }
+        }
+
+        // Second pass: fill null emails from the collected map
+        for (Map<String, Object> node : nodes) {
+            Object crGroup = node.get("crGroup");
+            Object email   = node.get("email");
+            if (email == null && crGroup != null) {
+                String resolved = groupEmail.get(crGroup.toString());
+                if (resolved != null) {
+                    node.put("email", resolved);
+                    log.debug("Filled null email for node '{}' (crGroup='{}') → {}",
+                            node.get("node"), crGroup, resolved);
+                }
+            }
+        }
     }
 
     // =========================================================================
