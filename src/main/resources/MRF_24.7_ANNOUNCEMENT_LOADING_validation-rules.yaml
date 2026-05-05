@@ -26,10 +26,10 @@ settings:
 # ---------------------------------------------------------------------------
 workbook_rules:
    # every CRGroup value in the Index must have a matching entry in USER_ID
-#  - match:
-#      from: Index.CRGroup
-#      to:   USER_ID.CRGroup
-           
+  - match:
+      from: Index.GROUP
+      to:   ANNOUNCEMENT_FILES.GROUP
+
 sheets:
 
   # ---------------------------------------------------------------------------
@@ -38,25 +38,24 @@ sheets:
   # ---------------------------------------------------------------------------
   Index:
     columns:
-      Node:
+      NODE:
         required: true
         description: "MRF Hostname"
         type: string
         pattern: ".*MRF.*"
-      CRGroup:
+      CRGROUP:
         required: true
         description: "CR Number"
-#      Tables:
-#        required: true
-#        description: "Data sheet name (must match an actual sheet in the workbook)"
-#        sheetRef: true
-#        sheetRefIgnoreCase: true
+      GROUP:
+        required: true
+        description: "Group name for the configuration changes"
       EMAIL:    
         type: email
         multi: false
         description: "Email ID"
         minOnePerGroup:
             groupByColumn: CRGroup
+
   # ---------------------------------------------------------------------------
   # Sheet: Node_Details
   # Maps each MRF hostname to its NIAM login ID.
@@ -90,21 +89,6 @@ sheets:
         patternMessage: "MRF Destination Path must be an absolute Unix path starting with /"
         maxLength: 1024
 
-          # ---------------------------------------------------------------------------
-  # Sheet: USER_ID
-  # Maps each CRGROUP to its EMAIL.
-  # ---------------------------------------------------------------------------
-#  USER_ID:
-#    columns:
-#      CRGroup:
-#        required: true
-#        description: "CR Number"
-#      EMAIL:
-#        required: true
-#        type: email
-#        multi: false
-#        description: "Email ID"
-
 # ---------------------------------------------------------------------------
 # Validation report output configuration
 # ---------------------------------------------------------------------------
@@ -121,15 +105,13 @@ report_output:
 outputs:
   # Distinct CR group identifiers from the Index sheet
   CR_LIST:
-    sheet: INDEX
-    column: CRGROUP
+    sheet: Index
+    column: CRGroup
     aggregate: distinct
     separator: ","
 
-  # Count of unique CRGroup values
+  # Total number of announcement file rows
   CR_COUNT:
-    sheet: INDEX
-    column: CRGROUP
+    sheet: Index
+    column: CRGroup
     aggregate: distinct_count
-
-

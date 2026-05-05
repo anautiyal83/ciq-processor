@@ -2,6 +2,7 @@ package com.nokia.ciq.processor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.nokia.ciq.processor.model.GroupIndex;
 import com.nokia.ciq.processor.reader.InMemoryCiqDataStore;
 import com.nokia.ciq.processor.reader.InMemoryExcelReader;
 import com.nokia.ciq.reader.model.CiqRow;
@@ -155,7 +156,10 @@ public class CiqProcessorImpl implements CiqProcessor {
 
             if (outputMode == OutputMode.SINGLE) {
                 log.info("output_mode=single → {}", jsonOutputDir);
-                segregateSingle(store, nodeType, activity, jsonOutputDir, template);
+                String jsonFileName = segregateSingle(store, nodeType, activity, jsonOutputDir, template);
+                if (jsonFileName != null) {
+                    report.getParameters().put("JSON_FILE_NAME", jsonFileName);
+                }
             } else {
                 // INDIVIDUAL — driven entirely by 'segregate_by' in the json-output config
                 SegregateByConfig seg = resolveSegregateBy(jsonOutputConfig);
@@ -164,7 +168,10 @@ public class CiqProcessorImpl implements CiqProcessor {
                 } else {
                     log.info("output_mode=individual — segregating by {}.{} (${}) → {}",
                             seg.sheet, seg.column, seg.varName, jsonOutputDir);
-                    segregateIndividual(store, nodeType, activity, jsonOutputDir, template, seg);
+                    String jsonFileName = segregateIndividual(store, nodeType, activity, jsonOutputDir, template, seg);
+                    if (jsonFileName != null) {
+                        report.getParameters().put("JSON_FILE_NAME", jsonFileName);
+                    }
                 }
             }
         }
@@ -217,14 +224,14 @@ public class CiqProcessorImpl implements CiqProcessor {
     // SINGLE output — one file for the entire workbook
     // =========================================================================
 
-    private void segregateSingle(InMemoryCiqDataStore store,
-                                 String nodeType,
-                                 String activity,
-                                 String outputDir,
-                                 Map<String, Object> template) throws IOException {
+    private String segregateSingle(InMemoryCiqDataStore store,
+                                   String nodeType,
+                                   String activity,
+                                   String outputDir,
+                                   Map<String, Object> template) throws IOException {
         if (template == null || template.isEmpty()) {
             log.warn("output_mode=single: no 'data' template in json_output — skipping");
-            return;
+            return null;
         }
         JsonTemplateEvaluator.TemplateContext ctx =
                 new JsonTemplateEvaluator.TemplateContext(store, buildAllRows(store));
@@ -232,24 +239,26 @@ public class CiqProcessorImpl implements CiqProcessor {
         String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + ".json";
         mapper.writeValue(new File(outputDir, fileName), json);
         log.info("Single JSON → {}", fileName);
+        return fileName;
     }
 
     // =========================================================================
     // INDIVIDUAL output — one file per distinct value of segregate_by column
     // =========================================================================
 
-    private void segregateIndividual(InMemoryCiqDataStore store,
-                                     String nodeType,
-                                     String activity,
-                                     String outputDir,
-                                     Map<String, Object> template,
-                                     SegregateByConfig seg) throws IOException {
+    private String segregateIndividual(InMemoryCiqDataStore store,
+                                       String nodeType,
+                                       String activity,
+                                       String outputDir,
+                                       Map<String, Object> template,
+                                       SegregateByConfig seg) throws IOException {
         List<String> values = distinctValues(store, seg.sheet, seg.column);
         if (values.isEmpty()) {
             log.warn("segregate_by: no distinct values found in {}.{} — skipping", seg.sheet, seg.column);
-            return;
+            return null;
         }
 
+        List<String> fileNames = new ArrayList<>();
         for (String value : values) {
             // Scope the segregation sheet to rows matching this value.
             // All other sheets are NOT in scopedRows — the template engine falls back
@@ -271,7 +280,9 @@ public class CiqProcessorImpl implements CiqProcessor {
                     + "_" + sanitize(value) + ".json";
             mapper.writeValue(new File(outputDir, fileName), json);
             log.info("  [{}.{}={}] → {}", seg.sheet, seg.column, value, fileName);
+            fileNames.add(fileName);
         }
+        return String.join(",", fileNames);
     }
 
     // =========================================================================

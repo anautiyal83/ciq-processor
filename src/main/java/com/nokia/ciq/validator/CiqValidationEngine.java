@@ -6,6 +6,7 @@ import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
+import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.SheetRowRule;
 import com.nokia.ciq.validator.config.SheetRules;
@@ -253,6 +254,11 @@ public class CiqValidationEngine {
                 }
             }
 
+            // Post-row aggregate checks: minOnePerGroup
+            if (sheetRules != null) {
+                checkMinOnePerGroup(sheet, sheetRules, result);
+            }
+
             log.info("Sheet '{}': {} rows, {} error(s)", tableName,
                     result.getRowsChecked(), result.getErrors().size());
             report.getSheets().add(result);
@@ -362,9 +368,52 @@ public class CiqValidationEngine {
             }
         }
 
+        // Post-row aggregate checks: minOnePerGroup
+        checkMinOnePerGroup(sheet, sheetRules, result);
+
         log.info("Sheet '{}' (special): {} rows, {} error(s)", sheetLabel,
                 result.getRowsChecked(), result.getErrors().size());
         report.getSheets().add(result);
+    }
+
+    // -------------------------------------------------------------------------
+    // Post-row aggregate checks
+    // -------------------------------------------------------------------------
+
+    /**
+     * For each column in {@code sheetRules} that has a {@code minOnePerGroup} rule,
+     * verifies that at least one non-blank value exists in that column for every
+     * unique value of the groupByColumn.
+     */
+    private void checkMinOnePerGroup(CiqSheet sheet, SheetRules sheetRules,
+                                     SheetValidationResult result) {
+        if (sheetRules.getColumns() == null) return;
+        for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
+            String colName = entry.getKey();
+            MinOnePerGroup rule = entry.getValue().getMinOnePerGroup();
+            if (rule == null) continue;
+            String groupByCol = rule.getGroupByColumn();
+            if (groupByCol == null || groupByCol.trim().isEmpty()) continue;
+
+            Map<String, Boolean> groupSatisfied = new LinkedHashMap<>();
+            Map<String, Integer> groupFirstRow = new LinkedHashMap<>();
+            for (CiqRow row : sheet.getRows()) {
+                String groupVal = row.get(groupByCol);
+                if (groupVal == null || groupVal.trim().isEmpty()) continue;
+                groupFirstRow.putIfAbsent(groupVal, row.getRowNumber());
+                String cellVal = row.get(colName);
+                boolean hasValue = cellVal != null && !cellVal.trim().isEmpty();
+                groupSatisfied.merge(groupVal, hasValue, Boolean::logicalOr);
+            }
+            for (Map.Entry<String, Boolean> g : groupSatisfied.entrySet()) {
+                if (!g.getValue()) {
+                    int firstRow = groupFirstRow.getOrDefault(g.getKey(), 0);
+                    result.addError(new ValidationError(firstRow, colName, null,
+                            "Column '" + colName + "' must have at least one non-blank value"
+                            + " for " + groupByCol + "='" + g.getKey() + "'"));
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -553,6 +602,19 @@ public class CiqValidationEngine {
                     if (v != null && !v.trim().isEmpty()) seen.add(v.trim());
                 }
                 return String.join(sep, seen);
+            }
+
+            case "distinct_count": {
+                if (isBlank(rule.getColumn())) {
+                    log.warn("outputs[{}]: 'column' is required for aggregate 'distinct_count' — returning 0", key);
+                    return "0";
+                }
+                Set<String> seen = new LinkedHashSet<>();
+                for (CiqRow row : sheet.getRows()) {
+                    String v = row.get(rule.getColumn());
+                    if (v != null && !v.trim().isEmpty()) seen.add(v.trim());
+                }
+                return String.valueOf(seen.size());
             }
 
             default:

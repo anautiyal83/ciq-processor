@@ -187,6 +187,20 @@ public class ColumnRule {
     /** Custom error messages overriding the default engine messages. */
     private ColumnMessages messages;
 
+    /**
+     * At least one non-blank value must exist in this column per unique value
+     * of the groupByColumn. Evaluated across all rows after per-row checks.
+     * Example: at least one EMAIL required per CRGroup.
+     *
+     * <p>YAML usage:
+     * <pre>
+     * EMAIL:
+     *   minOnePerGroup:
+     *     groupByColumn: CRGroup
+     * </pre>
+     */
+    private MinOnePerGroup minOnePerGroup;
+
     // Getters and setters
 
     public String getType() { return type; }
@@ -302,4 +316,7 @@ public class ColumnRule {
 
     public ColumnMessages getMessages() { return messages; }
     public void setMessages(ColumnMessages messages) { this.messages = messages; }
+
+    public MinOnePerGroup getMinOnePerGroup() { return minOnePerGroup; }
+    public void setMinOnePerGroup(MinOnePerGroup minOnePerGroup) { this.minOnePerGroup = minOnePerGroup; }
 }

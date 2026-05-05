@@ -19,10 +19,12 @@ data:
   nodes:
     _each: "DISTINCT INDEX.NODE AS $node"
     node:    $node
+    version: "Node_Details.VER WHERE Node_Details.Node_Name = $node"
     crGroup: INDEX.CRGROUP
+    Group: INDEX.GROUP
     email:   INDEX.EMAIL
-    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
-    configData:
+    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"    
+    tableData:
       _each: "ANNOUNCEMENT_FILES WHERE GROUP = INDEX.GROUP"
       INPUT_FILE: INPUT_FILE
       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

@@ -32,9 +32,11 @@ public class ValidationRulesLoader {
         // ---- Skip unknown properties (e.g. version, settings keys from schema files) ----
         constructor.getPropertyUtils().setSkipMissingProperties(true);
 
-        // ---- ColumnRule: element type for allowedRanges list ----
+        // ---- ColumnRule: element type for allowedRanges list + minOnePerGroup nested type ----
         TypeDescription columnRuleDesc = new TypeDescription(ColumnRule.class);
         columnRuleDesc.addPropertyParameters("allowedRanges", IntRange.class);
+        columnRuleDesc.substituteProperty("minOnePerGroup", MinOnePerGroup.class,
+                "getMinOnePerGroup", "setMinOnePerGroup");
         constructor.addTypeDescription(columnRuleDesc);
 
         // ---- SheetRules: element type for rules list ----
