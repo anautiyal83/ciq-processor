@@ -1,6 +1,7 @@
 package com.nokia.ciq.validator.config;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -9,19 +10,26 @@ import java.util.Map;
  * File naming: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
  * Example:     SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
  *
- * Full YAML structure:
+ * <h3>YAML structure</h3>
  * <pre>
- * # Validate that Index sheet tables all have matching sheets in the CIQ JSON output
- * validateIndexSheets: true
- *
- * # Validate that all nodes in data sheets exist in Node_ID sheet
- * validateNodeIds: true
- *
- * # Column name that drives grouping: GROUP (group-based MOP generation) or NODE (node-wise).
- * # Omit to auto-detect from the INDEX sheet column layout.
- * groupByColumnName: NODE
- *
  * sheets:
+ *   Index:
+ *     columns:
+ *       Node:
+ *         required: true
+ *       CRGroup:
+ *         required: true
+ *       Tables:
+ *         required: true
+ *         sheetRef: true
+ *
+ *   Node_ID:
+ *     columns:
+ *       Node:
+ *         required: true
+ *       NIAM_ID:
+ *         required: true
+ *
  *   CRFTargetList:
  *     columns:
  *       Node:
@@ -31,65 +39,86 @@ import java.util.Map;
  *           column: node
  *       Action:
  *         required: true
- *         allowedValues: [CREATE, DELETE, MODIFY]
- *       ActionKey:
- *         requiredWhen:
- *           column: Action
- *           value: MODIFY
- *       SubAction:
- *         requiredWhen:
- *           column: Action
- *           value: MODIFY
- *         allowedValues: [ADD, DEL, MOD]
- *       ID:
- *         required: true
- *         integer: true
- *         minValue: 1
+ *         type: enum
+ *         values: [CREATE, DELETE, MODIFY]
  * </pre>
  */
 public class ValidationRulesConfig {
 
-    /** Whether to validate that every table in the Index has a corresponding JSON file. */
-    private boolean validateIndexSheets = true;
+    // -------------------------------------------------------------------------
+    // Per-sheet column rules (all sheets — Index, Node-ID, data sheets)
+    // -------------------------------------------------------------------------
 
-    /** Whether to validate that every Node value in data sheets exists in niamMapping. */
-    private boolean validateNodeIds = true;
-
-    /**
-     * Column name that drives grouping for MOP generation.
-     * <ul>
-     *   <li>{@code "GROUP"} — GROUP mode: INDEX sheet has GROUP|NODE columns; one MOP folder per group.</li>
-     *   <li>{@code "NODE"}  — node-wise mode: INDEX sheet has Node|CRGroup|Tables columns.</li>
-     *   <li>{@code null}    — auto-detect from INDEX sheet column layout (default).</li>
-     * </ul>
-     */
-    private String groupByColumnName;
-
-    /**
-     * Optional column-level validation rules for the INDEX sheet.
-     * When present, every row in the Index sheet is validated against these rules
-     * using the same cell-validator chain as data sheets.
-     */
-    private SheetRules indexSheet;
-
-    /**
-     * Configuration for the NODE_ID sheet: sheet name, key column names, and
-     * optional column-level validation rules.
-     * When present, every row in the Node_ID sheet is validated against the column
-     * rules using the same cell-validator chain as data sheets.
-     */
-    private NodeIdSheetConfig nodeIdSheet;
-
-    /**
-     * Configuration for the USER_ID sheet: sheet name, CRGROUP column name, EMAIL column name,
-     * and optional column-level validation rules.
-     * Maps each CRGROUP to the responsible user's email address.
-     * When present, every row is validated and the EMAIL values are used for CR_EMAIL_ID_LIST.
-     */
-    private UserIdSheetConfig userIdSheet;
-
-    /** Per-sheet column rules. Key = sheet name (e.g. "CRFTargetList"). */
+    /** Column validation rules for every sheet, keyed by sheet name. */
     private Map<String, SheetRules> sheets = new LinkedHashMap<>();
+
+    // -------------------------------------------------------------------------
+    // Schema.yaml extension fields
+    // -------------------------------------------------------------------------
+
+    /** Schema version string (informational only). */
+    private String version;
+
+    /** Global workbook reading settings (can be overridden per sheet). */
+    private WorkbookSettings settings;
+
+    /** When true, validates that Index sheet entries reference existing data sheets. */
+    private boolean validateIndexSheets = false;
+
+    /** When true, validates that Node column values exist in the Node_ID sheet. */
+    private boolean validateNodeIds = false;
+
+    /**
+     * List of workbook-level cross-sheet validation rules.
+     * YAML key: {@code workbook_rules} (mapped via property alias).
+     */
+    private List<WorkbookRule> workbookRules;
+
+    /**
+     * Named custom validators that can be referenced from column rules via
+     * {@code validator: &lt;name&gt;}.
+     */
+    private Map<String, ValidatorDefinition> validators;
+
+    /**
+     * Post-validation output extractions, keyed by output parameter name.
+     * Computed only when validation passes; each entry is added to
+     * {@link com.nokia.ciq.validator.model.ValidationReport#getParameters()}.
+     *
+     * <p>YAML key: {@code outputs}
+     */
+    private Map<String, OutputRule> outputs;
+
+    /**
+     * Identifies the Node-ID sheet and its key columns for NIAM mapping.
+     * When absent the reader defaults to sheet {@code Node_ID}, columns {@code Node}
+     * and {@code NIAM_ID}.
+     *
+     * <p>YAML key: {@code node_id_config}
+     */
+    private NodeIdConfig nodeIdConfig;
+
+
+    /**
+     * Validation report output configuration: formats, filename template, and optional
+     * HTML template path.
+     *
+     * <p>YAML key: {@code report_output}
+     */
+    private ReportOutputConfig reportOutput;
+
+    // Getters and setters
+
+    public Map<String, SheetRules> getSheets() { return sheets; }
+    public void setSheets(Map<String, SheetRules> sheets) { this.sheets = sheets; }
+
+    // Schema.yaml extension getters/setters
+
+    public String getVersion() { return version; }
+    public void setVersion(String version) { this.version = version; }
+
+    public WorkbookSettings getSettings() { return settings; }
+    public void setSettings(WorkbookSettings settings) { this.settings = settings; }
 
     public boolean isValidateIndexSheets() { return validateIndexSheets; }
     public void setValidateIndexSheets(boolean validateIndexSheets) { this.validateIndexSheets = validateIndexSheets; }
@@ -97,18 +126,18 @@ public class ValidationRulesConfig {
     public boolean isValidateNodeIds() { return validateNodeIds; }
     public void setValidateNodeIds(boolean validateNodeIds) { this.validateNodeIds = validateNodeIds; }
 
-    public String getGroupByColumnName() { return groupByColumnName; }
-    public void setGroupByColumnName(String groupByColumnName) { this.groupByColumnName = groupByColumnName; }
+    public List<WorkbookRule> getWorkbookRules() { return workbookRules; }
+    public void setWorkbookRules(List<WorkbookRule> workbookRules) { this.workbookRules = workbookRules; }
 
-    public SheetRules getIndexSheet() { return indexSheet; }
-    public void setIndexSheet(SheetRules indexSheet) { this.indexSheet = indexSheet; }
+    public Map<String, ValidatorDefinition> getValidators() { return validators; }
+    public void setValidators(Map<String, ValidatorDefinition> validators) { this.validators = validators; }
 
-    public NodeIdSheetConfig getNodeIdSheet() { return nodeIdSheet; }
-    public void setNodeIdSheet(NodeIdSheetConfig nodeIdSheet) { this.nodeIdSheet = nodeIdSheet; }
+    public Map<String, OutputRule> getOutputs() { return outputs; }
+    public void setOutputs(Map<String, OutputRule> outputs) { this.outputs = outputs; }
 
-    public UserIdSheetConfig getUserIdSheet() { return userIdSheet; }
-    public void setUserIdSheet(UserIdSheetConfig userIdSheet) { this.userIdSheet = userIdSheet; }
+    public NodeIdConfig getNodeIdConfig()                        { return nodeIdConfig; }
+    public void         setNodeIdConfig(NodeIdConfig nodeIdConfig) { this.nodeIdConfig = nodeIdConfig; }
 
-    public Map<String, SheetRules> getSheets() { return sheets; }
-    public void setSheets(Map<String, SheetRules> sheets) { this.sheets = sheets; }
+    public ReportOutputConfig getReportOutput()                      { return reportOutput; }
+    public void               setReportOutput(ReportOutputConfig v) { this.reportOutput = v; }
 }

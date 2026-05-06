@@ -1,0 +1,227 @@
+# ===========================================================================
+# JSON Output Schema — Reference for *_json-output.yaml files
+# ===========================================================================
+#
+# A json-output file defines how validated CIQ workbook data is transformed
+# into structured JSON files for use by mop-generator-utility and
+# network-command-executor-utility.
+#
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_json-output.yaml
+#
+# This file is completely independent of the validation-rules YAML.
+# It is passed at runtime as a separate parameter:
+#
+#   ciq-processor:
+#     --json-output-dir  <output-dir>
+#     --json-output-config-file   <NODE_TYPE>_<ACTIVITY>_json-output.yaml
+#
+#   mop-generator-utility:
+#     --json-output-config-file   <NODE_TYPE>_<ACTIVITY>_json-output.yaml
+#
+#   network-command-executor-utility:
+#     --json-output-config-file   <NODE_TYPE>_<ACTIVITY>_json-output.yaml
+#
+# Load it in Java using JsonOutputLoader:
+#   Map<String, Object> template = new JsonOutputLoader().load(".../_json-output.yaml");
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Top-level keys
+# ---------------------------------------------------------------------------
+#
+#   output_mode   — controls how many JSON files are produced (required)
+#   segregate_by  — required when output_mode=individual; defines the split key
+#   data          — the free-form JSON template tree (required)
+#
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# output_mode
+# ---------------------------------------------------------------------------
+#
+#   single      — one JSON file for the entire workbook.
+#                 File name: <NODE_TYPE>_<ACTIVITY>.json
+#
+#   individual  — one JSON file per distinct value of the segregate_by column.
+#                 File name: <NODE_TYPE>_<ACTIVITY>_<value>.json
+#                 Requires a 'segregate_by' block (see below).
+#
+# ---------------------------------------------------------------------------
+output_mode: individual      # individual (default) | single
+
+
+# ---------------------------------------------------------------------------
+# segregate_by  (required for output_mode: individual)
+# ---------------------------------------------------------------------------
+#
+#   sheet:  <SheetName>   # any sheet in the workbook (use 'Index' for the index sheet)
+#   column: <ColumnName>  # one output file is created per distinct value of this column
+#   as:     $<varname>    # variable injected into the template (default: $unit)
+#
+#   The named sheet is pre-scoped to matching rows for each iteration value.
+#   All other sheets remain fully accessible via WHERE conditions.
+#
+# ---------------------------------------------------------------------------
+segregate_by:
+  sheet:  <SheetName>        # any sheet (use 'Index' for the index sheet)
+  column: <ColumnName>       # one file per distinct value of this column
+  as:     $<varname>         # variable injected into the template (default: $unit)
+
+
+# ---------------------------------------------------------------------------
+# data  — JSON template tree
+# ---------------------------------------------------------------------------
+#
+# ── Value resolution rules ────────────────────────────────────────────────
+#
+#   Plain string (no "$", no ".")
+#       Inside a row-iteration block (_each: Sheet or _each: "Sheet WHERE…"):
+#         treated as a column name; the cell value for the current row is used.
+#       Outside a row block:
+#         written as a static string literal.
+#
+#   "SheetName.ColumnName"  (contains ".", no WHERE)
+#       First non-blank value from the (scoped) rows of that sheet + column.
+#       Column names containing spaces must be wrapped in single quotes:
+#         "Node_Details.'NIAM NAME'"
+#
+#   "Sheet.Column WHERE [Sheet.]FilterCol = value"
+#       Relational lookup: scans the sheet's rows and returns the first
+#       non-blank Column value where FilterCol equals the resolved value.
+#       value may be a $variable, Sheet.Col reference, current-row column, or literal.
+#       Examples:
+#         niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#         email:  "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#
+#   $<varname>
+#       Resolves a named variable — from 'segregate_by.as' or from a DISTINCT iteration.
+#
+# ── Array directives (_each) ─────────────────────────────────────────────
+#
+#   _each: "DISTINCT [FROM] <Sheet>.<Column> [AS $<varname>]"
+#       RECOMMENDED — fully generic.
+#       Iterates distinct (deduplicated) values of Column from Sheet.
+#       Sets $varname to each value in the child context.
+#       Scopes Sheet's rows to the current value so that Sheet.AnyColumn
+#       lookups automatically return per-value data without extra WHERE clauses.
+#       "FROM" keyword and "AS $varname" are both optional; $item is used when omitted.
+#       Examples:
+#         _each: "DISTINCT Index.Node AS $node"
+#         _each: "DISTINCT FROM Index.CRGroup AS $cr"
+#         _each: "DISTINCT Index.Group AS $group"
+#
+#   _each: <SheetName>
+#       Iterates every row of SheetName.
+#       Inside this block, plain strings resolve as column names in the current row.
+#
+#   _each: "[<Sheet>.<Column> |] <SheetName> WHERE [<Sheet>.]FilterCol = value"
+#       Iterates rows of SheetName where FilterCol equals the resolved value.
+#       An optional "Sheet.Column" prefix before WHERE is supported as a column hint.
+#       value follows the same resolution rules: $variable, Sheet.Col, column name, literal.
+#       Examples:
+#         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#         _each: "Index.Node WHERE Index.CRGroup = $cr"
+#
+# ── Nested objects ────────────────────────────────────────────────────────
+#
+#   Any map without an _each key is treated as a nested object and all
+#   its keys are resolved recursively.
+#
+# ---------------------------------------------------------------------------
+data:
+  <jsonKey>: <static value>              # plain string written as-is
+  <jsonKey>: <SheetName>.<ColumnName>    # first non-blank value from sheet+column
+  <jsonKey>: "$<varname>"                # variable from segregate_by or DISTINCT
+  <jsonKey>: "<Sheet>.<Col> WHERE [<Sheet>.]<FilterCol> = $var"   # relational lookup
+
+  # ── DISTINCT-value array (RECOMMENDED) ────────────────────────────────────
+  <jsonArrayKey>:
+    _each: "DISTINCT <Sheet>.<Column> AS $<varname>"
+    <jsonKey>: $<varname>
+    <jsonKey>: <Sheet>.<Column>          # auto-scoped to current value's rows
+    <jsonKey>: "<Sheet>.<Col> WHERE <Sheet>.<FilterCol> = $<varname>"
+    <nestedArrayKey>:
+      _each: "<DataSheet> WHERE <Col> = <Sheet>.<Col>"
+      <jsonKey>: <ColumnName>
+
+  # ── Row-iteration array ─────────────────────────────────────────────────
+  <jsonArrayKey>:
+    _each: <SheetName>
+    <jsonKey>: <ColumnName>              # column name in the current row
+
+  # ── Filtered row-iteration array ───────────────────────────────────────
+  <jsonArrayKey>:
+    _each: "<SheetName> WHERE [<Sheet>.]<FilterCol> = <value>"
+    <jsonKey>: <ColumnName>
+
+  # ── Nested object (no _each) ──────────────────────────────────────────
+  <jsonObjectKey>:
+    <jsonKey>: <SheetName>.<ColumnName>
+    <jsonKey>: <static value>
+
+
+# ===========================================================================
+# Examples
+# ===========================================================================
+
+# ── Example 1: node-wise single file ────────────────────────────────────────
+# Produces: MRF_ANNOUNCEMENT_LOADING.json
+#
+# output_mode: single
+# data:
+#   nodeType: MRF
+#   activity: ANNOUNCEMENT_LOADING
+#   nodes:
+#     _each: "DISTINCT Index.Node AS $node"
+#     node:    $node
+#     crGroup: Index.CRGroup
+#     email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = Index.CRGroup"
+#     niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#     tableData:
+#       _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#       INPUT_FILE:           INPUT_FILE
+#       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+
+# ── Example 2: CR-wise individual files ─────────────────────────────────────
+# Produces: MRF_ANNOUNCEMENT_LOADING_CR001.json, MRF_ANNOUNCEMENT_LOADING_CR002.json …
+#
+# output_mode: individual
+# segregate_by:
+#   sheet:  Index
+#   column: CRGroup
+#   as:     $cr
+# data:
+#   nodeType: MRF
+#   activity: ANNOUNCEMENT_LOADING
+#   crGroup:  $cr
+#   email:    "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#   nodes:
+#     _each: "Index.Node WHERE Index.CRGroup = $cr"
+#     node:   Node
+#     niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
+#     tableData:
+#       _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#       INPUT_FILE:           INPUT_FILE
+#       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+
+# ── Example 3: CR-wise single file ──────────────────────────────────────────
+# Produces: MRF_ANNOUNCEMENT_LOADING.json  (all CRs in one file)
+#
+# output_mode: single
+# data:
+#   nodeType: MRF
+#   activity: ANNOUNCEMENT_LOADING
+#   crs:
+#     _each: "DISTINCT FROM Index.CRGroup AS $cr"
+#     crGroup: $cr
+#     email:   "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"
+#     nodes:
+#       _each: "Index.Node WHERE Index.CRGroup = $cr"
+#       node:   Node
+#       niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = Node"
+#       tableData:
+#         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
+#         INPUT_FILE:           INPUT_FILE
+#         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH

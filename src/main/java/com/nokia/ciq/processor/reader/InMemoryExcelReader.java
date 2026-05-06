@@ -4,10 +4,9 @@ import com.nokia.ciq.reader.model.CiqIndex;
 import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.model.NodeEntry;
-import com.nokia.ciq.validator.config.NodeIdSheetConfig;
 import com.nokia.ciq.validator.config.SheetRules;
-import com.nokia.ciq.validator.config.UserIdSheetConfig;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
+import com.nokia.ciq.validator.config.WorkbookSettings;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
@@ -108,43 +107,40 @@ public class InMemoryExcelReader {
 
     private InMemoryCiqDataStore readInternal(String ciqFilePath, String nodeType, String activity,
                                               ValidationRulesConfig rules) throws IOException {
-        NodeIdSheetConfig nodeIdCfg = (rules != null && rules.getNodeIdSheet() != null)
-                ? rules.getNodeIdSheet() : new NodeIdSheetConfig();
-        UserIdSheetConfig userIdCfg = (rules != null && rules.getUserIdSheet() != null)
-                ? rules.getUserIdSheet() : null;
-
         log.info("Reading CIQ into memory: {}", ciqFilePath);
         log.info("Node type: {}, Activity: {}", nodeType, activity);
-        log.info("NODE_ID sheet: '{}', nodeColumn: '{}', niamColumn: '{}'",
-                nodeIdCfg.getName(), nodeIdCfg.getNodeColumn(), nodeIdCfg.getNiamColumn());
-        if (userIdCfg != null) {
-            log.info("USER_ID sheet: '{}', crGroupColumn: '{}', emailColumn: '{}'",
-                    userIdCfg.getName(), userIdCfg.getCrGroupColumn(), userIdCfg.getEmailColumn());
-        }
 
         validateFile(ciqFilePath);
 
         try (FileInputStream fis = new FileInputStream(ciqFilePath);
              Workbook wb = new XSSFWorkbook(fis)) {
 
-            Map<String, String> niamMapping = readNiamMapping(wb, nodeIdCfg);
-            log.info("NIAM mapping: {} entries", niamMapping.size());
+            // Resolve Node-ID sheet name and column names from config (or fall back to defaults)
+            String niamSheet  = "Node_ID";
+            String niamNodeCol = "Node";
+            String niamNiamCol = "NIAM_ID";
+            if (rules != null && rules.getNodeIdConfig() != null) {
+                com.nokia.ciq.validator.config.NodeIdConfig nc = rules.getNodeIdConfig();
+                if (nc.getSheet()      != null) niamSheet   = nc.getSheet();
+                if (nc.getNodeColumn() != null) niamNodeCol = nc.getNodeColumn();
+                if (nc.getNiamColumn() != null) niamNiamCol = nc.getNiamColumn();
+            }
+            Map<String, String> niamMapping = readNiamMapping(wb, niamSheet, niamNodeCol, niamNiamCol);
+            log.info("NIAM mapping from '{}': {} entries", niamSheet, niamMapping.size());
 
             CiqIndex index = readIndex(wb, nodeType, activity, niamMapping);
             List<String> tables = index.getAllTables();
             log.info("Index: {} node entries, {} unique tables",
                     index.getEntries().size(), tables.size());
 
-            // No proper Index (no Tables column found) — read all non-NIAM sheets as data sheets.
-            // In GROUP / CRGROUP mode the Index sheet is grouping metadata only, not a data sheet,
-            // so it is excluded here alongside the NODE_ID sheet.
+            // No proper Index (no Tables column found) — read all non-special sheets as data sheets.
+            // In GROUP / CRGROUP mode the Index sheet is grouping metadata only, not a data sheet.
             if (tables.isEmpty()) {
                 boolean groupMode = !groupToNodes.isEmpty() || !crGroupToGroupNodes.isEmpty();
                 tables = new ArrayList<>();
                 for (int i = 0; i < wb.getNumberOfSheets(); i++) {
                     String sName = wb.getSheetName(i);
-                    if (sName.equalsIgnoreCase(nodeIdCfg.getName())) continue;
-                    if (userIdCfg != null && sName.equalsIgnoreCase(userIdCfg.getName())) continue;
+                    if (sName.equalsIgnoreCase(niamSheet)) continue;
                     if (groupMode && sName.equalsIgnoreCase(SHEET_INDEX)) continue;
                     tables.add(sName);
                 }
@@ -161,38 +157,72 @@ public class InMemoryExcelReader {
                     continue;
                 }
                 Set<String> cols = configuredColumns(rules, tableName);
-                CiqSheet ciqSheet = readSheet(sheet, tableName, cols);
+                WorkbookSettings sheetSettings = effectiveSettings(rules, tableName);
+                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings);
                 sheets.put(tableName, ciqSheet);
                 log.info("Loaded table '{}': {} rows", tableName, ciqSheet.getRows().size());
             }
 
+            // Load YAML-configured sheets that are NOT listed in the Index Tables column
+            // (e.g. Node_Details, USER_ID). These are auxiliary sheets that must be validated
+            // but are not referenced in the Index — include them in the store so the validation
+            // engine and workbook_rules validators can access them.
+            if (rules != null && rules.getSheets() != null) {
+                Set<String> alwaysSpecial = new java.util.HashSet<>(
+                        java.util.Arrays.asList("Index", "Node_ID"));
+                for (String sheetName : rules.getSheets().keySet()) {
+                    if (!alwaysSpecial.contains(sheetName) && !sheets.containsKey(sheetName)) {
+                        Sheet auxSheet = findSheet(wb, sheetName);
+                        if (auxSheet != null) {
+                            Set<String> cols = configuredColumns(rules, sheetName);
+                            WorkbookSettings sheetSettings = effectiveSettings(rules, sheetName);
+                            CiqSheet ciqSheet = readSheet(auxSheet, sheetName, cols, sheetSettings);
+                            sheets.put(sheetName, ciqSheet);
+                            log.info("Loaded auxiliary sheet '{}': {} rows", sheetName, ciqSheet.getRows().size());
+                        } else {
+                            log.warn("YAML-configured sheet '{}' not found in workbook", sheetName);
+                        }
+                    }
+                }
+            }
+
             InMemoryCiqDataStore store = new InMemoryCiqDataStore(index, sheets);
 
-            // Capture INDEX and NODE_ID sheets as CiqSheet objects for column-rule validation.
-            // These are stored separately so they do not appear in getAvailableSheets() and
-            // cannot interfere with the validateIndexSheets cross-check.
-            Sheet rawIndex = wb.getSheet(SHEET_INDEX);
+            // Capture all workbook sheet names for sheetRef validation.
+            // This must reflect every sheet in the Excel file — not just the ones loaded as
+            // data tables — so that sheetRef: true can correctly validate Index.Tables values
+            // against the full workbook contents.
+            List<String> allSheetNames = new ArrayList<>();
+            for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                allSheetNames.add(wb.getSheetName(i));
+            }
+            store.setAllWorkbookSheetNames(allSheetNames);
+            log.debug("Workbook contains {} sheet(s): {}", allSheetNames.size(), allSheetNames);
+
+            // Capture Index, Node-ID, and User-ID sheets separately for column-rule validation
+            // and special data extraction (NIAM mapping, CR-email mapping).
+            // Stored outside the main sheets map so they don't appear in getAvailableSheets()
+            // and cannot interfere with the validateIndexSheets cross-check.
+            Sheet rawIndex = findSheet(wb, SHEET_INDEX);
             if (rawIndex != null) {
-                Set<String> indexCols = configuredColumns(rules, null); // indexSheet columns
-                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, indexCols));
+                // Read ALL columns (null) so extra columns like GROUP are preserved for the
+                // template engine even if they are not listed in the validation-rules YAML.
+                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, null,
+                        effectiveSettings(rules, SHEET_INDEX), true /* stripTrailingBlanks */));
                 log.debug("Captured raw Index sheet ({} rows)",
                         store.getRawIndexSheet().getRows().size());
+
+                // NOTE: consolidateIndexColumns is intentionally NOT called here.
+                // It must be applied AFTER validation so that multi: false rules check
+                // the original per-row values. Call consolidateIndexColumns(rawIndexSheet, rules)
+                // from CiqProcessorImpl after the validation step.
             }
-            Sheet rawNodeId = wb.getSheet(nodeIdCfg.getName());
+            Sheet rawNodeId = findSheet(wb, niamSheet);
             if (rawNodeId != null) {
-                store.setRawNodeIdSheet(readNodeIdSheet(rawNodeId, nodeIdCfg));
-                log.debug("Captured raw '{}' sheet ({} rows)",
-                        nodeIdCfg.getName(), store.getRawNodeIdSheet().getRows().size());
-            }
-            if (userIdCfg != null) {
-                Sheet rawUserId = wb.getSheet(userIdCfg.getName());
-                if (rawUserId != null) {
-                    store.setRawUserIdSheet(readUserIdSheet(rawUserId, userIdCfg));
-                    log.info("USER_ID sheet '{}': {} row(s) loaded",
-                            userIdCfg.getName(), store.getRawUserIdSheet().getRows().size());
-                } else {
-                    log.warn("'{}' sheet not found in workbook", userIdCfg.getName());
-                }
+                store.setRawNodeIdSheet(
+                        readNodeIdSheet(rawNodeId, niamSheet, niamNodeCol, niamNiamCol));
+                log.debug("Captured raw Node-ID sheet '{}' ({} rows)",
+                        niamSheet, store.getRawNodeIdSheet().getRows().size());
             }
 
             return store;
@@ -336,26 +366,28 @@ public class InMemoryExcelReader {
     // Node_ID sheet
     // -------------------------------------------------------------------------
 
-    private Map<String, String> readNiamMapping(Workbook wb, NodeIdSheetConfig cfg) {
+    private Map<String, String> readNiamMapping(Workbook wb,
+                                                String sheetName, String nodeColumn, String niamColumn) {
         Map<String, String> map = new LinkedHashMap<>();
 
-        Sheet sheet = wb.getSheet(cfg.getName());
+        Sheet sheet = wb.getSheet(sheetName);
         if (sheet == null) {
-            log.warn("'{}' sheet not found — NIAM mapping will be empty", cfg.getName());
+            log.warn("'{}' sheet not found — NIAM mapping will be empty", sheetName);
             return map;
         }
 
-        int headerRowIdx = findHeaderRow(sheet, cfg.getNodeColumn(), cfg.getNiamColumn());
+        // Use primary-area scan to avoid picking up columns from reference/lookup tables
+        // that may repeat the same headers to the right of the active data area.
+        int headerRowIdx = findHeaderRowPrimary(sheet, nodeColumn, niamColumn);
         if (headerRowIdx < 0) {
             log.warn("Header row not found in '{}' sheet (expected columns '{}' and '{}')",
-                    cfg.getName(), cfg.getNodeColumn(), cfg.getNiamColumn());
+                    sheetName, nodeColumn, niamColumn);
             return map;
         }
 
         Row headerRow = sheet.getRow(headerRowIdx);
-        int nodeCol   = findColumnIndex(headerRow, cfg.getNodeColumn());
-        int niamCol   = findColumnIndex(headerRow, cfg.getNiamColumn());
-
+        int nodeCol   = findColumnIndexPrimary(headerRow, nodeColumn);
+        int niamCol   = findColumnIndexPrimary(headerRow, niamColumn);
         if (nodeCol < 0 || niamCol < 0) return map;
 
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
@@ -363,107 +395,122 @@ public class InMemoryExcelReader {
             if (row == null) continue;
             String node = getCellString(row.getCell(nodeCol));
             String niam = getCellString(row.getCell(niamCol));
-            if (!isBlank(node)) {
-                map.put(node, niam);
-            }
+            if (!isBlank(node)) map.put(node, niam);
         }
         return map;
     }
 
     /**
-     * Reads only the configured node and NIAM columns from the NODE_ID sheet into a
-     * {@link CiqSheet} for column-rule validation.  All other columns in the sheet are
-     * ignored — only the two columns declared in {@code cfg} are relevant for login details.
+     * Reads the configured node and NIAM columns from the Node-ID sheet into a
+     * {@link CiqSheet} for column-rule validation.
+     *
+     * <p>Uses the same lenient header-row strategy as {@link #readSheet}: tries strict
+     * (both columns required) first, then falls back to any-match so that a sheet missing
+     * one of the two columns is still read partially.  The missing column is then reported
+     * precisely by {@code CiqValidationEngine.checkMissingColumns()}.
      */
-    private CiqSheet readNodeIdSheet(Sheet sheet, NodeIdSheetConfig cfg) {
+    private CiqSheet readNodeIdSheet(Sheet sheet,
+                                     String sheetName, String nodeColumn, String niamColumn) {
         CiqSheet ciqSheet = new CiqSheet();
-        ciqSheet.setSheetName(cfg.getName());
+        ciqSheet.setSheetName(sheetName);
 
-        int headerRowIdx = findHeaderRow(sheet, cfg.getNodeColumn(), cfg.getNiamColumn());
+        // Primary-area scan: ignore columns that appear only in reference/lookup tables
+        // (identified by repeated column names to the right of the active data area).
+        int headerRowIdx = findHeaderRowPrimary(sheet, nodeColumn, niamColumn);
+        if (headerRowIdx < 0)
+            headerRowIdx = findHeaderRowAnyPrimary(sheet, nodeColumn, niamColumn);
         if (headerRowIdx < 0) {
             log.warn("Header row not found in '{}' sheet (expected columns '{}' and '{}') " +
-                    "— sheet will have no rows", cfg.getName(),
-                    cfg.getNodeColumn(), cfg.getNiamColumn());
+                    "— sheet will have no rows", sheetName, nodeColumn, niamColumn);
             return ciqSheet;
         }
 
         Row headerRow = sheet.getRow(headerRowIdx);
-        int nodeCol = findColumnIndex(headerRow, cfg.getNodeColumn());
-        int niamCol = findColumnIndex(headerRow, cfg.getNiamColumn());
-        if (nodeCol < 0 || niamCol < 0) return ciqSheet;
+        int nodeCol   = findColumnIndexPrimary(headerRow, nodeColumn);
+        int niamCol   = findColumnIndexPrimary(headerRow, niamColumn);
 
-        ciqSheet.setColumns(java.util.Arrays.asList(cfg.getNodeColumn(), cfg.getNiamColumn()));
+        // Build column list from only the columns actually present
+        List<String> colNames = new ArrayList<>();
+        if (nodeCol >= 0) colNames.add(nodeColumn);
+        if (niamCol >= 0) colNames.add(niamColumn);
+        ciqSheet.setColumns(colNames);
 
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) continue;
-            String node = getCellString(row.getCell(nodeCol));
-            String niam = getCellString(row.getCell(niamCol));
-            if (isBlank(node) && isBlank(niam)) continue;
             Map<String, String> data = new LinkedHashMap<>();
-            data.put(cfg.getNodeColumn(), node);
-            data.put(cfg.getNiamColumn(), niam);
+            boolean hasAnyValue = false;
+            if (nodeCol >= 0) {
+                String v = getCellString(row.getCell(nodeCol));
+                data.put(nodeColumn, v);
+                if (v != null) hasAnyValue = true;
+            }
+            if (niamCol >= 0) {
+                String v = getCellString(row.getCell(niamCol));
+                data.put(niamColumn, v);
+                if (v != null) hasAnyValue = true;
+            }
+            if (!hasAnyValue) continue;
             ciqSheet.getRows().add(new CiqRow(r + 1, data));
         }
         return ciqSheet;
     }
 
     /**
-     * Reads only the configured CRGROUP and EMAIL columns from the USER_ID sheet into a
-     * {@link CiqSheet} for column-rule validation and CR_EMAIL_ID_LIST population.
+     * Reads the configured CRGROUP and EMAIL columns from the User-ID sheet into a
+     * {@link CiqSheet} for column-rule validation and CR-email extraction.
+     *
+     * <p>Uses the same lenient header-row strategy as {@link #readSheet}: tries strict
+     * (both columns required) first, then falls back to any-match so that a sheet missing
+     * one of the two columns is still read partially.  The missing column is then reported
+     * precisely by {@code CiqValidationEngine.checkMissingColumns()}.
      */
-    private CiqSheet readUserIdSheet(Sheet sheet, UserIdSheetConfig cfg) {
-        CiqSheet ciqSheet = new CiqSheet();
-        ciqSheet.setSheetName(cfg.getName());
-
-        int headerRowIdx = findHeaderRow(sheet, cfg.getCrGroupColumn(), cfg.getEmailColumn());
-        if (headerRowIdx < 0) {
-            log.warn("Header row not found in '{}' sheet (expected columns '{}' and '{}') " +
-                    "— sheet will have no rows", cfg.getName(),
-                    cfg.getCrGroupColumn(), cfg.getEmailColumn());
-            return ciqSheet;
-        }
-
-        Row headerRow  = sheet.getRow(headerRowIdx);
-        int crGroupCol = findColumnIndex(headerRow, cfg.getCrGroupColumn());
-        int emailCol   = findColumnIndex(headerRow, cfg.getEmailColumn());
-        if (crGroupCol < 0 || emailCol < 0) return ciqSheet;
-
-        ciqSheet.setColumns(java.util.Arrays.asList(cfg.getCrGroupColumn(), cfg.getEmailColumn()));
-
-        for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
-            Row row = sheet.getRow(r);
-            if (row == null) continue;
-            String crGroup = getCellString(row.getCell(crGroupCol));
-            String email   = getCellString(row.getCell(emailCol));
-            if (isBlank(crGroup) && isBlank(email)) continue;
-            Map<String, String> data = new LinkedHashMap<>();
-            data.put(cfg.getCrGroupColumn(), crGroup);
-            data.put(cfg.getEmailColumn(),   email);
-            ciqSheet.getRows().add(new CiqRow(r + 1, data));
-        }
-        return ciqSheet;
-    }
-
     // -------------------------------------------------------------------------
     // Data sheet reading
     // -------------------------------------------------------------------------
 
     /**
      * Reads a sheet, restricting to {@code columnsToRead} when provided.
-     * When {@code columnsToRead} is non-empty the header row is located by searching
-     * for a row that contains all the configured column names; only those columns are
-     * stored in the returned {@link CiqSheet}.
+     *
+     * <p>Header row location strategy when {@code columnsToRead} is non-empty:
+     * <ol>
+     *   <li>Try strict match — a row containing <em>all</em> configured columns.</li>
+     *   <li>Fall back to lenient match — the first row containing <em>any</em> configured
+     *       column.  This handles the case where some configured columns are absent from the
+     *       sheet; the missing ones are not added to {@code CiqSheet.columns} and will be
+     *       reported as absent by {@code CiqValidationEngine.checkMissingColumns()}.</li>
+     * </ol>
      * When {@code columnsToRead} is null or empty the existing Node/Group/Action
      * heuristics are used and every non-blank column is read.
      */
-    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead) {
+    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
+                               WorkbookSettings settings) {
+        return readSheet(sheet, tableName, columnsToRead, settings, false);
+    }
+
+    /**
+     * @param stripTrailingBlanks when {@code true}, trailing all-null rows are removed after
+     *                            reading regardless of the {@code ignoreBlankRows} setting.
+     *                            Pass {@code true} for structural/metadata sheets (Index, Node_ID)
+     *                            that are prone to Excel phantom rows, so those rows are silently
+     *                            stripped and do not produce spurious required-field errors.
+     *                            Pass {@code false} (default) for user data sheets so that
+     *                            intentional blank rows reach the validator.
+     */
+    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
+                               WorkbookSettings settings, boolean stripTrailingBlanks) {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
         int headerRowIdx;
         if (columnsToRead != null && !columnsToRead.isEmpty()) {
+            // Strict: all configured columns present in the same header row
             headerRowIdx = findHeaderRow(sheet, columnsToRead.toArray(new String[0]));
+            // Lenient fallback: at least one configured column present — lets us read
+            // whatever IS there and report missing columns properly during validation
+            if (headerRowIdx < 0) {
+                headerRowIdx = findHeaderRowAny(sheet, columnsToRead.toArray(new String[0]));
+            }
         } else {
             // Fallback heuristics for sheets with no rules config
             headerRowIdx = findHeaderRow(sheet, "Node", "Action");
@@ -505,9 +552,13 @@ public class InMemoryExcelReader {
         }
         ciqSheet.setColumns(colNames);
 
+        boolean ignoreBlank = (settings == null) || settings.isIgnoreBlankRows();
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
-            if (row == null) continue;
+            if (row == null) {
+                if (!ignoreBlank) ciqSheet.getRows().add(new CiqRow(r + 1, emptyData(colNames)));
+                continue;
+            }
             Map<String, String> data = new LinkedHashMap<>();
             boolean hasAnyValue = false;
             for (int i = 0; i < colMap.size(); i++) {
@@ -515,8 +566,21 @@ public class InMemoryExcelReader {
                 data.put(colNames.get(i), value);
                 if (value != null) hasAnyValue = true;
             }
-            if (!hasAnyValue) continue;
+            if (!hasAnyValue && ignoreBlank) continue;
             ciqSheet.getRows().add(new CiqRow(r + 1, data));
+        }
+
+        // Strip trailing all-null rows for structural/metadata sheets (Index, Node_ID) that are
+        // prone to Excel phantom rows extending the used-range well beyond the last real data row.
+        // For user data sheets (stripTrailingBlanks=false) we intentionally keep trailing blank
+        // rows so that required-field validation catches them as deliberate blank entries.
+        if (stripTrailingBlanks) {
+            List<CiqRow> rows = ciqSheet.getRows();
+            int last = rows.size() - 1;
+            while (last >= 0
+                    && rows.get(last).getData().values().stream().allMatch(v -> v == null)) {
+                rows.remove(last--);
+            }
         }
 
         return ciqSheet;
@@ -528,13 +592,106 @@ public class InMemoryExcelReader {
      * Returns {@code null} when no rules are configured (caller reads all columns).
      */
     private Set<String> configuredColumns(ValidationRulesConfig rules, String tableName) {
-        if (rules == null) return null;
-        SheetRules sheetRules = (tableName == null)
-                ? rules.getIndexSheet()
-                : (rules.getSheets() != null ? rules.getSheets().get(tableName) : null);
+        if (rules == null || rules.getSheets() == null || tableName == null) return null;
+        SheetRules sheetRules = rules.getSheets().get(tableName);
         if (sheetRules == null || sheetRules.getColumns() == null
                 || sheetRules.getColumns().isEmpty()) return null;
         return sheetRules.getColumns().keySet();
+    }
+
+    // -------------------------------------------------------------------------
+    // Index column consolidation
+    // -------------------------------------------------------------------------
+
+    /**
+     * For each column in the Index sheet rules that has {@code consolidate: true},
+     * accumulates all values across rows sharing the same CRGroup, splits any
+     * comma-separated tokens, deduplicates, and writes the merged string back into
+     * every row for that CRGroup.  This ensures template expressions like
+     * {@code INDEX.EMAIL} always resolve to the complete CRGroup-level value.
+     *
+     * <p>The CRGroup column is located using the same normalised (case + underscore
+     * insensitive) matching used elsewhere in this class.
+     */
+    public void consolidateIndexColumns(com.nokia.ciq.reader.model.CiqSheet indexSheet,
+                                        ValidationRulesConfig rules) {
+        if (rules == null || rules.getSheets() == null) return;
+        com.nokia.ciq.validator.config.SheetRules indexRules = rules.getSheets().get(SHEET_INDEX);
+        if (indexRules == null || indexRules.getColumns() == null) return;
+
+        // Collect columns that need consolidation
+        List<String> consolidateCols = new ArrayList<>();
+        for (Map.Entry<String, com.nokia.ciq.validator.config.ColumnRule> e
+                : indexRules.getColumns().entrySet()) {
+            if (e.getValue() != null && e.getValue().isConsolidate()) {
+                consolidateCols.add(e.getKey());
+            }
+        }
+        if (consolidateCols.isEmpty()) return;
+
+        // Find the actual CRGroup column name in the sheet (normalised match)
+        String crGroupActual = findActualCol(indexSheet.getColumns(), "CRGroup");
+        if (crGroupActual == null) {
+            log.warn("consolidateIndexColumns: CRGroup column not found in Index sheet — skipping");
+            return;
+        }
+
+        // Pass 1: accumulate tokens per CRGroup per column
+        // crGroup → colName → ordered set of tokens
+        Map<String, Map<String, LinkedHashSet<String>>> acc = new LinkedHashMap<>();
+        for (com.nokia.ciq.reader.model.CiqRow row : indexSheet.getRows()) {
+            String crGroup = row.get(crGroupActual);
+            if (crGroup == null || crGroup.trim().isEmpty()) continue;
+            crGroup = crGroup.trim();
+            for (String colKey : consolidateCols) {
+                String actual = findActualCol(indexSheet.getColumns(), colKey);
+                if (actual == null) continue;
+                String cellVal = row.get(actual);
+                if (cellVal == null || cellVal.trim().isEmpty()) continue;
+                Map<String, LinkedHashSet<String>> colMap =
+                        acc.computeIfAbsent(crGroup, k -> new LinkedHashMap<>());
+                LinkedHashSet<String> tokens =
+                        colMap.computeIfAbsent(colKey, k -> new LinkedHashSet<>());
+                for (String token : cellVal.split(",")) {
+                    String t = token.trim();
+                    if (!t.isEmpty()) tokens.add(t);
+                }
+            }
+        }
+        if (acc.isEmpty()) return;
+
+        // Pass 2: write consolidated value back into every row
+        for (com.nokia.ciq.reader.model.CiqRow row : indexSheet.getRows()) {
+            String crGroup = row.get(crGroupActual);
+            if (crGroup == null || crGroup.trim().isEmpty()) continue;
+            crGroup = crGroup.trim();
+            Map<String, LinkedHashSet<String>> colMap = acc.get(crGroup);
+            if (colMap == null) continue;
+            for (String colKey : consolidateCols) {
+                String actual = findActualCol(indexSheet.getColumns(), colKey);
+                if (actual == null) continue;
+                LinkedHashSet<String> tokens = colMap.get(colKey);
+                if (tokens != null && !tokens.isEmpty()) {
+                    row.getData().put(actual, String.join(",", tokens));
+                }
+            }
+        }
+        log.debug("consolidateIndexColumns: consolidated {} column(s) across {} CRGroup(s)",
+                consolidateCols.size(), acc.size());
+    }
+
+    /**
+     * Returns the actual column name in {@code columns} that matches {@code canonical}
+     * using normalised (case + underscore-insensitive) comparison, or {@code null} if
+     * no match is found.
+     */
+    private static String findActualCol(List<String> columns, String canonical) {
+        if (columns == null || canonical == null) return null;
+        String target = normalize(canonical);
+        for (String col : columns) {
+            if (normalize(col).equals(target)) return col;
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------
@@ -579,6 +736,30 @@ public class InMemoryExcelReader {
     }
 
     /**
+     * Lenient header row search: returns the index of the first row (within the first 10 rows)
+     * that contains <em>at least one</em> of {@code candidateHeaders}.
+     * Used as a fallback when {@link #findHeaderRow} (strict — all required) returns -1,
+     * so that sheets with some missing columns can still be read partially and the missing
+     * columns can be reported precisely by the validation engine.
+     */
+    private int findHeaderRowAny(Sheet sheet, String... candidateHeaders) {
+        int maxScan = Math.min(10, sheet.getLastRowNum() + 1);
+        for (int r = 0; r <= maxScan; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            Set<String> normalizedCells = new HashSet<>();
+            for (Cell cell : row) {
+                String v = getCellString(cell);
+                if (v != null) normalizedCells.add(normalize(v));
+            }
+            for (String header : candidateHeaders) {
+                if (normalizedCells.contains(normalize(header))) return r;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * Finds a column by name. Matching is case-insensitive and underscore-insensitive,
      * so "CRGroup", "CR_GROUP", and "crgroup" all resolve to the same column.
      */
@@ -587,6 +768,93 @@ public class InMemoryExcelReader {
         for (Cell cell : headerRow) {
             String v = getCellString(cell);
             if (v != null && normalize(v).equals(target)) return cell.getColumnIndex();
+        }
+        return -1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Primary-area header detection (stops at first repeated column name)
+    // -------------------------------------------------------------------------
+    //
+    // Some sheets (e.g. Node_Details) have a complex layout where the main data
+    // area (col 0 – N) is followed by one or more lookup/reference tables that
+    // repeat the same column headers.  Scanning the full row width would find
+    // column names that belong to those reference tables, not the active data area.
+    //
+    // The three methods below limit their scan to the "primary area": the
+    // contiguous block of columns at the left of the header row whose names are
+    // all unique.  The scan stops as soon as a column name is seen for the
+    // second time — that signals the start of a reference/lookup section.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Like {@link #findHeaderRow} but scans only the primary area of each row
+     * (stops at the first repeated column name in that row).
+     * Requires ALL {@code requiredHeaders} to be present within the primary area.
+     */
+    private int findHeaderRowPrimary(Sheet sheet, String... requiredHeaders) {
+        int maxScan = Math.min(10, sheet.getLastRowNum() + 1);
+        for (int r = 0; r <= maxScan; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            Set<String> seen = new HashSet<>();
+            Set<String> primary = new HashSet<>();
+            for (Cell cell : row) {
+                String v = getCellString(cell);
+                if (v == null) continue;
+                String norm = normalize(v);
+                if (seen.contains(norm)) break;   // repeated → end of primary area
+                seen.add(norm);
+                primary.add(norm);
+            }
+            boolean allFound = true;
+            for (String h : requiredHeaders) {
+                if (!primary.contains(normalize(h))) { allFound = false; break; }
+            }
+            if (allFound) return r;
+        }
+        return -1;
+    }
+
+    /**
+     * Like {@link #findHeaderRowAny} but scans only the primary area of each row.
+     * Returns the first row that contains ANY of {@code candidateHeaders} within
+     * the primary area.
+     */
+    private int findHeaderRowAnyPrimary(Sheet sheet, String... candidateHeaders) {
+        int maxScan = Math.min(10, sheet.getLastRowNum() + 1);
+        for (int r = 0; r <= maxScan; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            Set<String> seen = new HashSet<>();
+            for (Cell cell : row) {
+                String v = getCellString(cell);
+                if (v == null) continue;
+                String norm = normalize(v);
+                if (seen.contains(norm)) break;   // repeated → end of primary area
+                seen.add(norm);
+                for (String h : candidateHeaders) {
+                    if (norm.equals(normalize(h))) return r;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Like {@link #findColumnIndex} but scans only the primary area of the row
+     * (stops at the first repeated column name).
+     */
+    private int findColumnIndexPrimary(Row headerRow, String columnName) {
+        String target = normalize(columnName);
+        Set<String> seen = new HashSet<>();
+        for (Cell cell : headerRow) {
+            String v = getCellString(cell);
+            if (v == null) continue;
+            String norm = normalize(v);
+            if (seen.contains(norm)) break;   // repeated → end of primary area
+            seen.add(norm);
+            if (norm.equals(target)) return cell.getColumnIndex();
         }
         return -1;
     }
@@ -645,6 +913,12 @@ public class InMemoryExcelReader {
         return s == null || s.trim().isEmpty();
     }
 
+    private static Map<String, String> emptyData(List<String> colNames) {
+        Map<String, String> data = new LinkedHashMap<>();
+        for (String col : colNames) data.put(col, null);
+        return data;
+    }
+
     // -------------------------------------------------------------------------
     // Input validation
     // -------------------------------------------------------------------------
@@ -662,5 +936,42 @@ public class InMemoryExcelReader {
         if (!file.canRead()) {
             throw new IOException("CIQ file is not readable: " + ciqFilePath);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Schema.yaml framework: effective settings resolution
+    // -------------------------------------------------------------------------
+
+    /**
+     * Resolves the effective {@link WorkbookSettings} for the given sheet by merging
+     * the global settings with any per-sheet overrides.  Per-sheet values take precedence.
+     *
+     * @param rules     the loaded validation rules (may be {@code null})
+     * @param sheetName the sheet whose settings should be resolved
+     * @return the merged settings (never {@code null})
+     */
+    WorkbookSettings effectiveSettings(ValidationRulesConfig rules, String sheetName) {
+        WorkbookSettings global = (rules != null && rules.getSettings() != null)
+                ? rules.getSettings() : new WorkbookSettings();
+
+        if (rules != null && rules.getSheets() != null) {
+            SheetRules sr = rules.getSheets().get(sheetName);
+            if (sr != null && sr.getSettings() != null) {
+                WorkbookSettings override = sr.getSettings();
+                WorkbookSettings merged = new WorkbookSettings();
+                merged.setHeaderRow(override.getHeaderRow() >= 0
+                        ? override.getHeaderRow() : global.getHeaderRow());
+                merged.setDataStartRow(override.getDataStartRow() > 0
+                        ? override.getDataStartRow() : global.getDataStartRow());
+                merged.setTrimCellValues(override.isTrimCellValues() || global.isTrimCellValues());
+                merged.setIgnoreBlankRows(override.isIgnoreBlankRows());
+                merged.setCaseSensitiveHeaders(
+                        override.isCaseSensitiveHeaders() || global.isCaseSensitiveHeaders());
+                merged.setCaseSensitiveValues(
+                        override.isCaseSensitiveValues() && global.isCaseSensitiveValues());
+                return merged;
+            }
+        }
+        return global;
     }
 }

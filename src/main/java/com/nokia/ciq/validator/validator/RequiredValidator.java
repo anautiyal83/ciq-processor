@@ -24,9 +24,10 @@ public class RequiredValidator implements CellValidator {
         boolean isBlank = value == null || value.trim().isEmpty();
 
         if (rule.isRequired() && isBlank) {
+            String message = CellValidator.msg(rule.getMessages(), "required",
+                    "Column '" + colName + "' is required but is empty");
             return Collections.singletonList(new ValidationError(
-                    row.getRowNumber(), colName, value,
-                    "Column '" + colName + "' is required but is empty"));
+                    row.getRowNumber(), colName, value, message));
         }
 
         ConditionalRequired rw = rule.getRequiredWhen();

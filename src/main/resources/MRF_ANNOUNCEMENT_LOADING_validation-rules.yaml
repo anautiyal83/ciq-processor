@@ -4,68 +4,74 @@
 #
 # Use-case: Load announcement audio files (TAR or individual) onto MRF nodes.
 #
-# CIQ Sheet validated: ANNOUNCEMENT_FILES
-#   CRGROUP mode columns: GROUP, Action, VERSION, INPUT_FILE, MRF_DESTINATION_PATH
-#
-# Notes:
-#   - CRGROUP mode: INDEX sheet has GROUP | CRGROUP | NODE columns (no TABLES).
-#     GROUP drives MOP content — all nodes in the same GROUP get identical rows.
-#     CRGROUP drives execution and approval — nodes in the same CRGROUP are
-#     executed in the same change window (in parallel by NCE).
-#     validateNodeIds checks every node in every GROUP against the NODE_ID sheet.
-#   - ciq-processor writes one sub-folder per CRGROUP value containing a
-#     CRGroupIndex JSON and per-GROUP data files.
+# CIQ structure:
+#   - INDEX sheet: Node | CRGroup | Tables
+#   - Data sheets: ANNOUNCEMENT_FILES
+#   - Node-ID sheet: Node_Details (Node_Name → NIAM NAME)
 # =============================================================================
 
-# INDEX sheet has GROUP|CRGROUP|NODE format (no TABLES column) — no cross-sheet validation
-validateIndexSheets: false
-
-# Validate that each node in the GROUP→NODE index exists in the NODE_ID sheet
-validateNodeIds: true
-
-# GROUP mode: INDEX sheet uses GROUP|CRGROUP|NODE columns; one MOP folder per CRGROUP
-groupByColumnName: CRGROUP
-
-# Validate columns in the INDEX sheet (GROUP|CRGROUP|NODE format for MRF)
-indexSheet:
-  columns:
-    GROUP:
-      required: true
-    CRGROUP:
-      required: true
-      description: "CR Number"
-    NODE:
-      required: true
-      description: "MRF Hostname"
-
-# NODE_ID sheet: name, key column names, and column-level validation rules
-nodeIdSheet:
-  name:       Node_Details1
-  nodeColumn: Node_Name
-  niamColumn: "NIAM NAME"
-  columns:
-    Node_Name:
-      required: true
-      description: "MRF Hostname"
-    "NIAM NAME":
-      required: true
-      description: "NIAM ID for the hostname"
-
-# USER_ID sheet: maps each CRGROUP to the responsible user's email address
-userIdSheet:
-  name:          User_ID
-  crGroupColumn: CRGROUP
-  emailColumn:   EMAIL
-  columns:
-    CRGROUP:
-      required: true
-      description: "CR Number. Should match Index sheet"
-    EMAIL:
-      required: true
-      email:    true
-      description: "Email address(es) of the user(s) responsible for executing the CR, used for sending notifications related to execution status, reports, and alerts. Can hold a comma-separated list"
-
+# ---------------------------------------------------------------------------
+# Global settings
+# ---------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: false
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true   
+ 
+ # ---------------------------------------------------------------------------
+# Cross-sheet (workbook-level) rules
+# ---------------------------------------------------------------------------
+workbook_rules:
+   # every CRGroup value in the Index must have a matching entry in USER_ID
+#  - match:
+#      from: Index.CRGroup
+#      to:   USER_ID.CRGroup
+           
 sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Index
+  # Standard NODE | CRGROUP | TABLES format.
+  # ---------------------------------------------------------------------------
+  Index:
+    columns:
+      Node:
+        required: true
+        description: "MRF Hostname"
+        type: string
+        pattern: ".*MRF.*"
+      CRGroup:
+        required: true
+        description: "CR Number"
+#      Tables:
+#        required: true
+#        description: "Data sheet name (must match an actual sheet in the workbook)"
+#        sheetRef: true
+#        sheetRefIgnoreCase: true
+      EMAIL:    
+        type: email
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        minOnePerGroup:
+            groupByColumn: CRGroup
+  # ---------------------------------------------------------------------------
+  # Sheet: Node_Details
+  # Maps each MRF hostname to its NIAM login ID.
+  # ---------------------------------------------------------------------------
+  Node_Details:
+    columns:
+      Node_Name:
+        required: true
+        description: "MRF Hostname"
+      "NIAM NAME":
+        required: true
+        description: "NIAM ID for the hostname"
+      VER:
+        description: "Software version of the MRF node"
 
   # ---------------------------------------------------------------------------
   # Sheet: ANNOUNCEMENT_FILES
@@ -75,6 +81,7 @@ sheets:
     columns:
       GROUP:
         required: true
+        description: "Group name for the configuration changes"
       INPUT_FILE:
         required: true
         maxLength: 512
@@ -83,3 +90,47 @@ sheets:
         pattern: "^/.*"
         patternMessage: "MRF Destination Path must be an absolute Unix path starting with /"
         maxLength: 1024
+
+          # ---------------------------------------------------------------------------
+  # Sheet: USER_ID
+  # Maps each CRGROUP to its EMAIL.
+  # ---------------------------------------------------------------------------
+#  USER_ID:
+#    columns:
+#      CRGroup:
+#        required: true
+#        description: "CR Number"
+#      EMAIL:
+#        required: true
+#        type: email
+#        multi: false
+#        description: "Email ID"
+
+# ---------------------------------------------------------------------------
+# Validation report output configuration
+# ---------------------------------------------------------------------------
+report_output:
+  formats: [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
+
+# ---------------------------------------------------------------------------
+# Post-validation outputs (computed only when validation passes)
+# ---------------------------------------------------------------------------
+# Each entry key is used as the parameter name unless 'name' is specified.
+# Supported aggregates: distinct | count | sum
+# ---------------------------------------------------------------------------
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: INDEX
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+
+  # Count of unique CRGroup values
+  CR_COUNT:
+    sheet: INDEX
+    column: CRGROUP
+    aggregate: distinct_count
+
+
