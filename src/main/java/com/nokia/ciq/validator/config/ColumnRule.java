@@ -332,4 +332,34 @@ public class ColumnRule {
 
     public boolean isConsolidate() { return consolidate; }
     public void setConsolidate(boolean consolidate) { this.consolidate = consolidate; }
+
+    /**
+     * Cross-sheet conditional pattern validation.
+     *
+     * <p>Reads distinct values from a configured lookup sheet/column and validates
+     * this column's value against the regex pattern associated with the first matching
+     * {@code when} condition.  Fully generic — the lookup can be any sheet/column
+     * (software version, node type, protocol, OS type, etc.).
+     *
+     * <p>YAML usage:
+     * <pre>
+     * INPUT_FILE:
+     *   conditionalPattern:
+     *     lookupSheet: Node_Details
+     *     lookupColumn: VER
+     *     rules:
+     *       - when: "^13\\."
+     *         pattern: "(?i).*\\.jar$"
+     *         message: "Version 13.x requires a .jar file"
+     *       - when: ".*"
+     *         pattern: "(?i)^(?!.*\\.(jar|gz|zip|bz2|tgz)$).*$"
+     *         message: "Plain non-compressed file required"
+     * </pre>
+     */
+    private ConditionalPattern conditionalPattern;
+
+    public ConditionalPattern getConditionalPattern() { return conditionalPattern; }
+    public void setConditionalPattern(ConditionalPattern conditionalPattern) {
+        this.conditionalPattern = conditionalPattern;
+    }
 }

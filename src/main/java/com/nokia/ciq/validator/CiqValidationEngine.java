@@ -18,6 +18,7 @@ import com.nokia.ciq.validator.model.ValidationError;
 import com.nokia.ciq.validator.model.ValidationReport;
 import com.nokia.ciq.validator.validator.CellValidator;
 import com.nokia.ciq.validator.validator.CompareColumnsValidator;
+import com.nokia.ciq.validator.validator.ConditionalPatternValidator;
 import com.nokia.ciq.validator.validator.ConditionalRowRuleValidator;
 import com.nokia.ciq.validator.validator.CrossRefValidator;
 import com.nokia.ciq.validator.validator.DecimalValidator;
@@ -116,23 +117,25 @@ public class CiqValidationEngine {
      *   <li>{@link IpAddressValidator}     — ip / cidr</li>
      *   <li>{@link HostnameValidator}      — hostname / fqdn</li>
      *   <li>{@link PatternValidator}       — mac, phone (built-in), + custom pattern override</li>
-     *   <li>{@link CrossRefValidator}      — crossRef (cross-sheet column lookup)</li>
-     *   <li>{@link SheetRefValidator}      — sheetRef (cell value must match a workbook sheet name)</li>
+     *   <li>{@link CrossRefValidator}           — crossRef (cross-sheet column lookup)</li>
+     *   <li>{@link SheetRefValidator}           — sheetRef (cell value must match a workbook sheet name)</li>
+     *   <li>{@link ConditionalPatternValidator} — conditionalPattern (pattern driven by a lookup sheet value)</li>
      * </ol>
      */
     private static List<CellValidator> buildValidatorChain(CiqDataStore store) {
         return Arrays.asList(
-                new RequiredValidator(),        // 1. required / requiredWhen
-                new StringValidator(),          // 2. minLength/maxLength, enum, allowedValues, boolean, urlScheme
-                new IntegerValidator(),         // 3. integer (minValue, maxValue, allowedRanges)
-                new DecimalValidator(),         // 4. decimal (minDecimal, maxDecimal, precision)
-                new TemporalValidator(),        // 5. date / time / datetime
-                new EmailValidator(),           // 6. email (multi-address support)
-                new IpAddressValidator(),       // 7. ip / cidr
-                new HostnameValidator(),        // 8. hostname / fqdn
-                new PatternValidator(),         // 9. mac, phone (built-in), + custom pattern override
-                new CrossRefValidator(store),   // 10. crossRef (cross-sheet column lookup)
-                new SheetRefValidator(store)    // 11. sheetRef (cell value must match a sheet name)
+                new RequiredValidator(),               // 1. required / requiredWhen
+                new StringValidator(),                 // 2. minLength/maxLength, enum, allowedValues, boolean, urlScheme
+                new IntegerValidator(),                // 3. integer (minValue, maxValue, allowedRanges)
+                new DecimalValidator(),                // 4. decimal (minDecimal, maxDecimal, precision)
+                new TemporalValidator(),               // 5. date / time / datetime
+                new EmailValidator(),                  // 6. email (multi-address support)
+                new IpAddressValidator(),              // 7. ip / cidr
+                new HostnameValidator(),               // 8. hostname / fqdn
+                new PatternValidator(),                // 9. mac, phone (built-in), + custom pattern override
+                new CrossRefValidator(store),          // 10. crossRef (cross-sheet column lookup)
+                new SheetRefValidator(store),          // 11. sheetRef (cell value must match a sheet name)
+                new ConditionalPatternValidator(store) // 12. conditionalPattern (lookup-driven pattern)
         );
     }
 

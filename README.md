@@ -584,6 +584,7 @@ sheets:
 | `ignoreCase: true` | boolean | Case-insensitive comparison for `allowedValues` / `values` |
 | `unique: true` | boolean | Values must be unique within the sheet |
 | `multi: true` | boolean | Cell may contain multiple comma-separated values |
+| `conditionalPattern: { ... }` | object | Validates the cell value against a regex that depends on a value resolved via a multi-hop join chain through other sheets. See **Conditional pattern** section below. |
 | `description: "..."` | string | Shown in Column_Guide sheet of generated template |
 | `messages: { ... }` | object | Per-constraint custom messages (see below) |
 
@@ -608,6 +609,55 @@ sheets:
 | `enum` | Closed vocabulary | `values`, `ignoreCase` |
 | `protocol` | Network protocol | `values` |
 | `urlScheme` | URL with allowed scheme | `values` |
+
+**Conditional pattern (`conditionalPattern`):**
+
+Validates a column's value against a regex that is selected based on a value resolved by following a chain of sheet joins. This is useful when the allowed format depends on metadata held in another sheet (e.g. software version, node type, OS).
+
+Fields:
+
+| Field | Description |
+|---|---|
+| `startColumn` | Column in the **current row** whose value seeds the join chain |
+| `lookupChain` | Ordered list of join steps (see below) |
+| `rules` | Ordered list of `when` / `pattern` / `message` entries; first matching `when` wins |
+
+Each `lookupChain` step:
+
+| Field | Description |
+|---|---|
+| `sheet` | Sheet to scan |
+| `joinOn` | Column in that sheet matched against the incoming value set |
+| `extract` | Column in that sheet whose values are carried to the next step (or used as final lookup values) |
+
+Each `rules` entry:
+
+| Field | Description |
+|---|---|
+| `when` | Regex matched (via `find`) against the resolved lookup value; null/empty = catch-all |
+| `pattern` | Full-string regex the cell value must satisfy when `when` matches |
+| `message` | Error message; `{value}` → cell value, `{lookupValue}` → resolved value |
+
+```yaml
+# Example: INPUT_FILE pattern depends on the node's software version
+INPUT_FILE:
+  conditionalPattern:
+    startColumn: GROUP          # read GROUP from current ANNOUNCEMENT_FILES row
+    lookupChain:
+      - sheet: Index
+        joinOn: GROUP           # match against Index.GROUP
+        extract: Node           # carry Index.Node forward
+      - sheet: Node_Details
+        joinOn: Node_Name       # match against Node_Details.Node_Name
+        extract: VER            # resolved value: the software version
+    rules:
+      - when: "^13\\."         # version starts with "13."
+        pattern: "(?i).*\\.tar$"
+        message: "Version 13.x requires a .tar file — '{value}' is not valid"
+      - when: ".*"             # catch-all for all other versions
+        pattern: "(?i)^(?!.*\\.(jar|tar|tar\\.gz|tgz|gz|zip|bz2|7z|rar)$).*$"
+        message: "Non-13.x versions require a plain non-compressed file — '{value}' is not valid"
+```
 
 **`messages` block — per-constraint custom error messages:**
 

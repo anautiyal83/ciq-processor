@@ -85,6 +85,22 @@ sheets:
       INPUT_FILE:
         required: true
         maxLength: 512
+        conditionalPattern:
+          startColumn: GROUP
+          lookupChain:
+            - sheet: Index
+              joinOn: GROUP
+              extract: Node
+            - sheet: Node_Details
+              joinOn: Node_Name
+              extract: VER
+          rules:
+            - when: "^13\\."
+              pattern: "(?i).*\\.tar$"
+              message: "Version 13.x requires a .tar file — '{value}' is not a valid .tar filename"
+            - when: ".*"
+              pattern: "(?i)^(?!.*\\.(jar|tar|tar\\.gz|tgz|gz|zip|bz2|7z|rar)$).*$"
+              message: "Non-13.x versions require a plain non-compressed file — '{value}' appears to be a compressed archive"
       MRF_DESTINATION_PATH:
         required: true
         pattern: "^/.*"
