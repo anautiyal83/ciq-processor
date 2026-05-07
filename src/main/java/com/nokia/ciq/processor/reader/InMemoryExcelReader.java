@@ -860,7 +860,7 @@ public class InMemoryExcelReader {
     }
 
     private static String normalize(String s) {
-        return s.replace("_", "").toLowerCase();
+        return s.replace("_", "").toLowerCase(Locale.ROOT);
     }
 
     // -------------------------------------------------------------------------

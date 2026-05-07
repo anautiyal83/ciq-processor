@@ -1,6 +1,7 @@
 package com.nokia.ciq.reader.model;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -44,6 +45,6 @@ public class CiqRow {
     }
 
     private static String normalize(String s) {
-        return s.replace("_", "").toLowerCase();
+        return s.replace("_", "").toLowerCase(Locale.ROOT);
     }
 }
