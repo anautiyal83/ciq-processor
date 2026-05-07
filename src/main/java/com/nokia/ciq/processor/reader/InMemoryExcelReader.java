@@ -145,7 +145,7 @@ public class InMemoryExcelReader {
                     tables.add(sName);
                 }
                 if (!tables.isEmpty()) {
-                    log.info("No Index — reading {} sheet(s) directly: {}", tables.size(), tables);
+                    log.debug("No Tables-based Index — reading {} sheet(s) directly: {}", tables.size(), tables);
                 }
             }
 
@@ -310,9 +310,9 @@ public class InMemoryExcelReader {
         headerRowIdx = findHeaderRow(sheet, "Group", "Node");
         if (headerRowIdx >= 0) {
             readGroupIndex(sheet, headerRowIdx);
-            log.info("GROUP mode detected in Index sheet — {} group(s): {}",
+            log.debug("GROUP/CRGROUP layout detected in Index sheet — {} group(s): {}",
                     groupToNodes.size(), groupToNodes.keySet());
-            return index;   // CiqIndex intentionally empty for GROUP mode
+            return index;   // CiqIndex intentionally empty — sheets loaded directly
         }
 
         log.warn("Header row not found in Index sheet (no Node+CRGroup and no Group+Node columns)");
@@ -338,7 +338,7 @@ public class InMemoryExcelReader {
 
         boolean hasCrGroup = crGroupCol >= 0;
         if (hasCrGroup) {
-            log.info("CRGROUP column found in INDEX sheet — CRGROUP mode enabled");
+            log.debug("CRGROUP column found in INDEX sheet — CRGROUP mode enabled");
         }
 
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
