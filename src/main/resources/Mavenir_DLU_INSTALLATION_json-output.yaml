@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# JSON output template — DLU INSTALLATION
+# ---------------------------------------------------------------------------
+# This file is referenced from DLU_INSTALLATION_validation-rules.yaml
+# via:  json_output_file: "DLU_INSTALLATION_json-output.yaml"
+# ---------------------------------------------------------------------------
+
+output_mode: single
+
+data:
+    nodeType: DPA
+    activity: DLU_INSTALLATION
+    nodes:
+      _each: "DISTINCT INDEX.REGION AS $region"
+      region: $region
+      crGroup:  CRGROUP
+      group:    GROUP
+      email:    EMAIL
+      NEW_FILE_NAME: "PHONESDAT_FILES.NEW_FILE_NAME WHERE GROUP = GROUP"
+      NEW_VERSION: "PHONESDAT_FILES.NEW_VERSION WHERE GROUP = GROUP"  
+      TAC_COUNT:   "PHONESDAT_FILES.TAC_COUNT WHERE GROUP = GROUP"  
+      nodes:
+        _each: "INDEX WHERE REGION = $region"
+        node:     NODE       
+        niamName: "Node_Details.NIAM_NAME WHERE Node_Details.NODE = NODE"
+         
