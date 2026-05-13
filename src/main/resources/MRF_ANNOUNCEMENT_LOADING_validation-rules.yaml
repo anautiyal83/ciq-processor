@@ -26,10 +26,10 @@ settings:
 # ---------------------------------------------------------------------------
 workbook_rules:
    # every CRGroup value in the Index must have a matching entry in USER_ID
-#  - match:
-#      from: Index.CRGroup
-#      to:   USER_ID.CRGroup
-           
+  - match:
+      from: Index.GROUP
+      to:   ANNOUNCEMENT_FILES.GROUP
+
 sheets:
 
   # ---------------------------------------------------------------------------
@@ -38,12 +38,12 @@ sheets:
   # ---------------------------------------------------------------------------
   Index:
     columns:
-      Node:
+      NODE:
         required: true
         description: "MRF Hostname"
         type: string
         pattern: ".*MRF.*"
-      CRGroup:
+      CRGROUP:
         required: true
         description: "CR Number"
 #      Tables:
@@ -88,19 +88,19 @@ sheets:
         conditionalPattern:
           startColumn: GROUP
           lookupChain:
-            - sheet: Index
+            - sheet: INDEX
               joinOn: GROUP
-              extract: Node
+              extract: NODE
             - sheet: Node_Details
-              joinOn: Node_Name
+              joinOn: NODE_NAME
               extract: VER
           rules:
-            - when: "^13\\."
+            - when: "^17\\."
               pattern: "(?i).*\\.tar$"
-              message: "Version 13.x requires a .tar file — '{value}' is not a valid .tar filename"
+              message: "Version 17.x requires a .tar file — '{value}' is not a valid .tar filename"
             - when: ".*"
               pattern: "(?i)^(?!.*\\.(jar|tar|tar\\.gz|tgz|gz|zip|bz2|7z|rar)$).*$"
-              message: "Non-13.x versions require a plain non-compressed file — '{value}' appears to be a compressed archive"
+              message: "Non-17.x versions require a plain non-compressed file — '{value}' appears to be a compressed archive"
       MRF_DESTINATION_PATH:
         required: true
         pattern: "^/.*"
@@ -148,5 +148,3 @@ outputs:
     sheet: INDEX
     column: CRGROUP
     aggregate: distinct_count
-
-

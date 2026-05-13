@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Validates CIQ JSON data (via {@link CiqDataStore}) against a {@link ValidationRulesConfig}.
@@ -237,6 +238,8 @@ public class CiqValidationEngine {
             // Report one error per missing column; exclude it from per-row validation.
             Set<String> missingColumns = checkMissingColumns(sheet, sheetRules, result);
 
+            logActiveValidators(tableName, sheetRules, missingColumns);
+
             for (CiqRow row : sheet.getRows()) {
                 // Column rules — delegated to the validator chain; skip missing columns
                 if (sheetRules != null) {
@@ -262,6 +265,8 @@ public class CiqValidationEngine {
                 checkMinOnePerGroup(sheet, sheetRules, result);
             }
 
+            logColumnSummary(tableName, sheetRules, sheet.getRows().size(),
+                    result.getErrors(), missingColumns);
             log.info("Sheet '{}': {} rows, {} error(s)", tableName,
                     result.getRowsChecked(), result.getErrors().size());
             report.getSheets().add(result);
@@ -354,6 +359,8 @@ public class CiqValidationEngine {
 
         Set<String> missingColumns = checkMissingColumns(sheet, sheetRules, result);
 
+        logActiveValidators(sheetLabel, sheetRules, missingColumns);
+
         for (CiqRow row : sheet.getRows()) {
             for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
                 if (missingColumns.contains(entry.getKey())) continue;
@@ -374,6 +381,8 @@ public class CiqValidationEngine {
         // Post-row aggregate checks: minOnePerGroup
         checkMinOnePerGroup(sheet, sheetRules, result);
 
+        logColumnSummary(sheetLabel, sheetRules, sheet.getRows().size(),
+                result.getErrors(), missingColumns);
         log.info("Sheet '{}' (special): {} rows, {} error(s)", sheetLabel,
                 result.getRowsChecked(), result.getErrors().size());
         report.getSheets().add(result);
@@ -457,28 +466,152 @@ public class CiqValidationEngine {
     }
 
     // -------------------------------------------------------------------------
+    // Pre/post-sheet logging helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Logs the active validation rules for every configured column in a sheet.
+     * Called once before the per-row loop so the user can see what will be checked.
+     */
+    private static void logActiveValidators(String sheetName, SheetRules sheetRules,
+                                            Set<String> missingColumns) {
+        if (sheetRules == null || sheetRules.getColumns() == null) return;
+        for (Map.Entry<String, ColumnRule> e : sheetRules.getColumns().entrySet()) {
+            String col = e.getKey();
+            if (missingColumns.contains(col)) {
+                log.info("[Config] sheet='{}' col='{}': MISSING — column not found in sheet",
+                        sheetName, col);
+                continue;
+            }
+            String rules = describeActiveRules(e.getValue());
+            log.info("[Config] sheet='{}' col='{}': {}",
+                    sheetName, col, rules.isEmpty() ? "(no rules configured)" : rules);
+        }
+    }
+
+    /**
+     * Logs a per-column pass/fail summary after all rows have been validated.
+     */
+    private static void logColumnSummary(String sheetName, SheetRules sheetRules,
+                                         int rowCount, List<ValidationError> errors,
+                                         Set<String> missingColumns) {
+        if (sheetRules == null || sheetRules.getColumns() == null) return;
+        Map<String, Long> errorsByCol = errors.stream()
+                .filter(e -> e.getRowNumber() > 0)
+                .collect(Collectors.groupingBy(ValidationError::getColumn, Collectors.counting()));
+
+        for (String col : sheetRules.getColumns().keySet()) {
+            if (missingColumns.contains(col)) {
+                log.info("[Summary] sheet='{}' col='{}': SKIPPED — column missing from sheet",
+                        sheetName, col);
+                continue;
+            }
+            long failed = errorsByCol.getOrDefault(col, 0L);
+            long passed = rowCount - failed;
+            String status = failed == 0 ? "PASS" : "FAIL";
+            log.info("[Summary] sheet='{}' col='{}': {} — {} passed, {} failed",
+                    sheetName, col, status, passed, failed);
+        }
+    }
+
+    /**
+     * Builds a human-readable description of all active rules in a {@link ColumnRule}.
+     */
+    private static String describeActiveRules(ColumnRule r) {
+        List<String> parts = new ArrayList<>();
+        if (r.isRequired())                                            parts.add("required");
+        if (r.getRequiredWhen() != null)                               parts.add("requiredWhen");
+        if (r.getType() != null && !r.getType().isEmpty())            parts.add("type:" + r.getType());
+        if (r.isEmail())                                               parts.add("email");
+        if (r.isInteger())                                             parts.add("integer");
+        if (r.getMinLength() != null)                                  parts.add("minLength:" + r.getMinLength());
+        if (r.getMaxLength() != null)                                  parts.add("maxLength:" + r.getMaxLength());
+        if (r.getMinValue() != null)                                   parts.add("minValue:" + r.getMinValue());
+        if (r.getMaxValue() != null)                                   parts.add("maxValue:" + r.getMaxValue());
+        if (r.getMinDecimal() != null)                                 parts.add("minDecimal:" + r.getMinDecimal());
+        if (r.getMaxDecimal() != null)                                 parts.add("maxDecimal:" + r.getMaxDecimal());
+        if (r.getAllowedValues() != null && !r.getAllowedValues().isEmpty())
+                                                                       parts.add("allowedValues:" + r.getAllowedValues());
+        if (r.getValues() != null && !r.getValues().isEmpty())        parts.add("enumValues:" + r.getValues());
+        if (r.getPattern() != null)                                    parts.add("pattern:'" + r.getPattern() + "'");
+        if (r.getCrossRef() != null)                                   parts.add("crossRef");
+        if (r.isSheetRef())                                            parts.add("sheetRef");
+        if (r.getConditionalPattern() != null) {
+            com.nokia.ciq.validator.config.ConditionalPattern cp = r.getConditionalPattern();
+            int steps = cp.getLookupChain() != null ? cp.getLookupChain().size() : 0;
+            int rules = cp.getRules()       != null ? cp.getRules().size()       : 0;
+            parts.add("conditionalPattern(startCol=" + cp.getStartColumn()
+                    + ", steps=" + steps + ", rules=" + rules + ")");
+        }
+        if (r.isUnique())                                              parts.add("unique");
+        if (r.isMulti())                                               parts.add("multi");
+        if (r.getMinOnePerGroup() != null)                             parts.add("minOnePerGroup");
+        return String.join(", ", parts);
+    }
+
+    // -------------------------------------------------------------------------
     // Per-cell validation — delegates to the ordered validator chain
     // -------------------------------------------------------------------------
 
     private void validateCell(CiqRow row, String colName, ColumnRule rule,
                                CiqIndex index, SheetValidationResult result) {
         String value = row.get(colName);
+        String sheet = result.getSheetName();
+        log.debug("[Check] sheet='{}' row={} col='{}' value='{}'",
+                sheet, row.getRowNumber(), colName, value);
+
+        boolean anyFail = false;
+        String failingValidator = null;
+
         for (CellValidator validator : validators) {
             List<ValidationError> errors = validator.validate(row, colName, value, rule, index);
-            for (ValidationError e : errors) result.addError(e);
-            if (!errors.isEmpty() && validator.isGatekeeper()) return;
+            if (errors.isEmpty()) {
+                log.debug("[{}] sheet='{}' row={} col='{}' value='{}': PASS",
+                        vname(validator), sheet, row.getRowNumber(), colName, value);
+            } else {
+                anyFail = true;
+                failingValidator = vname(validator);
+                for (ValidationError e : errors) {
+                    log.info("[{}] sheet='{}' row={} col='{}' value='{}': FAIL — {}",
+                            failingValidator, sheet, row.getRowNumber(), colName, value, e.getMessage());
+                    result.addError(e);
+                }
+                if (validator.isGatekeeper()) return;
+            }
         }
         // Run custom validator if specified in the column rule
         if (rule.getValidator() != null) {
             CellValidator custom = customValidators.get(rule.getValidator());
             if (custom != null) {
                 List<ValidationError> errors = custom.validate(row, colName, value, rule, index);
-                for (ValidationError e : errors) result.addError(e);
+                if (errors.isEmpty()) {
+                    log.debug("[{}] sheet='{}' row={} col='{}' value='{}': PASS",
+                            vname(custom), sheet, row.getRowNumber(), colName, value);
+                } else {
+                    anyFail = true;
+                    for (ValidationError e : errors) {
+                        log.info("[{}] sheet='{}' row={} col='{}' value='{}': FAIL — {}",
+                                vname(custom), sheet, row.getRowNumber(), colName, value, e.getMessage());
+                        result.addError(e);
+                    }
+                }
             } else {
-                log.warn("Custom validator '{}' referenced in column '{}' but not registered",
-                        rule.getValidator(), colName);
+                log.warn("[Config] sheet='{}' col='{}': custom validator '{}' not registered",
+                        sheet, colName, rule.getValidator());
             }
         }
+
+        if (!anyFail) {
+            log.info("[Validated] sheet='{}' row={} col='{}' value='{}': PASS",
+                    sheet, row.getRowNumber(), colName, value);
+        }
+    }
+
+    /** Returns a short, readable validator name for log messages. */
+    private static String vname(CellValidator v) {
+        String name = v.getClass().getSimpleName();
+        // Strip trailing "Validator" suffix for brevity: "RequiredValidator" → "Required"
+        return name.endsWith("Validator") ? name.substring(0, name.length() - 9) : name;
     }
 
     /**
