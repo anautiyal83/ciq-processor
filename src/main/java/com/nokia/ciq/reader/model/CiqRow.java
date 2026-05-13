@@ -30,8 +30,9 @@ public class CiqRow {
     public void setData(Map<String, String> data) { this.data = data; }
 
     /**
-     * Get a column value by name. Matching is case-insensitive and underscore-insensitive,
-     * so "CRGroup", "CR_GROUP", and "crgroup" all resolve to the same column.
+     * Get a column value by name. Matching is case-insensitive, underscore-insensitive,
+     * and space-insensitive, so "CRGroup", "CR_GROUP", "CR GROUP", and "crgroup" all
+     * resolve to the same column.
      * Returns null if the column is absent or blank.
      */
     public String get(String column) {
@@ -45,6 +46,6 @@ public class CiqRow {
     }
 
     private static String normalize(String s) {
-        return s.replace("_", "").toLowerCase(Locale.ROOT);
+        return s.replace("_", "").replace(" ", "").toLowerCase(Locale.ROOT);
     }
 }

@@ -177,15 +177,29 @@ public class ConditionalPatternValidator implements CellValidator {
                         step.getSheet(), colName);
                 return result;
             }
+            log.debug("conditionalPattern: resolveStep sheet='{}' rows={} joinOn='{}' extract='{}' incoming={}",
+                    step.getSheet(), sheet.getRows().size(), step.getJoinOn(), step.getExtract(), incomingValues);
             for (CiqRow r : sheet.getRows()) {
                 String joinVal = r.get(step.getJoinOn());
+                log.debug("conditionalPattern: resolveStep row={} dataKeys={} joinVal='{}'",
+                        r.getRowNumber(), r.getData().keySet(), joinVal);
                 if (joinVal == null || joinVal.trim().isEmpty()) continue;
                 if (incomingValues.contains(joinVal.trim())) {
                     String extracted = r.get(step.getExtract());
+                    log.debug("conditionalPattern: resolveStep row={} JOIN MATCH joinVal='{}' extracted='{}'",
+                            r.getRowNumber(), joinVal.trim(), extracted);
                     if (extracted != null && !extracted.trim().isEmpty()) {
                         result.add(extracted.trim());
                     }
                 }
+            }
+            if (result.isEmpty() && !sheet.getRows().isEmpty()) {
+                CiqRow first = sheet.getRows().get(0);
+                String sampleJoinVal = first.get(step.getJoinOn());
+                log.warn("conditionalPattern: resolveStep DIAGNOSTIC sheet='{}' rows={} joinOn='{}' incoming={}"
+                        + " | firstRowDataKeys={} firstRowJoinVal='{}'",
+                        step.getSheet(), sheet.getRows().size(), step.getJoinOn(), incomingValues,
+                        first.getData().keySet(), sampleJoinVal);
             }
         } catch (IOException e) {
             log.warn("conditionalPattern: error reading sheet '{}': {}", step.getSheet(), e.getMessage());
