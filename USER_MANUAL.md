@@ -371,6 +371,8 @@ segregation value.
 | `Value 'X' is not a valid integer` | Numeric column contains text or a decimal | Enter a whole number |
 | `Node 'X' not found in Node_ID sheet` | Node name mismatch between sheets | Check for spelling differences or trailing spaces |
 | Validation PASSED but `mop-json/` is empty | `--json-output-dir` or `--json-output-config-file` not specified | Add both `--json-output-dir <dir>` and `--json-output-config-file <file>` to the command |
+| `conditionalPattern: join chain produced no values at step [X.Y -> Z]` | The join key in `lookupChain` does not match any rows in the referenced sheet — `startColumn` value has no corresponding entry | Check that `startColumn`, `joinOn`, and `extract` column names match the actual sheet headers, and that the data is consistent across sheets |
+| `conditionalPattern` rule configured but cell value never validated | `when` regex does not match the resolved lookup value — catch-all `".*"` rule missing | Add a catch-all rule as the last entry: `- when: ".*"` with the default pattern |
 
 ---
 
@@ -388,6 +390,45 @@ Naming convention: `{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml`
 | `datetime` | Date / time (`format`, default: `yyyy-MM-dd'T'HH:mm:ss`) |
 | `email` | E-mail address (`multi: true` = comma-separated list) |
 | `ip` | IP address (`accepts`: `ipv4` \| `ipv6` \| `both`) |
+
+### Conditional pattern (`conditionalPattern`)
+
+Validates a column's value against a regex that is selected by following a chain of sheet joins to resolve a lookup value (e.g. software version, node type). The chain starts from a column in the current row and hops through one or more sheets until a final value is resolved.
+
+**Resolution chain (per row):**
+1. Read `startColumn` from the current row → initial value
+2. For each step in `lookupChain`: scan `sheet` where `joinOn` matches the current value → collect `extract` column values → pass to next step
+3. Match each resolved value against the ordered `rules`; first `when` match wins → validate cell against `pattern`
+
+```yaml
+INPUT_FILE:
+  conditionalPattern:
+    startColumn: GROUP          # column in current row that seeds the join
+    lookupChain:
+      - sheet: Index
+        joinOn: GROUP           # match ANNOUNCEMENT_FILES.GROUP against Index.GROUP
+        extract: Node           # carry Index.Node to next step
+      - sheet: Node_Details
+        joinOn: Node_Name       # match Node value against Node_Details.Node_Name
+        extract: VER            # final resolved value (software version)
+    rules:
+      - when: "^13\\."         # matches versions starting with "13."
+        pattern: "(?i).*\\.tar$"
+        message: "Version 13.x requires a .tar file — '{value}' is not valid"
+      - when: ".*"             # catch-all for all other versions
+        pattern: "(?i)^(?!.*\\.(jar|tar|tar\\.gz|tgz|gz|zip|bz2|7z|rar)$).*$"
+        message: "Non-13.x versions require a plain non-compressed file — '{value}' is not valid"
+```
+
+| Field | Description |
+|---|---|
+| `startColumn` | Column in the current row whose value seeds the join chain |
+| `lookupChain[].sheet` | Sheet to scan at this step |
+| `lookupChain[].joinOn` | Column in that sheet matched against the incoming values |
+| `lookupChain[].extract` | Column whose values are carried to the next step |
+| `rules[].when` | Regex matched against the resolved value (`find` semantics; `".*"` = catch-all) |
+| `rules[].pattern` | Full-string regex the cell value must satisfy |
+| `rules[].message` | Error message; `{value}` → cell value, `{lookupValue}` → resolved value |
 
 ### Row rules
 
