@@ -6,21 +6,23 @@
 # ---------------------------------------------------------------------------
 
 output_mode: single
-
 data:
     nodeType: DPA
     activity: DLU_INSTALLATION
     nodes:
       _each: "DISTINCT INDEX.REGION AS $region"
-      region: $region
+      node: $region
+      node_details:
+        _join: "INDEX.NODE WHERE INDEX.REGION = $region"
+        separator: ","
       crGroup:  CRGROUP
       group:    GROUP
       email:    EMAIL
-      NEW_FILE_NAME: "PHONESDAT_FILES.NEW_FILE_NAME WHERE GROUP = GROUP"
-      NEW_VERSION: "PHONESDAT_FILES.NEW_VERSION WHERE GROUP = GROUP"  
-      TAC_COUNT:   "PHONESDAT_FILES.TAC_COUNT WHERE GROUP = GROUP"  
-      nodes:
-        _each: "INDEX WHERE REGION = $region"
-        node:     NODE       
-        niamName: "Node_Details.NIAM_NAME WHERE Node_Details.NODE = NODE"
+      NODE1_NAME:      "Node_Details.NODE1 WHERE Node_Details.NODE1 = NODE"
+      NODE1_NIAM_NAME: "Node_Details.NIAM1_NAME WHERE Node_Details.NODE1 = NODE"
+      NODE2_NAME:      "Node_Details.NODE2 WHERE Node_Details.NODE1 = NODE"
+      NODE2_NIAM_NAME: "Node_Details.NIAM2_NAME WHERE Node_Details.NODE1 = NODE"
+      NEW_FILE_NAME: "PHONESDAT_FILES.NEW_FILE_NAME WHERE PHONESDAT_FILES.GROUP = GROUP"
+      NEW_VERSION:   "PHONESDAT_FILES.NEW_VERSION   WHERE PHONESDAT_FILES.GROUP = GROUP"
+      TAC_COUNT:     "PHONESDAT_FILES.TAC_COUNT     WHERE PHONESDAT_FILES.GROUP = GROUP"
          

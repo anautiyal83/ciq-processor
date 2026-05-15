@@ -12,6 +12,11 @@ package com.nokia.ciq.validator.config;
  *   - subset:
  *       from: "DataSheet.Node"
  *       to:   "Node_ID.Node"
+ *   - subset_any:
+ *       from: "INDEX.NODE"
+ *       to:
+ *         - "Node_Details.NODE1"
+ *         - "Node_Details.NODE2"
  *   - unique:
  *       columns: [Node, Interface]
  * </pre>
@@ -30,6 +35,9 @@ public class WorkbookRule {
     /** Values (or composite keys) must be unique across the listed columns. */
     private UniqueRule unique;
 
+    /** Each value in {@code from} must appear in at least one of the {@code to} columns. */
+    private SubsetAnyRule subsetAny;
+
     public SubsetRule getSubset() { return subset; }
     public void setSubset(SubsetRule subset) { this.subset = subset; }
 
@@ -41,4 +49,7 @@ public class WorkbookRule {
 
     public UniqueRule getUnique() { return unique; }
     public void setUnique(UniqueRule unique) { this.unique = unique; }
+
+    public SubsetAnyRule getSubsetAny() { return subsetAny; }
+    public void setSubsetAny(SubsetAnyRule subsetAny) { this.subsetAny = subsetAny; }
 }

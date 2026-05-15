@@ -50,6 +50,12 @@ public class ValidationRulesLoader {
         rowConditionDesc.addPropertyParameters("any", RowCondition.class);
         constructor.addTypeDescription(rowConditionDesc);
 
+        // ---- WorkbookRule: YAML key "subset_any" → Java property "subsetAny" ----
+        TypeDescription workbookRuleDesc = new TypeDescription(WorkbookRule.class);
+        workbookRuleDesc.substituteProperty("subset_any", SubsetAnyRule.class,
+                "getSubsetAny", "setSubsetAny");
+        constructor.addTypeDescription(workbookRuleDesc);
+
         // ---- ValidationRulesConfig:
         //      YAML key "workbook_rules" → Java property "workbookRules"
         //      YAML key "json_output"    → Java property "jsonOutput"

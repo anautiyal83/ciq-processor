@@ -18,7 +18,8 @@ data:
   activity: ANNOUNCEMENT_LOADING
   nodes:
     _each: "DISTINCT INDEX.NODE AS $node"
-    node:    $node
+    node: $node
+    node_details: $node
     crGroup: INDEX.CRGROUP
     email:   INDEX.EMAIL
     niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"

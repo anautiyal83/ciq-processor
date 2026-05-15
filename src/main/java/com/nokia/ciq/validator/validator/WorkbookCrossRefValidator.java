@@ -3,6 +3,7 @@ package com.nokia.ciq.validator.validator;
 import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
+import com.nokia.ciq.validator.config.SubsetAnyRule;
 import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.UniqueRule;
 import com.nokia.ciq.validator.config.WorkbookRule;
@@ -57,6 +58,10 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             errors.addAll(checkUnique(rule.getUnique(), store));
         }
 
+        if (rule.getSubsetAny() != null) {
+            errors.addAll(checkSubsetAny(rule.getSubsetAny(), store));
+        }
+
         return errors;
     }
 
@@ -77,6 +82,32 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
                 errors.add(new ValidationError(0, subsetRule.getFrom(), v,
                         "Value '" + v + "' from [" + subsetRule.getFrom()
                         + "] not found in [" + subsetRule.getTo() + "]"));
+            }
+        }
+        return errors;
+    }
+
+    // -------------------------------------------------------------------------
+    // SubsetAny check
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkSubsetAny(SubsetAnyRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        if (rule.getFrom() == null || rule.getTo() == null || rule.getTo().isEmpty()) return errors;
+
+        Set<String> fromVals = resolveColumn(rule.getFrom(), store);
+
+        // Union of all target columns — value must appear in at least one
+        Set<String> unionVals = new LinkedHashSet<>();
+        for (String to : rule.getTo()) {
+            unionVals.addAll(resolveColumn(to, store));
+        }
+
+        for (String v : fromVals) {
+            if (!unionVals.contains(v)) {
+                errors.add(new ValidationError(0, rule.getFrom(), v,
+                        "Value '" + v + "' from [" + rule.getFrom()
+                        + "] not found in any of " + rule.getTo()));
             }
         }
         return errors;

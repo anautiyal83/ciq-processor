@@ -30,10 +30,14 @@ workbook_rules:
       to: PHONESDAT_FILES.GROUP
 
   # NODE values in INDEX must exist in Node_Details
-  - match:
+#  - match:
+#      from: INDEX.NODE
+#      to: Node_Details.NODE
+  - subset_any:
       from: INDEX.NODE
-      to: Node_Details.NODE
-
+      to:
+        - Node_Details.NODE1
+        - Node_Details.NODE2
 # -----------------------------------------------------------------------------
 # Custom validators
 # -----------------------------------------------------------------------------
@@ -141,13 +145,21 @@ sheets:
 
     columns:
 
-      NODE:
+      NODE1:
         required: true
         type: string
         pattern: ".*DPA.*"
         description: "DPA Hostname"
-
-      NIAM_NAME:
+      NODE2:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "DPA Hostname"
+      NIAM1_NAME:
+        required: true
+        type: string
+        description: "NIAM CLI name"
+      NIAM2_NAME:
         required: true
         type: string
         description: "NIAM CLI name"
