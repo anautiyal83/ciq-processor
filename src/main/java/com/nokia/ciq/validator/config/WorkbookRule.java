@@ -38,6 +38,12 @@ public class WorkbookRule {
     /** Each value in {@code from} must appear in at least one of the {@code to} columns. */
     private SubsetAnyRule subsetAny;
 
+    /** Each distinct value of the partition column must appear exactly {@code count} times. */
+    private CountPerRule countPer;
+
+    /** Listed columns must hold a constant value within each partition. */
+    private ConstantWithinRule constantWithin;
+
     public SubsetRule getSubset() { return subset; }
     public void setSubset(SubsetRule subset) { this.subset = subset; }
 
@@ -52,4 +58,10 @@ public class WorkbookRule {
 
     public SubsetAnyRule getSubsetAny() { return subsetAny; }
     public void setSubsetAny(SubsetAnyRule subsetAny) { this.subsetAny = subsetAny; }
+
+    public CountPerRule getCountPer() { return countPer; }
+    public void setCountPer(CountPerRule countPer) { this.countPer = countPer; }
+
+    public ConstantWithinRule getConstantWithin() { return constantWithin; }
+    public void setConstantWithin(ConstantWithinRule constantWithin) { this.constantWithin = constantWithin; }
 }

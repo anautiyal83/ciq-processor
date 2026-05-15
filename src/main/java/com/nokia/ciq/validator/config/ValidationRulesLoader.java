@@ -50,10 +50,14 @@ public class ValidationRulesLoader {
         rowConditionDesc.addPropertyParameters("any", RowCondition.class);
         constructor.addTypeDescription(rowConditionDesc);
 
-        // ---- WorkbookRule: YAML key "subset_any" → Java property "subsetAny" ----
+        // ---- WorkbookRule: snake_case YAML keys → camelCase Java properties ----
         TypeDescription workbookRuleDesc = new TypeDescription(WorkbookRule.class);
         workbookRuleDesc.substituteProperty("subset_any", SubsetAnyRule.class,
                 "getSubsetAny", "setSubsetAny");
+        workbookRuleDesc.substituteProperty("count_per", CountPerRule.class,
+                "getCountPer", "setCountPer");
+        workbookRuleDesc.substituteProperty("constant_within", ConstantWithinRule.class,
+                "getConstantWithin", "setConstantWithin");
         constructor.addTypeDescription(workbookRuleDesc);
 
         // ---- ValidationRulesConfig:

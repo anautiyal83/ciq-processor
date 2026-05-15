@@ -3,6 +3,8 @@ package com.nokia.ciq.validator.validator;
 import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
+import com.nokia.ciq.validator.config.ConstantWithinRule;
+import com.nokia.ciq.validator.config.CountPerRule;
 import com.nokia.ciq.validator.config.SubsetAnyRule;
 import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.UniqueRule;
@@ -62,6 +64,14 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             errors.addAll(checkSubsetAny(rule.getSubsetAny(), store));
         }
 
+        if (rule.getCountPer() != null) {
+            errors.addAll(checkCountPer(rule.getCountPer(), store));
+        }
+
+        if (rule.getConstantWithin() != null) {
+            errors.addAll(checkConstantWithin(rule.getConstantWithin(), store));
+        }
+
         return errors;
     }
 
@@ -108,6 +118,85 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
                 errors.add(new ValidationError(0, rule.getFrom(), v,
                         "Value '" + v + "' from [" + rule.getFrom()
                         + "] not found in any of " + rule.getTo()));
+            }
+        }
+        return errors;
+    }
+
+    // -------------------------------------------------------------------------
+    // CountPer check
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkCountPer(CountPerRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        if (rule.getSheet() == null || rule.getGroup() == null || rule.getCount() <= 0) return errors;
+
+        CiqSheet sheet = getSheet(store, rule.getSheet());
+        if (sheet == null) {
+            log.warn("count_per: sheet '{}' not found", rule.getSheet());
+            return errors;
+        }
+
+        // Count occurrences of each distinct group value
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (CiqRow row : sheet.getRows()) {
+            String val = row.get(rule.getGroup());
+            if (val != null && !val.trim().isEmpty()) {
+                counts.merge(val.trim(), 1, Integer::sum);
+            }
+        }
+
+        for (Map.Entry<String, Integer> e : counts.entrySet()) {
+            if (e.getValue() != rule.getCount()) {
+                errors.add(new ValidationError(0, rule.getGroup(), e.getKey(),
+                        rule.getSheet() + "." + rule.getGroup() + " value '" + e.getKey()
+                        + "' appears " + e.getValue() + " time(s) — expected exactly " + rule.getCount()));
+            }
+        }
+        return errors;
+    }
+
+    // -------------------------------------------------------------------------
+    // ConstantWithin check
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkConstantWithin(ConstantWithinRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        if (rule.getSheet() == null || rule.getGroup() == null
+                || rule.getColumns() == null || rule.getColumns().isEmpty()) return errors;
+
+        CiqSheet sheet = getSheet(store, rule.getSheet());
+        if (sheet == null) {
+            log.warn("constant_within: sheet '{}' not found", rule.getSheet());
+            return errors;
+        }
+
+        // For each group value, collect distinct values of each target column
+        Map<String, Map<String, Set<String>>> groupColValues = new LinkedHashMap<>();
+        for (CiqRow row : sheet.getRows()) {
+            String groupVal = row.get(rule.getGroup());
+            if (groupVal == null || groupVal.trim().isEmpty()) continue;
+            groupVal = groupVal.trim();
+
+            groupColValues.putIfAbsent(groupVal, new LinkedHashMap<>());
+            for (String col : rule.getColumns()) {
+                String v = row.get(col);
+                if (v != null && !v.trim().isEmpty()) {
+                    groupColValues.get(groupVal)
+                                  .computeIfAbsent(col, k -> new LinkedHashSet<>())
+                                  .add(v.trim());
+                }
+            }
+        }
+
+        for (Map.Entry<String, Map<String, Set<String>>> groupEntry : groupColValues.entrySet()) {
+            String groupVal = groupEntry.getKey();
+            for (Map.Entry<String, Set<String>> colEntry : groupEntry.getValue().entrySet()) {
+                if (colEntry.getValue().size() > 1) {
+                    errors.add(new ValidationError(0, colEntry.getKey(), groupVal,
+                            rule.getSheet() + "." + colEntry.getKey() + " must be constant within "
+                            + rule.getGroup() + " '" + groupVal + "' — found: " + colEntry.getValue()));
+                }
             }
         }
         return errors;
@@ -194,6 +283,16 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             }
         }
         return values;
+    }
+
+    /** Loads a sheet from the store by name, returning {@code null} on missing or error. */
+    private CiqSheet getSheet(CiqDataStore store, String sheetName) {
+        try {
+            return store.getSheet(sheetName);
+        } catch (IOException e) {
+            log.warn("Cannot read sheet '{}': {}", sheetName, e.getMessage());
+            return null;
+        }
     }
 
     /** Returns the sheet part of a "Sheet.Column" reference, or {@code null} if absent. */
