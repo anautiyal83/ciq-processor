@@ -354,6 +354,21 @@ data:                      # free-form YAML template evaluated by JsonTemplateEv
 | `_each: <SheetName>` | Iterate all rows of a sheet |
 | `_each: "<Sheet> WHERE <Col> = <value>"` | Iterate filtered rows |
 
+**`_join` directive:**
+
+Collects all non-blank values from a column expression and joins them into a single string.
+
+```yaml
+node_details:
+  _join: "INDEX.NODE WHERE INDEX.REGION = $region"
+  separator: ","     # optional — defaults to ","
+```
+
+| Field | Description |
+|---|---|
+| `_join` | Column expression: `Sheet.Col` or `Sheet.Col WHERE Sheet.Filter = value` |
+| `separator` | Join character (default `,`) |
+
 **Relational lookups:**
 
 | Syntax | Meaning |
@@ -470,6 +485,56 @@ settings:
   caseSensitiveHeaders: false
   caseSensitiveValues: true
 ```
+
+### workbook_rules
+
+Cross-sheet constraints evaluated after all per-sheet validation.
+
+```yaml
+workbook_rules:
+  # All values in INDEX.NODE must exist in Node_Details.NODE
+  - subset:
+      from: INDEX.NODE
+      to:   Node_Details.NODE
+
+  # Bidirectional — sets must be identical
+  - match:
+      from: INDEX.NODE
+      to:   Node_Details.NODE
+
+  # Each value in from must exist in at least one of the to columns (OR logic)
+  - subset_any:
+      from: INDEX.NODE
+      to:
+        - Node_Details.NODE1
+        - Node_Details.NODE2
+
+  # Each REGION must have exactly 2 rows in INDEX
+  - count_per:
+      sheet: INDEX
+      group: REGION
+      count: 2
+
+  # GROUP and CRGROUP must be the same for all rows sharing a REGION value
+  - constant_within:
+      sheet:   INDEX
+      group:   REGION
+      columns: [GROUP, CRGROUP]
+
+  # Composite key must be unique within a sheet
+  - unique:
+      columns: [Node_Details.NODE1, Node_Details.NODE2]
+```
+
+| Rule | Description |
+|---|---|
+| `subset` | Every value in `from` must appear in `to` |
+| `superset` | Every value in `to` must appear in `from` |
+| `match` | Bidirectional — value sets must be identical |
+| `subset_any` | Every value in `from` must appear in **at least one** of the `to` columns |
+| `unique` | Composite key formed by `columns` must be unique within the sheet |
+| `count_per` | Each distinct value of `group` must appear exactly `count` times in `sheet` |
+| `constant_within` | Listed `columns` must hold the same value across all rows sharing the same `group` value |
 
 ### report_output
 
@@ -794,7 +859,10 @@ ciq-processor/
 │       │   ├── RowCondition.java              # when: condition model (same-sheet + cross-sheet)
 │       │   ├── WorkbookSettings.java          # Global/per-sheet settings model
 │       │   ├── WorkbookRule.java              # workbook_rules entry model
-│       │   ├── SubsetRule.java                # subset/superset rule model
+│       │   ├── SubsetRule.java                # subset/superset/match rule model
+│       │   ├── SubsetAnyRule.java             # subset_any rule model (OR across columns)
+│       │   ├── CountPerRule.java              # count_per rule model (exact row count per group)
+│       │   ├── ConstantWithinRule.java        # constant_within rule model (column consistency within group)
 │       │   ├── UniqueRule.java                # unique rule model
 │       │   ├── ConditionalRequired.java       # requiredWhen model
 │       │   ├── CrossRef.java                  # crossRef model

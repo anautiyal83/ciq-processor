@@ -1,0 +1,165 @@
+# =============================================================================
+# Validation Rules: DPA - DLU_INSTALLATION
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+# Validate DLU installation CIQ sheets and phones.dat configuration data.
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: false
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# -----------------------------------------------------------------------------
+# Workbook-level validation rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  # GROUP values in INDEX must exist in PHONESDAT_FILES
+  - match:
+      from: INDEX.GROUP
+      to: PHONESDAT_FILES.GROUP
+
+  # NODE values in INDEX must exist in Node_Details
+#  - match:
+#      from: INDEX.NODE
+#      to: Node_Details.NODE
+  - subset_any:
+      from: INDEX.NODE
+      to:
+        - Node_Details.NODE1
+        - Node_Details.NODE2
+# -----------------------------------------------------------------------------
+# Custom validators
+# -----------------------------------------------------------------------------
+validators:
+
+  regionEntryValidator:
+    class: "com.mavenir.validation.RegionEntryValidator"
+    description: "Each REGION must contain exactly 2 entries"
+
+  regionGroupValidator:
+    class: "com.mavenir.validation.RegionGroupValidator"
+    description: "GROUP and CRGROUP must be same inside REGION"
+
+  regionEmailValidator:
+    class: "com.mavenir.validation.RegionEmailValidator"
+    description: "EMAIL must be different inside REGION"
+
+  regionNodeValidator:
+    class: "com.mavenir.validation.RegionNodeValidator"
+    description: "NODE must be unique inside REGION"
+
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: INDEX
+  # ---------------------------------------------------------------------------
+  INDEX:
+    required: true
+
+    columns:
+
+      REGION:
+        required: true
+        type: string
+        description: "Region Name"
+
+      NODE:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "NODE must be unique inside REGION"
+
+      GROUP:
+        required: true
+        type: string
+        description: "GROUP should be same within REGION"
+
+      CRGROUP:
+        required: true
+        type: string
+        description: "CRGROUP should be same within REGION"
+
+      EMAIL:
+        required: true
+        type: email
+        multi: false
+        description: "EMAIL should be different within REGION"
+
+    rules:
+
+      - require: REGION
+        when:
+          column: REGION
+          operator: notBlank
+
+  # ---------------------------------------------------------------------------
+  # Sheet: PHONESDAT_FILES
+  # ---------------------------------------------------------------------------
+  PHONESDAT_FILES:
+    required: true
+
+    columns:
+
+      GROUP:
+        required: true
+        type: string
+        description: "Group mapping"
+
+      NEW_FILE_NAME:
+        required: true
+        type: string
+        pattern: '.*\.dat'
+        description: "phones.dat file name"
+
+      NEW_VERSION:
+        required: true
+        type: string
+        pattern: '^DPA[A-Za-z0-9.]+_DLU[0-9]+(-Interim)?$'
+        description: "DLU version"
+
+      TAC_COUNT:
+        required: true
+        type: integer
+        minValue: 1
+        description: "TAC count"
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Node_Details
+  # ---------------------------------------------------------------------------
+  Node_Details:
+    required: true
+
+    columns:
+
+      NODE1:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "DPA Hostname"
+      NODE2:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "DPA Hostname"
+      NIAM1_NAME:
+        required: true
+        type: string
+        description: "NIAM CLI name"
+      NIAM2_NAME:
+        required: true
+        type: string
+        description: "NIAM CLI name"

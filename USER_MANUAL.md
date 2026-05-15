@@ -430,6 +430,65 @@ INPUT_FILE:
 | `rules[].pattern` | Full-string regex the cell value must satisfy |
 | `rules[].message` | Error message; `{value}` → cell value, `{lookupValue}` → resolved value |
 
+### Workbook rules
+
+Cross-sheet constraints defined under `workbook_rules:` and evaluated after per-sheet validation.
+
+```yaml
+workbook_rules:
+  # Every INDEX.NODE must exist in Node_Details.NODE
+  - subset:
+      from: INDEX.NODE
+      to:   Node_Details.NODE
+
+  # Every INDEX.NODE must exist in Node_Details.NODE1 OR Node_Details.NODE2
+  - subset_any:
+      from: INDEX.NODE
+      to:
+        - Node_Details.NODE1
+        - Node_Details.NODE2
+
+  # Bidirectional match — value sets must be identical in both sheets
+  - match:
+      from: INDEX.NODE
+      to:   Node_Details.NODE
+
+  # Each REGION must have exactly 2 rows in INDEX
+  - count_per:
+      sheet: INDEX
+      group: REGION
+      count: 2
+
+  # GROUP and CRGROUP must be the same for all rows sharing a REGION value
+  - constant_within:
+      sheet:   INDEX
+      group:   REGION
+      columns: [GROUP, CRGROUP]
+
+  # NODE must be unique within each REGION
+  - unique:
+      columns: [INDEX.REGION, INDEX.NODE]
+```
+
+| Rule | Description |
+|---|---|
+| `subset` | Every value in `from` must appear in `to` |
+| `superset` | Every value in `to` must appear in `from` |
+| `match` | Bidirectional — value sets must be identical |
+| `subset_any` | Every value in `from` must appear in **at least one** of the `to` columns (OR logic) |
+| `unique` | Composite key formed by `columns` must be unique within the sheet |
+| `count_per` | Each distinct value of `group` must appear exactly `count` times in `sheet` |
+| `constant_within` | Listed `columns` must hold the same value for all rows sharing the same `group` value |
+
+**Error messages:**
+
+| Rule | Example error |
+|---|---|
+| `count_per` | `INDEX.REGION value 'EAST' appears 3 time(s) — expected exactly 2` |
+| `constant_within` | `INDEX.GROUP must be constant within REGION 'EAST' — found: [INDIA1, INDIA2]` |
+
+---
+
 ### Row rules
 
 Row rules are defined under `sheets.<SheetName>.rules:` and apply to every data row.
@@ -602,6 +661,17 @@ relational lookups, and variable substitution.
 | `key: S.Col WHERE S.Filter = $var` | `email: "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"` | Relational scalar lookup |
 | `key: S.Col` | `crGroup: Index.CRGroup` | First non-blank value from sheet+column |
 | `key: $var` | `node: $node` | Inline variable reference |
+| `_join: "S.Col WHERE S.Filter = $var"` | `node_details: {_join: "INDEX.NODE WHERE INDEX.REGION = $region", separator: ","}` | Join all matching column values into a string |
+
+**`_join` usage:**
+
+```yaml
+node_details:
+  _join: "INDEX.NODE WHERE INDEX.REGION = $region"
+  separator: ","     # optional — defaults to ","
+```
+
+Collects every non-blank value of `INDEX.NODE` where `INDEX.REGION` matches `$region` and produces a comma-separated string, e.g. `"DPA-EAST1,DPA-EAST2"`.
 
 #### Example (`MRF_ANNOUNCEMENT_LOADING_json-output.yaml`)
 
