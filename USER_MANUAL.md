@@ -391,6 +391,25 @@ Naming convention: `{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml`
 | `email` | E-mail address (`multi: true` = comma-separated list) |
 | `ip` | IP address (`accepts`: `ipv4` \| `ipv6` \| `both`) |
 
+### Special Index column options
+
+These options apply only to columns in the **INDEX sheet** and control post-validation behaviour used by JSON output templates.
+
+| Option | Description |
+|---|---|
+| `consolidate: true` | After validation passes, merges all values of this column across rows sharing the same CRGroup into one deduplicated comma-separated string, written back to every row in that group. Runs **after** validation so per-row checks still see the original individual values. Typical use: `EMAIL` — so `INDEX.EMAIL` in a JSON template resolves to the full list of engineers for the CRGroup. |
+| `minOnePerGroup: groupByColumn: <col>` | At least one non-blank value must exist in this column for each distinct value of `groupByColumn`. Example: at least one `EMAIL` per `CRGroup`. |
+
+```yaml
+# Example — EMAIL: collect all per-CRGroup, allow multi-address, require at least one per CR
+EMAIL:
+  type: email
+  multi: true
+  consolidate: true
+  minOnePerGroup:
+    groupByColumn: CRGROUP
+```
+
 ### Conditional pattern (`conditionalPattern`)
 
 Validates a column's value against a regex that is selected by following a chain of sheet joins to resolve a lookup value (e.g. software version, node type). The chain starts from a column in the current row and hops through one or more sheets until a final value is resolved.
@@ -468,6 +487,16 @@ workbook_rules:
   # NODE must be unique within each REGION
   - unique:
       columns: [INDEX.REGION, INDEX.NODE]
+
+  # Each REGION's NODE set in INDEX must match {NODE1, NODE2} in exactly one Node_Details row
+  - set_match:
+      source:
+        sheet:  INDEX
+        group:  REGION
+        column: NODE
+      target:
+        sheet:   Node_Details
+        columns: [NODE1, NODE2]
 ```
 
 | Rule | Description |
@@ -479,6 +508,7 @@ workbook_rules:
 | `unique` | Composite key formed by `columns` must be unique within the sheet |
 | `count_per` | Each distinct value of `group` must appear exactly `count` times in `sheet` |
 | `constant_within` | Listed `columns` must hold the same value for all rows sharing the same `group` value |
+| `set_match` | Each source group's collected value set must match exactly one target row's column set (bidirectional) |
 
 **Error messages:**
 
@@ -486,6 +516,7 @@ workbook_rules:
 |---|---|
 | `count_per` | `INDEX.REGION value 'EAST' appears 3 time(s) — expected exactly 2` |
 | `constant_within` | `INDEX.GROUP must be constant within REGION 'EAST' — found: [INDIA1, INDIA2]` |
+| `set_match` | `REGION 'EAST' has INDEX.NODE set [DPA-EAST1, DPA-EAST2] — no matching row found in Node_Details columns [NODE1, NODE2]` |
 
 ---
 

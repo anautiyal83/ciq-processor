@@ -524,6 +524,16 @@ workbook_rules:
   # Composite key must be unique within a sheet
   - unique:
       columns: [Node_Details.NODE1, Node_Details.NODE2]
+
+  # Each REGION's NODE set in INDEX must match {NODE1, NODE2} in exactly one Node_Details row
+  - set_match:
+      source:
+        sheet:  INDEX
+        group:  REGION
+        column: NODE
+      target:
+        sheet:   Node_Details
+        columns: [NODE1, NODE2]
 ```
 
 | Rule | Description |
@@ -535,6 +545,7 @@ workbook_rules:
 | `unique` | Composite key formed by `columns` must be unique within the sheet |
 | `count_per` | Each distinct value of `group` must appear exactly `count` times in `sheet` |
 | `constant_within` | Listed `columns` must hold the same value across all rows sharing the same `group` value |
+| `set_match` | Each source group's collected value set must match exactly one target row's column set (bidirectional) |
 
 ### report_output
 
@@ -649,6 +660,8 @@ sheets:
 | `ignoreCase: true` | boolean | Case-insensitive comparison for `allowedValues` / `values` |
 | `unique: true` | boolean | Values must be unique within the sheet |
 | `multi: true` | boolean | Cell may contain multiple comma-separated values |
+| `consolidate: true` | boolean | After validation, merges all values of this Index column across rows sharing the same CRGroup into a single deduplicated comma-separated string. Runs post-validation so per-row checks still see the original values. Useful for EMAIL so JSON templates resolve `INDEX.EMAIL` as the full CRGroup email list. |
+| `minOnePerGroup: { groupByColumn }` | object | At least one non-blank value must exist in this column for each distinct value of `groupByColumn` (e.g. at least one EMAIL per CRGroup). |
 | `conditionalPattern: { ... }` | object | Validates the cell value against a regex that depends on a value resolved via a multi-hop join chain through other sheets. See **Conditional pattern** section below. |
 | `description: "..."` | string | Shown in Column_Guide sheet of generated template |
 | `messages: { ... }` | object | Per-constraint custom messages (see below) |
@@ -863,6 +876,7 @@ ciq-processor/
 │       │   ├── SubsetAnyRule.java             # subset_any rule model (OR across columns)
 │       │   ├── CountPerRule.java              # count_per rule model (exact row count per group)
 │       │   ├── ConstantWithinRule.java        # constant_within rule model (column consistency within group)
+│       │   ├── SetMatchRule.java              # set_match rule model (source group set vs target row set)
 │       │   ├── UniqueRule.java                # unique rule model
 │       │   ├── ConditionalRequired.java       # requiredWhen model
 │       │   ├── CrossRef.java                  # crossRef model

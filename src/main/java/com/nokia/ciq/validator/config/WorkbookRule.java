@@ -44,6 +44,9 @@ public class WorkbookRule {
     /** Listed columns must hold a constant value within each partition. */
     private ConstantWithinRule constantWithin;
 
+    /** Each source group's value set must match exactly one target row's column set. */
+    private SetMatchRule setMatch;
+
     public SubsetRule getSubset() { return subset; }
     public void setSubset(SubsetRule subset) { this.subset = subset; }
 
@@ -64,4 +67,7 @@ public class WorkbookRule {
 
     public ConstantWithinRule getConstantWithin() { return constantWithin; }
     public void setConstantWithin(ConstantWithinRule constantWithin) { this.constantWithin = constantWithin; }
+
+    public SetMatchRule getSetMatch() { return setMatch; }
+    public void setSetMatch(SetMatchRule setMatch) { this.setMatch = setMatch; }
 }

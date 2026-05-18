@@ -58,6 +58,8 @@ public class ValidationRulesLoader {
                 "getCountPer", "setCountPer");
         workbookRuleDesc.substituteProperty("constant_within", ConstantWithinRule.class,
                 "getConstantWithin", "setConstantWithin");
+        workbookRuleDesc.substituteProperty("set_match", SetMatchRule.class,
+                "getSetMatch", "setSetMatch");
         constructor.addTypeDescription(workbookRuleDesc);
 
         // ---- ValidationRulesConfig:
