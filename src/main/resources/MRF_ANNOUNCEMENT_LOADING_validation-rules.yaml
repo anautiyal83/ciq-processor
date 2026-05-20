@@ -56,6 +56,7 @@ sheets:
         multi: true
         description: "Email ID"
         consolidate: true
+        consolidate_separator: ";"
         minOnePerGroup:
             groupByColumn: CRGroup
   # ---------------------------------------------------------------------------
@@ -95,9 +96,9 @@ sheets:
               joinOn: Node_Name
               extract: VER
           rules:
-            - when: "^13\\."
+            - when: "^17\\."
               pattern: "(?i).*\\.tar$"
-              message: "Version 13.x requires a .tar file — '{value}' is not a valid .tar filename"
+              message: "Version 17.x requires a .tar file — '{value}' is not a valid .tar filename"
             - when: ".*"
               pattern: "(?i)^(?!.*\\.(jar|tar|tar\\.gz|tgz|gz|zip|bz2|7z|rar)$).*$"
               message: "Non-13.x versions require a plain non-compressed file — '{value}' appears to be a compressed archive"

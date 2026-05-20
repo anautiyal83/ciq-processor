@@ -280,6 +280,31 @@ public class JsonTemplateEvaluator {
     private List<Object> buildFilteredSheetArray(String sheetName, String condition,
                                                    Map<String, Object> elemTemplate,
                                                    TemplateContext ctx) {
+        // ── Col IN Sheet.Col  (multi-value membership filter) ─────────────────
+        int inOpIdx = condition.toUpperCase().indexOf(" IN ");
+        if (inOpIdx >= 0) {
+            String filterColExpr = condition.substring(0, inOpIdx).trim();
+            String filterValExpr = condition.substring(inOpIdx + 4).trim();
+            String filterCol = filterColExpr.contains(".")
+                    ? filterColExpr.substring(filterColExpr.indexOf('.') + 1).trim()
+                    : filterColExpr;
+            // Collect all values from the right-hand side (e.g. all GROUP values for this node)
+            List<String> filterValues = collectValues(filterValExpr, ctx);
+            if (filterValues.isEmpty()) {
+                // fallback: treat as single resolved value
+                Object single = resolveString(filterValExpr, ctx);
+                if (single != null) filterValues.add(single.toString());
+            }
+            if (filterValues.isEmpty()) return Collections.emptyList();
+            List<Object> result = new ArrayList<>();
+            for (CiqRow row : resolveRows(sheetName, ctx)) {
+                if (filterValues.contains(row.get(filterCol)))
+                    result.add(buildObject(elemTemplate, ctx.withRow(row)));
+            }
+            return result;
+        }
+
+        // ── Col = value  (single-value equality filter) ───────────────────────
         int eqIdx = condition.indexOf('=');
         if (eqIdx < 0) return buildSheetArray(sheetName, elemTemplate, ctx);
 
