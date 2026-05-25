@@ -27,37 +27,44 @@ workbook_rules:
   # GROUP values in INDEX must exist in PHONESDAT_FILES
   - match:
       from: INDEX.GROUP
-      to: PHONESDAT_FILES.GROUP
+      to:   PHONESDAT_FILES.GROUP
 
-  # NODE values in INDEX must exist in Node_Details
-#  - match:
-#      from: INDEX.NODE
-#      to: Node_Details.NODE
+  # Each INDEX.NODE must exist in Node_Details.NODE1 or Node_Details.NODE2
   - subset_any:
       from: INDEX.NODE
       to:
         - Node_Details.NODE1
         - Node_Details.NODE2
-# -----------------------------------------------------------------------------
-# Custom validators
-# -----------------------------------------------------------------------------
-validators:
 
-  regionEntryValidator:
-    class: "com.mavenir.validation.RegionEntryValidator"
-    description: "Each REGION must contain exactly 2 entries"
+  # Each REGION must contain exactly 2 entries
+  - count_per:
+      sheet: INDEX
+      group: REGION
+      count: 2
 
-  regionGroupValidator:
-    class: "com.mavenir.validation.RegionGroupValidator"
-    description: "GROUP and CRGROUP must be same inside REGION"
+  # GROUP and CRGROUP must be the same within a REGION
+  - constant_within:
+      sheet:   INDEX
+      group:   REGION
+      columns: [GROUP, CRGROUP]
 
-  regionEmailValidator:
-    class: "com.mavenir.validation.RegionEmailValidator"
-    description: "EMAIL must be different inside REGION"
+  # NODE must be unique within a REGION
+  - unique:
+      columns: [INDEX.REGION, INDEX.NODE]
 
-  regionNodeValidator:
-    class: "com.mavenir.validation.RegionNodeValidator"
-    description: "NODE must be unique inside REGION"
+#  # EMAIL must be different within a REGION
+#  - unique:
+#      columns: [INDEX.REGION, INDEX.EMAIL]
+
+  # Each REGION's NODE pair in INDEX must match {NODE1, NODE2} in Node_Details
+  - set_match:
+      source:
+        sheet:  INDEX
+        group:  REGION
+        column: NODE
+      target:
+        sheet:   Node_Details
+        columns: [NODE1, NODE2]
 
 # -----------------------------------------------------------------------------
 # Sheet-wise validation rules
@@ -93,11 +100,13 @@ sheets:
         type: string
         description: "CRGROUP should be same within REGION"
 
-      EMAIL:
-        required: true
+      EMAIL:    
         type: email
-        multi: false
-        description: "EMAIL should be different within REGION"
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        minOnePerGroup:
+            groupByColumn: CRGroup
 
     rules:
 
@@ -163,3 +172,30 @@ sheets:
         required: true
         type: string
         description: "NIAM CLI name"
+        
+# ---------------------------------------------------------------------------
+# Validation report output configuration
+# ---------------------------------------------------------------------------
+report_output:
+  formats: [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
+
+# ---------------------------------------------------------------------------
+# Post-validation outputs (computed only when validation passes)
+# ---------------------------------------------------------------------------
+# Each entry key is used as the parameter name unless 'name' is specified.
+# Supported aggregates: distinct | count | sum
+# ---------------------------------------------------------------------------
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: INDEX
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+
+  # Count of unique CRGroup values
+  CR_COUNT:
+    sheet: INDEX
+    column: CRGROUP
+    aggregate: distinct_count

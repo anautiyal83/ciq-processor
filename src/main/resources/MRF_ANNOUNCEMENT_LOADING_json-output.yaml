@@ -18,16 +18,19 @@ data:
   activity: ANNOUNCEMENT_LOADING
   nodes:
     _each: "DISTINCT INDEX.NODE AS $node"
-    node: $node
-    node_details: $node
+    node:    $node
+    version: "Node_Details.VER WHERE Node_Details.Node_Name = $node"
     crGroup: INDEX.CRGROUP
+    Group:
+      _join: "INDEX.GROUP"
+      separator: ","
     email:   INDEX.EMAIL
     niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
     configData:
-      _each: "ANNOUNCEMENT_FILES WHERE GROUP = INDEX.GROUP"
+      _each: "ANNOUNCEMENT_FILES WHERE GROUP IN INDEX.GROUP"
       INPUT_FILE: INPUT_FILE
       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-
+      
 # ── CR-wise single file (alternate template) ────────────────────────────────
 
 # output_mode: single

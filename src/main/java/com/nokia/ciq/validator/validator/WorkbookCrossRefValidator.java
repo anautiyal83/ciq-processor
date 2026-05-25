@@ -5,6 +5,7 @@ import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ConstantWithinRule;
 import com.nokia.ciq.validator.config.CountPerRule;
+import com.nokia.ciq.validator.config.SetMatchRule;
 import com.nokia.ciq.validator.config.SubsetAnyRule;
 import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.UniqueRule;
@@ -70,6 +71,10 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
 
         if (rule.getConstantWithin() != null) {
             errors.addAll(checkConstantWithin(rule.getConstantWithin(), store));
+        }
+
+        if (rule.getSetMatch() != null) {
+            errors.addAll(checkSetMatch(rule.getSetMatch(), store));
         }
 
         return errors;
@@ -283,6 +288,67 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             }
         }
         return values;
+    }
+
+    // -------------------------------------------------------------------------
+    // SetMatch check
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkSetMatch(SetMatchRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        SetMatchRule.Source src = rule.getSource();
+        SetMatchRule.Target tgt = rule.getTarget();
+        if (src == null || tgt == null) return errors;
+        if (src.getSheet() == null || src.getGroup() == null || src.getColumn() == null) return errors;
+        if (tgt.getSheet() == null || tgt.getColumns() == null || tgt.getColumns().isEmpty()) return errors;
+
+        CiqSheet srcSheet = getSheet(store, src.getSheet());
+        CiqSheet tgtSheet = getSheet(store, tgt.getSheet());
+        if (srcSheet == null) { log.warn("set_match: source sheet '{}' not found", src.getSheet()); return errors; }
+        if (tgtSheet == null) { log.warn("set_match: target sheet '{}' not found", tgt.getSheet()); return errors; }
+
+        // Build source: group → Set<value>
+        Map<String, Set<String>> sourceGroups = new LinkedHashMap<>();
+        for (CiqRow row : srcSheet.getRows()) {
+            String groupVal = row.get(src.getGroup());
+            String colVal   = row.get(src.getColumn());
+            if (groupVal == null || groupVal.trim().isEmpty()) continue;
+            if (colVal   == null || colVal.trim().isEmpty())   continue;
+            sourceGroups.computeIfAbsent(groupVal.trim(), k -> new LinkedHashSet<>()).add(colVal.trim());
+        }
+
+        // Build target: list of Set<value> (one set per row)
+        List<Set<String>> targetSets = new ArrayList<>();
+        for (CiqRow row : tgtSheet.getRows()) {
+            Set<String> rowSet = new LinkedHashSet<>();
+            for (String col : tgt.getColumns()) {
+                String v = row.get(col);
+                if (v != null && !v.trim().isEmpty()) rowSet.add(v.trim());
+            }
+            if (!rowSet.isEmpty()) targetSets.add(rowSet);
+        }
+
+        // Check every source group has a matching target row
+        for (Map.Entry<String, Set<String>> e : sourceGroups.entrySet()) {
+            if (targetSets.stream().noneMatch(t -> t.equals(e.getValue()))) {
+                errors.add(new ValidationError(0, src.getGroup(), e.getKey(),
+                        src.getGroup() + " '" + e.getKey() + "' has " + src.getSheet()
+                        + "." + src.getColumn() + " set " + e.getValue()
+                        + " — no matching row found in " + tgt.getSheet()
+                        + " columns " + tgt.getColumns()));
+            }
+        }
+
+        // Check every target row has a matching source group
+        for (Set<String> tgtSet : targetSets) {
+            if (sourceGroups.values().stream().noneMatch(s -> s.equals(tgtSet))) {
+                errors.add(new ValidationError(0, String.join("+", tgt.getColumns()),
+                        tgtSet.toString(),
+                        tgt.getSheet() + " row with " + tgt.getColumns() + " = " + tgtSet
+                        + " — no matching " + src.getGroup() + " group found in " + src.getSheet()));
+            }
+        }
+        return errors;
     }
 
     /** Loads a sheet from the store by name, returning {@code null} on missing or error. */

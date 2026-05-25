@@ -619,12 +619,12 @@ public class InMemoryExcelReader {
         com.nokia.ciq.validator.config.SheetRules indexRules = rules.getSheets().get(SHEET_INDEX);
         if (indexRules == null || indexRules.getColumns() == null) return;
 
-        // Collect columns that need consolidation
-        List<String> consolidateCols = new ArrayList<>();
+        // Collect columns that need consolidation: colKey → effective separator
+        Map<String, String> consolidateCols = new LinkedHashMap<>();
         for (Map.Entry<String, com.nokia.ciq.validator.config.ColumnRule> e
                 : indexRules.getColumns().entrySet()) {
             if (e.getValue() != null && e.getValue().isConsolidate()) {
-                consolidateCols.add(e.getKey());
+                consolidateCols.put(e.getKey(), e.getValue().effectiveConsolidateSeparator());
             }
         }
         if (consolidateCols.isEmpty()) return;
@@ -643,7 +643,7 @@ public class InMemoryExcelReader {
             String crGroup = row.get(crGroupActual);
             if (crGroup == null || crGroup.trim().isEmpty()) continue;
             crGroup = crGroup.trim();
-            for (String colKey : consolidateCols) {
+            for (String colKey : consolidateCols.keySet()) {
                 String actual = findActualCol(indexSheet.getColumns(), colKey);
                 if (actual == null) continue;
                 String cellVal = row.get(actual);
@@ -652,7 +652,7 @@ public class InMemoryExcelReader {
                         acc.computeIfAbsent(crGroup, k -> new LinkedHashMap<>());
                 LinkedHashSet<String> tokens =
                         colMap.computeIfAbsent(colKey, k -> new LinkedHashSet<>());
-                for (String token : cellVal.split(",")) {
+                for (String token : cellVal.split("[,;]")) {
                     String t = token.trim();
                     if (!t.isEmpty()) tokens.add(t);
                 }
@@ -667,12 +667,14 @@ public class InMemoryExcelReader {
             crGroup = crGroup.trim();
             Map<String, LinkedHashSet<String>> colMap = acc.get(crGroup);
             if (colMap == null) continue;
-            for (String colKey : consolidateCols) {
+            for (Map.Entry<String, String> colEntry : consolidateCols.entrySet()) {
+                String colKey = colEntry.getKey();
+                String separator = colEntry.getValue();
                 String actual = findActualCol(indexSheet.getColumns(), colKey);
                 if (actual == null) continue;
                 LinkedHashSet<String> tokens = colMap.get(colKey);
                 if (tokens != null && !tokens.isEmpty()) {
-                    row.getData().put(actual, String.join(",", tokens));
+                    row.getData().put(actual, String.join(separator, tokens));
                 }
             }
         }
