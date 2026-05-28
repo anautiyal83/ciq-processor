@@ -96,7 +96,7 @@ public class CiqValidationEngine {
                 Class<?> cls = Class.forName(e.getValue().getClazz());
                 CellValidator v = (CellValidator) cls.getDeclaredConstructor().newInstance();
                 map.put(e.getKey(), v);
-                log.info("Loaded custom validator '{}' → {}", e.getKey(), e.getValue().getClazz());
+                log.info("Loaded custom validator '{}' -> {}", e.getKey(), e.getValue().getClazz());
             } catch (Exception ex) {
                 log.error("Failed to load custom validator '{}': {}", e.getKey(), ex.getMessage());
             }
@@ -109,18 +109,18 @@ public class CiqValidationEngine {
      *
      * <p>Ordering rules:
      * <ol>
-     *   <li>{@link RequiredValidator}      — gatekeeper; must remain first</li>
-     *   <li>{@link StringValidator}        — minLength/maxLength, enum, allowedValues, boolean, urlScheme</li>
-     *   <li>{@link IntegerValidator}       — integer (minValue, maxValue, allowedRanges)</li>
-     *   <li>{@link DecimalValidator}       — decimal (minDecimal, maxDecimal, precision)</li>
-     *   <li>{@link TemporalValidator}      — date / time / datetime</li>
-     *   <li>{@link EmailValidator}         — email (multi-address support)</li>
-     *   <li>{@link IpAddressValidator}     — ip / cidr</li>
-     *   <li>{@link HostnameValidator}      — hostname / fqdn</li>
-     *   <li>{@link PatternValidator}       — mac, phone (built-in), + custom pattern override</li>
-     *   <li>{@link CrossRefValidator}           — crossRef (cross-sheet column lookup)</li>
-     *   <li>{@link SheetRefValidator}           — sheetRef (cell value must match a workbook sheet name)</li>
-     *   <li>{@link ConditionalPatternValidator} — conditionalPattern (pattern driven by a lookup sheet value)</li>
+     *   <li>{@link RequiredValidator}      - gatekeeper; must remain first</li>
+     *   <li>{@link StringValidator}        - minLength/maxLength, enum, allowedValues, boolean, urlScheme</li>
+     *   <li>{@link IntegerValidator}       - integer (minValue, maxValue, allowedRanges)</li>
+     *   <li>{@link DecimalValidator}       - decimal (minDecimal, maxDecimal, precision)</li>
+     *   <li>{@link TemporalValidator}      - date / time / datetime</li>
+     *   <li>{@link EmailValidator}         - email (multi-address support)</li>
+     *   <li>{@link IpAddressValidator}     - ip / cidr</li>
+     *   <li>{@link HostnameValidator}      - hostname / fqdn</li>
+     *   <li>{@link PatternValidator}       - mac, phone (built-in), + custom pattern override</li>
+     *   <li>{@link CrossRefValidator}           - crossRef (cross-sheet column lookup)</li>
+     *   <li>{@link SheetRefValidator}           - sheetRef (cell value must match a workbook sheet name)</li>
+     *   <li>{@link ConditionalPatternValidator} - conditionalPattern (pattern driven by a lookup sheet value)</li>
      * </ol>
      */
     private static List<CellValidator> buildValidatorChain(CiqDataStore store) {
@@ -197,7 +197,7 @@ public class CiqValidationEngine {
             result.setRowsChecked(sheet.getRows().size());
 
             // Blank-sheet check: fail if the sheet has no rows OR every row has all-null values.
-            // Note: isEmpty() must also be checked — when rows is empty the allMatch predicate
+            // Note: isEmpty() must also be checked - when rows is empty the allMatch predicate
             // is vacuously true, so the original !isEmpty() guard would silently pass an empty sheet.
             if (sheet.getRows().isEmpty()
                     || sheet.getRows().stream().allMatch(r ->
@@ -206,7 +206,7 @@ public class CiqValidationEngine {
                 result.addError(new ValidationError(0, "-", null,
                         sheet.getRows().isEmpty()
                             ? "Sheet '" + tableName + "' has no data rows"
-                            : "Sheet '" + tableName + "' contains only blank rows — no valid data found"));
+                            : "Sheet '" + tableName + "' contains only blank rows - no valid data found"));
                 report.getSheets().add(result);
                 log.warn("Sheet '{}': {}", tableName,
                         sheet.getRows().isEmpty() ? "no data rows" : "all rows are blank");
@@ -241,7 +241,7 @@ public class CiqValidationEngine {
             logActiveValidators(tableName, sheetRules, missingColumns);
 
             for (CiqRow row : sheet.getRows()) {
-                // Column rules — delegated to the validator chain; skip missing columns
+                // Column rules - delegated to the validator chain; skip missing columns
                 if (sheetRules != null) {
                     for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
                         if (missingColumns.contains(entry.getKey())) continue;
@@ -307,7 +307,7 @@ public class CiqValidationEngine {
                 }
             }
         }
-        log.info("Validation complete: {} — {} error(s)", report.getStatus(), report.getTotalErrors());
+        log.info("Validation complete: {} - {} error(s)", report.getStatus(), report.getTotalErrors());
         return report;
     }
 
@@ -336,13 +336,13 @@ public class CiqValidationEngine {
             result.addError(new ValidationError(0, "-", null,
                     "Sheet '" + sheetLabel + "' not found in workbook"));
             report.getSheets().add(result);
-            log.warn("Sheet '{}' not found — cannot validate", sheetLabel);
+            log.warn("Sheet '{}' not found - cannot validate", sheetLabel);
             return;
         }
 
         result.setRowsChecked(sheet.getRows().size());
 
-        // Blank-sheet check: same fix as the per-sheet loop — also catches zero-row sheets.
+        // Blank-sheet check: same fix as the per-sheet loop - also catches zero-row sheets.
         if (sheet.getRows().isEmpty()
                 || sheet.getRows().stream().allMatch(r ->
                         r.getData().values().stream().allMatch(v -> v == null))) {
@@ -350,7 +350,7 @@ public class CiqValidationEngine {
             result.addError(new ValidationError(0, "-", null,
                     sheet.getRows().isEmpty()
                         ? "Sheet '" + sheetLabel + "' has no data rows"
-                        : "Sheet '" + sheetLabel + "' contains only blank rows — no valid data found"));
+                        : "Sheet '" + sheetLabel + "' contains only blank rows - no valid data found"));
             report.getSheets().add(result);
             log.warn("Sheet '{}' (special): {}", sheetLabel,
                     sheet.getRows().isEmpty() ? "no data rows" : "all rows are blank");
@@ -479,7 +479,7 @@ public class CiqValidationEngine {
         for (Map.Entry<String, ColumnRule> e : sheetRules.getColumns().entrySet()) {
             String col = e.getKey();
             if (missingColumns.contains(col)) {
-                log.info("[Config] sheet='{}' col='{}': MISSING — column not found in sheet",
+                log.info("[Config] sheet='{}' col='{}': MISSING - column not found in sheet",
                         sheetName, col);
                 continue;
             }
@@ -502,14 +502,14 @@ public class CiqValidationEngine {
 
         for (String col : sheetRules.getColumns().keySet()) {
             if (missingColumns.contains(col)) {
-                log.info("[Summary] sheet='{}' col='{}': SKIPPED — column missing from sheet",
+                log.info("[Summary] sheet='{}' col='{}': SKIPPED - column missing from sheet",
                         sheetName, col);
                 continue;
             }
             long failed = errorsByCol.getOrDefault(col, 0L);
             long passed = rowCount - failed;
             String status = failed == 0 ? "PASS" : "FAIL";
-            log.info("[Summary] sheet='{}' col='{}': {} — {} passed, {} failed",
+            log.info("[Summary] sheet='{}' col='{}': {} - {} passed, {} failed",
                     sheetName, col, status, passed, failed);
         }
     }
@@ -550,7 +550,7 @@ public class CiqValidationEngine {
     }
 
     // -------------------------------------------------------------------------
-    // Per-cell validation — delegates to the ordered validator chain
+    // Per-cell validation - delegates to the ordered validator chain
     // -------------------------------------------------------------------------
 
     private void validateCell(CiqRow row, String colName, ColumnRule rule,
@@ -572,7 +572,7 @@ public class CiqValidationEngine {
                 anyFail = true;
                 failingValidator = vname(validator);
                 for (ValidationError e : errors) {
-                    log.info("[{}] sheet='{}' row={} col='{}' value='{}': FAIL — {}",
+                    log.info("[{}] sheet='{}' row={} col='{}' value='{}': FAIL - {}",
                             failingValidator, sheet, row.getRowNumber(), colName, value, e.getMessage());
                     result.addError(e);
                 }
@@ -590,7 +590,7 @@ public class CiqValidationEngine {
                 } else {
                     anyFail = true;
                     for (ValidationError e : errors) {
-                        log.info("[{}] sheet='{}' row={} col='{}' value='{}': FAIL — {}",
+                        log.info("[{}] sheet='{}' row={} col='{}' value='{}': FAIL - {}",
                                 vname(custom), sheet, row.getRowNumber(), colName, value, e.getMessage());
                         result.addError(e);
                     }
@@ -610,7 +610,7 @@ public class CiqValidationEngine {
     /** Returns a short, readable validator name for log messages. */
     private static String vname(CellValidator v) {
         String name = v.getClass().getSimpleName();
-        // Strip trailing "Validator" suffix for brevity: "RequiredValidator" → "Required"
+        // Strip trailing "Validator" suffix for brevity: "RequiredValidator" -> "Required"
         return name.endsWith("Validator") ? name.substring(0, name.length() - 9) : name;
     }
 
@@ -655,13 +655,13 @@ public class CiqValidationEngine {
                     ? rule.getName().trim() : yamlKey;
 
             if (rule.getSheet() == null || rule.getAggregate() == null) {
-                log.warn("outputs[{}]: 'sheet' and 'aggregate' are required — skipping", yamlKey);
+                log.warn("outputs[{}]: 'sheet' and 'aggregate' are required - skipping", yamlKey);
                 continue;
             }
 
             CiqSheet sheet = store.getSheet(rule.getSheet());
             if (sheet == null) {
-                log.warn("outputs[{}]: sheet '{}' not found — skipping", yamlKey, rule.getSheet());
+                log.warn("outputs[{}]: sheet '{}' not found - skipping", yamlKey, rule.getSheet());
                 continue;
             }
 
@@ -709,7 +709,7 @@ public class CiqValidationEngine {
 
             case "sum": {
                 if (isBlank(rule.getColumn())) {
-                    log.warn("outputs[{}]: 'column' is required for aggregate 'sum' — returning 0", key);
+                    log.warn("outputs[{}]: 'column' is required for aggregate 'sum' - returning 0", key);
                     return "0";
                 }
                 double total = 0.0;
@@ -728,7 +728,7 @@ public class CiqValidationEngine {
 
             case "distinct": {
                 if (isBlank(rule.getColumn())) {
-                    log.warn("outputs[{}]: 'column' is required for aggregate 'distinct' — returning empty", key);
+                    log.warn("outputs[{}]: 'column' is required for aggregate 'distinct' - returning empty", key);
                     return "";
                 }
                 String sep = (rule.getSeparator() != null) ? rule.getSeparator() : ",";
@@ -742,7 +742,7 @@ public class CiqValidationEngine {
 
             case "distinct_count": {
                 if (isBlank(rule.getColumn())) {
-                    log.warn("outputs[{}]: 'column' is required for aggregate 'distinct_count' — returning 0", key);
+                    log.warn("outputs[{}]: 'column' is required for aggregate 'distinct_count' - returning 0", key);
                     return "0";
                 }
                 Set<String> seen = new LinkedHashSet<>();
@@ -754,21 +754,21 @@ public class CiqValidationEngine {
             }
 
             default:
-                log.warn("outputs[{}]: unknown aggregate '{}' — returning empty", key, rule.getAggregate());
+                log.warn("outputs[{}]: unknown aggregate '{}' - returning empty", key, rule.getAggregate());
                 return "";
         }
     }
 
     /**
      * Groups distinct values of {@code rule.getColumn()} by each distinct value of
-     * {@code rule.getGroupBy()}, returning a map of {@code groupValue → joinedColumnValues}.
+     * {@code rule.getGroupBy()}, returning a map of {@code groupValue -> joinedColumnValues}.
      * Insertion order is preserved (first-seen group value comes first).
      */
     private Map<String, String> computeGroupAggregate(String key, CiqSheet sheet, OutputRule rule) {
         String groupByCol = rule.getGroupBy();
         String valueCol   = rule.getColumn();
         if (isBlank(groupByCol) || isBlank(valueCol)) {
-            log.warn("outputs[{}]: 'groupBy' and 'column' are required for aggregate 'group' — returning empty", key);
+            log.warn("outputs[{}]: 'groupBy' and 'column' are required for aggregate 'group' - returning empty", key);
             return new LinkedHashMap<>();
         }
         String sep = (rule.getSeparator() != null) ? rule.getSeparator() : ",";

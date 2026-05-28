@@ -40,6 +40,10 @@ public class ValidationReport {
      * and (in GROUP mode) GROUP_N, GROUP_N_VALUES.
      */
     private Map<String, String> parameters = new LinkedHashMap<>();
+    private List<String> logs = new ArrayList<>();
+
+    public List<String> getLogs()                  { return logs; }
+    public void setLogs(List<String> logs)         { this.logs = logs; }
 
     public String getNodeType() { return nodeType; }
     public void setNodeType(String nodeType) { this.nodeType = nodeType; }
