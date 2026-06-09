@@ -19,6 +19,7 @@ data:
   nodes:
     _each: "DISTINCT INDEX.NODE AS $node"
     node:    $node
+    node_details: $node
     version: "Node_Details.VER WHERE Node_Details.Node_Name = $node"
     crGroup: INDEX.CRGROUP
     Group:
