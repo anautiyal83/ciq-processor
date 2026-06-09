@@ -77,8 +77,14 @@ public class ConditionalPatternValidator implements CellValidator {
         ConditionalPattern cp = rule.getConditionalPattern();
         if (cp == null) return Collections.emptyList();
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
-        if (cp.getRules() == null || cp.getRules().isEmpty()) return Collections.emptyList();
-        if (cp.getLookupChain() == null || cp.getLookupChain().isEmpty()) return Collections.emptyList();
+        if (cp.getRules() == null || cp.getRules().isEmpty()) {
+            log.warn("conditionalPattern: no rules configured for column '{}'", colName);
+            return Collections.emptyList();
+        }
+        if (cp.getLookupChain() == null || cp.getLookupChain().isEmpty()) {
+            log.warn("conditionalPattern: no lookupChain configured for column '{}' — skipping (check YAML or JAR version)", colName);
+            return Collections.emptyList();
+        }
 
         // Seed: read startColumn from the current row
         String startCol = cp.getStartColumn();
@@ -88,37 +94,62 @@ public class ConditionalPatternValidator implements CellValidator {
         }
         String startValue = row.get(startCol);
         if (startValue == null || startValue.trim().isEmpty()) {
+            log.debug("conditionalPattern: row {} col '{}': startColumn '{}' is blank — skipping",
+                    row.getRowNumber(), colName, startCol);
             return Collections.emptyList(); // no start value — nothing to resolve
         }
+
+        log.debug("conditionalPattern: row {} col '{}': startColumn='{}' seed='{}'",
+                row.getRowNumber(), colName, startCol, startValue.trim());
 
         Set<String> currentValues = new LinkedHashSet<>();
         currentValues.add(startValue.trim());
 
         // Walk the join chain
         for (LookupStep step : cp.getLookupChain()) {
+            Set<String> prev = currentValues;
             currentValues = resolveStep(step, currentValues, colName);
             if (currentValues.isEmpty()) {
-                log.warn("conditionalPattern: join chain produced no values at step [{}.{} -> {}] for column '{}'",
-                        step.getSheet(), step.getJoinOn(), step.getExtract(), colName);
+                log.warn("conditionalPattern: row {} col '{}': join chain returned no values at step"
+                        + " [{}.{} -> {}] (incoming: {}) — validation skipped",
+                        row.getRowNumber(), colName,
+                        step.getSheet(), step.getJoinOn(), step.getExtract(), prev);
                 return Collections.emptyList();
             }
+            log.debug("conditionalPattern: row {} col '{}': step [{}.{} -> {}] resolved: {}",
+                    row.getRowNumber(), colName,
+                    step.getSheet(), step.getJoinOn(), step.getExtract(), currentValues);
         }
 
         // currentValues now holds the resolved final values (e.g. VER values)
         String cellValue = value.trim();
+        log.debug("conditionalPattern: row {} col '{}': cell='{}', resolved values={}",
+                row.getRowNumber(), colName, cellValue, currentValues);
 
         for (String resolvedValue : currentValues) {
             ConditionalPatternEntry matched = findMatchingRule(cp, resolvedValue, colName);
-            if (matched == null) continue;
+            if (matched == null) {
+                log.debug("conditionalPattern: row {} col '{}': no 'when' rule matched resolvedValue='{}'",
+                        row.getRowNumber(), colName, resolvedValue);
+                continue;
+            }
 
             String pattern = matched.getPattern();
             if (pattern == null || pattern.trim().isEmpty()) continue;
 
+            log.debug("conditionalPattern: row {} col '{}': resolvedValue='{}' matched when='{}', testing pattern='{}'",
+                    row.getRowNumber(), colName, resolvedValue, matched.getWhen(), pattern);
+
             try {
                 if (!Pattern.compile(pattern).matcher(cellValue).matches()) {
                     String msg = buildMessage(matched.getMessage(), cellValue, resolvedValue, pattern);
+                    log.debug("conditionalPattern: row {} col '{}': FAIL — cell='{}' resolvedValue='{}' pattern='{}'",
+                            row.getRowNumber(), colName, cellValue, resolvedValue, pattern);
                     return Collections.singletonList(
                             new ValidationError(row.getRowNumber(), colName, value, msg));
+                } else {
+                    log.debug("conditionalPattern: row {} col '{}': PASS — cell='{}' resolvedValue='{}' pattern='{}'",
+                            row.getRowNumber(), colName, cellValue, resolvedValue, pattern);
                 }
             } catch (PatternSyntaxException e) {
                 log.error("conditionalPattern: invalid pattern '{}' for column '{}': {}",
@@ -146,15 +177,29 @@ public class ConditionalPatternValidator implements CellValidator {
                         step.getSheet(), colName);
                 return result;
             }
+            log.debug("conditionalPattern: resolveStep sheet='{}' rows={} joinOn='{}' extract='{}' incoming={}",
+                    step.getSheet(), sheet.getRows().size(), step.getJoinOn(), step.getExtract(), incomingValues);
             for (CiqRow r : sheet.getRows()) {
                 String joinVal = r.get(step.getJoinOn());
+                log.debug("conditionalPattern: resolveStep row={} dataKeys={} joinVal='{}'",
+                        r.getRowNumber(), r.getData().keySet(), joinVal);
                 if (joinVal == null || joinVal.trim().isEmpty()) continue;
                 if (incomingValues.contains(joinVal.trim())) {
                     String extracted = r.get(step.getExtract());
+                    log.debug("conditionalPattern: resolveStep row={} JOIN MATCH joinVal='{}' extracted='{}'",
+                            r.getRowNumber(), joinVal.trim(), extracted);
                     if (extracted != null && !extracted.trim().isEmpty()) {
                         result.add(extracted.trim());
                     }
                 }
+            }
+            if (result.isEmpty() && !sheet.getRows().isEmpty()) {
+                CiqRow first = sheet.getRows().get(0);
+                String sampleJoinVal = first.get(step.getJoinOn());
+                log.warn("conditionalPattern: resolveStep DIAGNOSTIC sheet='{}' rows={} joinOn='{}' incoming={}"
+                        + " | firstRowDataKeys={} firstRowJoinVal='{}'",
+                        step.getSheet(), sheet.getRows().size(), step.getJoinOn(), incomingValues,
+                        first.getData().keySet(), sampleJoinVal);
             }
         } catch (IOException e) {
             log.warn("conditionalPattern: error reading sheet '{}': {}", step.getSheet(), e.getMessage());
