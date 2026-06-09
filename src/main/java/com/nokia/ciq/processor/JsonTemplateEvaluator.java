@@ -6,9 +6,11 @@ import com.nokia.ciq.reader.model.CiqSheet;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Evaluates a YAML-defined JSON template against CIQ workbook data to produce
@@ -63,6 +65,7 @@ public class JsonTemplateEvaluator {
             Map<String, Object> map = (Map<String, Object>) value;
             if (map.containsKey("_each"))  return buildArray(map, ctx);
             if (map.containsKey("_join"))  return buildJoin(map, ctx);
+            if (map.containsKey("_row"))   return buildRowMap(map, ctx);
             return buildObject(map, ctx);
         }
         if (value instanceof List) {
@@ -157,6 +160,71 @@ public class JsonTemplateEvaluator {
     }
 
     /**
+     * Emits all columns of the current row as a map, optionally excluding named columns.
+     *
+     * <pre>
+     * data:
+     *   _row: exclude [GROUP, ACTION, SUBACTION]
+     *
+     * # or using YAML map form:
+     * data:
+     *   _row:
+     *     exclude: [GROUP, ACTION, SUBACTION]
+     * </pre>
+     *
+     * Exclusion matching is case- and underscore-insensitive (same normalisation as CiqRow).
+     */
+    private Map<String, Object> buildRowMap(Map<String, Object> map, TemplateContext ctx) {
+        if (ctx.currentRow == null) return Collections.emptyMap();
+
+        // Collect excluded column names (normalised)
+        Set<String> excluded = new HashSet<>();
+        Object directive = map.get("_row");
+
+        if (directive instanceof String) {
+            String s = ((String) directive).trim();
+            if ("*".equals(s)) {
+                // _row: "*"  →  include all columns, no exclusions
+            } else if (s.toUpperCase().startsWith("EXCLUDE")) {
+                // e.g. "exclude [GROUP, ACTION, SUBACTION]"
+                String rest = s.substring(7).trim();
+                if (rest.startsWith("[") && rest.endsWith("]"))
+                    rest = rest.substring(1, rest.length() - 1);
+                for (String col : rest.split(","))
+                    excluded.add(normalizeColName(col.trim()));
+            }
+        } else if (directive instanceof Map) {
+            // e.g. {exclude: [GROUP, ACTION, SUBACTION]}
+            @SuppressWarnings("unchecked")
+            Map<String, Object> dMap = (Map<String, Object>) directive;
+            Object exList = dMap.get("exclude");
+            if (exList instanceof List) {
+                for (Object col : (List<?>) exList)
+                    excluded.add(normalizeColName(String.valueOf(col).trim()));
+            }
+        } else if (directive instanceof List) {
+            // e.g. _row: [GROUP, ACTION, SUBACTION]  (treat as exclusion list directly)
+            for (Object col : (List<?>) directive)
+                excluded.add(normalizeColName(String.valueOf(col).trim()));
+        }
+
+        // Build result map from current row's data, skipping excluded columns
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : ctx.currentRow.getData().entrySet()) {
+            if (!excluded.contains(normalizeColName(e.getKey()))) {
+                String val = e.getValue();
+                if (val != null && !val.trim().isEmpty())
+                    result.put(e.getKey(), val.trim());
+            }
+        }
+        return result;
+    }
+
+    private static String normalizeColName(String s) {
+        return s == null ? "" : s.replace("_", "").toLowerCase();
+    }
+
+    /**
      * Collects all non-blank values of a column expression.
      * Supports:
      * <ul>
@@ -237,11 +305,22 @@ public class JsonTemplateEvaluator {
             String sheetPart = each.substring(0, whereIdx).trim();
             if (sheetPart.contains("."))
                 sheetPart = sheetPart.substring(0, sheetPart.indexOf('.')).trim();
+            // Resolve $variable to actual sheet name
+            if (sheetPart.startsWith("$")) {
+                Object resolved = ctx.vars.get(sheetPart.substring(1));
+                if (resolved == null) return Collections.emptyList();
+                sheetPart = resolved.toString();
+            }
             String condition = each.substring(whereIdx + 7).trim();
             return buildFilteredSheetArray(sheetPart, condition, elemTemplate, ctx);
         }
 
-        // ── Plain sheet name ─────────────────────────────────────────────────
+        // ── Plain sheet name (including $variable) ───────────────────────────
+        if (each.startsWith("$")) {
+            Object resolved = ctx.vars.get(each.substring(1));
+            if (resolved == null) return Collections.emptyList();
+            each = resolved.toString();
+        }
         return buildSheetArray(each, elemTemplate, ctx);
     }
 

@@ -1,10 +1,12 @@
 # ---------------------------------------------------------------------------
-# JSON output template — DLU INSTALLATION
+# JSON output template — SBC FIXED_LINE_CONFIGURATION
 # ---------------------------------------------------------------------------
-# This file is referenced from DLU_INSTALLATION_validation-rules.yaml
-# via:  json_output_file: "DLU_INSTALLATION_json-output.yaml"
+# This file is referenced from SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
+# via:  json_output_file: "SBC_FIXED_LINE_CONFIGURATION_json-output.yaml"
 # ---------------------------------------------------------------------------
-
+# It is also consumed directly by:
+#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
+# ---------------------------------------------------------------------------
 output_mode: single
 data:
     nodeType: DPA

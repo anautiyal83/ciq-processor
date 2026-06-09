@@ -10,6 +10,7 @@ import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.SheetRowRule;
 import com.nokia.ciq.validator.config.SheetRules;
+import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.ValidatorDefinition;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.WorkbookRule;
@@ -148,9 +149,8 @@ public class CiqValidationEngine {
         CiqIndex index = store.getIndex();
 
         // --- Determine which tables to validate ---
-        // Start with sheets listed in the Index's Tables column, then add any additional
-        // sheets defined in the YAML rules that are not special and not already included.
-        // This ensures Node_Details, USER_ID, and any other configured sheets are always validated.
+        // Start with sheets listed in Index.TABLES, then add any additional sheets
+        // defined in the YAML rules that are not special and not already included.
         Set<String> specialNames = specialSheetNames(rules);
         List<String> tableNames = new ArrayList<>(index.getAllTables());
         if (rules.getSheets() != null) {
@@ -187,10 +187,14 @@ public class CiqValidationEngine {
             }
 
             if (sheet == null) {
-                result.setStatus("FAILED");
-                result.addError(new ValidationError(0, "-", null,
-                        "JSON file for sheet '" + tableName + "' not found"));
-                report.getSheets().add(result);
+                if (isSheetRequired(tableName, sheetRules, index)) {
+                    result.setStatus("FAILED");
+                    result.addError(new ValidationError(0, "-", null,
+                            "Sheet '" + tableName + "' is required but not found in workbook"));
+                    report.getSheets().add(result);
+                } else {
+                    log.info("Sheet '{}' is optional and absent — skipping", tableName);
+                }
                 continue;
             }
 
@@ -289,8 +293,22 @@ public class CiqValidationEngine {
         }
 
         // --- Workbook-level cross-sheet rules ---
+        // Skip a rule if any sheet it references is absent AND optional (not required).
         if (rules.getWorkbookRules() != null) {
             for (WorkbookRule wbRule : rules.getWorkbookRules()) {
+                Set<String> referencedSheets = extractReferencedSheets(wbRule);
+                boolean skip = false;
+                for (String refSheet : referencedSheets) {
+                    if (store.getSheet(refSheet) == null) {
+                        SheetRules refRules = sheetRulesFor(rules, refSheet);
+                        if (!isSheetRequired(refSheet, refRules, index)) {
+                            log.info("Skipping workbook_rule referencing optional absent sheet '{}'", refSheet);
+                            skip = true;
+                            break;
+                        }
+                    }
+                }
+                if (skip) continue;
                 List<ValidationError> errors = workbookCrossRefValidator.validate(wbRule, store);
                 for (ValidationError e : errors) {
                     report.getGlobalErrors().add("[workbook_rule] " + e.getMessage());
@@ -814,5 +832,85 @@ public class CiqValidationEngine {
         names.add("Index");
         names.add("Node_ID");
         return names;
+    }
+
+    /**
+     * Determines whether a sheet is required to be present.
+     *
+     * <p>Priority:
+     * <ol>
+     *   <li>If {@code sheetRules} is null — not required (unknown sheet).</li>
+     *   <li>If {@code required: true} — always required.</li>
+     *   <li>If {@code required_if_listed_in: Sheet.Column} is set — required only when
+     *       the sheet's own name appears as a value in that column.</li>
+     *   <li>Otherwise ({@code required: false}, no dynamic rule) — optional.</li>
+     * </ol>
+     */
+    private boolean isSheetRequired(String sheetName, SheetRules sheetRules, CiqIndex index) {
+        if (sheetRules == null)      return false;
+        if (sheetRules.isRequired()) return true;
+
+        String dynamicRule = sheetRules.getRequired_if_listed_in();
+        if (dynamicRule == null || !dynamicRule.contains(".")) return false;
+
+        int dot = dynamicRule.indexOf('.');
+        String refSheet = dynamicRule.substring(0, dot).trim();
+        String refCol   = dynamicRule.substring(dot + 1).trim();
+
+        // Resolve the reference sheet rows — special-case "Index" since it is not in
+        // the regular store; use the raw index sheet from InMemoryCiqDataStore if available.
+        List<CiqRow> refRows = null;
+        if ("Index".equalsIgnoreCase(refSheet)) {
+            // Fast path: if the column is TABLES, use the already-parsed getAllTables()
+            if ("TABLES".equalsIgnoreCase(refCol)) {
+                return index.getAllTables().stream()
+                        .anyMatch(t -> sheetName.equalsIgnoreCase(t));
+            }
+            if (store instanceof InMemoryCiqDataStore) {
+                CiqSheet rawIndex = ((InMemoryCiqDataStore) store).getRawIndexSheet();
+                if (rawIndex != null) refRows = rawIndex.getRows();
+            }
+        } else {
+            try {
+                CiqSheet refSheetObj = store.getSheet(refSheet);
+                if (refSheetObj != null) refRows = refSheetObj.getRows();
+            } catch (java.io.IOException e) {
+                log.warn("Could not resolve required_if_listed_in sheet '{}': {}", refSheet, e.getMessage());
+            }
+        }
+        if (refRows == null) return false;
+        for (CiqRow row : refRows) {
+            String val = row.get(refCol);
+            if (sheetName.equalsIgnoreCase(val != null ? val.trim() : "")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Extracts all sheet names referenced by a {@link WorkbookRule} so the caller
+     * can decide whether to skip the rule when any referenced sheet is absent.
+     */
+    private static Set<String> extractReferencedSheets(WorkbookRule rule) {
+        Set<String> sheets = new HashSet<>();
+        addSheetFromRef(rule.getSubset(),    sheets);
+        addSheetFromRef(rule.getSuperset(),  sheets);
+        addSheetFromRef(rule.getMatch(),     sheets);
+        if (rule.getSubsetAny() != null && rule.getSubsetAny().getTo() != null) {
+            for (String ref : rule.getSubsetAny().getTo()) addSheetFromString(ref, sheets);
+            addSheetFromString(rule.getSubsetAny().getFrom(), sheets);
+        }
+        return sheets;
+    }
+
+    private static void addSheetFromRef(SubsetRule ref, Set<String> sheets) {
+        if (ref == null) return;
+        addSheetFromString(ref.getFrom(), sheets);
+        addSheetFromString(ref.getTo(),   sheets);
+    }
+
+    private static void addSheetFromString(String ref, Set<String> sheets) {
+        if (ref == null || !ref.contains(".")) return;
+        String sheet = ref.substring(0, ref.indexOf('.')).trim();
+        if (!sheet.isEmpty()) sheets.add(sheet);
     }
 }
