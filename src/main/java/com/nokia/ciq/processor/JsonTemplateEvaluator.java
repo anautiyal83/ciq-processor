@@ -61,7 +61,9 @@ public class JsonTemplateEvaluator {
         if (value instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = (Map<String, Object>) value;
-            return map.containsKey("_each") ? buildArray(map, ctx) : buildObject(map, ctx);
+            if (map.containsKey("_each"))  return buildArray(map, ctx);
+            if (map.containsKey("_join"))  return buildJoin(map, ctx);
+            return buildObject(map, ctx);
         }
         if (value instanceof List) {
             List<Object> result = new ArrayList<>();
@@ -127,6 +129,77 @@ public class JsonTemplateEvaluator {
             result.put(e.getKey(), resolveValue(e.getValue(), ctx));
         }
         return result;
+    }
+
+    // -------------------------------------------------------------------------
+    // Join builder
+    // -------------------------------------------------------------------------
+
+    /**
+     * Collects all non-blank values from a column expression and joins them with a separator.
+     *
+     * <pre>
+     * node_details:
+     *   _join: "INDEX.NODE WHERE INDEX.REGION = $region"
+     *   separator: ","     # optional, default ","
+     * </pre>
+     */
+    private String buildJoin(Map<String, Object> map, TemplateContext ctx) {
+        String expr      = String.valueOf(map.get("_join"));
+        String separator = map.containsKey("separator") ? String.valueOf(map.get("separator")) : ",";
+        List<String> values = collectValues(expr, ctx);
+        StringBuilder sb = new StringBuilder();
+        for (String v : values) {
+            if (sb.length() > 0) sb.append(separator);
+            sb.append(v);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Collects all non-blank values of a column expression.
+     * Supports:
+     * <ul>
+     *   <li>{@code Sheet.Col WHERE [Sheet.]FilterCol = value}</li>
+     *   <li>{@code Sheet.Col}</li>
+     * </ul>
+     */
+    private List<String> collectValues(String expr, TemplateContext ctx) {
+        List<String> results = new ArrayList<>();
+        int whereIdx = expr.toUpperCase().indexOf(" WHERE ");
+        if (whereIdx >= 0) {
+            String targetExpr = expr.substring(0, whereIdx).trim();
+            String condExpr   = expr.substring(whereIdx + 7).trim();
+            int dot = targetExpr.indexOf('.');
+            if (dot < 0) return results;
+            String sheet     = targetExpr.substring(0, dot).trim();
+            String targetCol = stripQuotes(targetExpr.substring(dot + 1).trim());
+            int eqIdx = condExpr.indexOf('=');
+            if (eqIdx < 0) return results;
+            String condLeft  = condExpr.substring(0, eqIdx).trim();
+            String condRight = condExpr.substring(eqIdx + 1).trim();
+            String filterCol = condLeft.contains(".")
+                    ? stripQuotes(condLeft.substring(condLeft.indexOf('.') + 1).trim())
+                    : stripQuotes(condLeft);
+            Object filterVal = resolveString(condRight, ctx);
+            if (filterVal == null) return results;
+            String filterValStr = filterVal.toString();
+            for (CiqRow row : resolveRows(sheet, ctx)) {
+                if (filterValStr.equals(row.get(filterCol))) {
+                    String v = row.get(targetCol);
+                    if (v != null && !v.trim().isEmpty()) results.add(v.trim());
+                }
+            }
+        } else if (expr.contains(".")) {
+            int dot = expr.indexOf('.');
+            String sheet = expr.substring(0, dot).trim();
+            String col   = stripQuotes(expr.substring(dot + 1).trim());
+            for (CiqRow row : resolveRows(sheet, ctx)) {
+                String v = row.get(col);
+                if (v != null && !v.trim().isEmpty()) results.add(v.trim());
+            }
+        }
+        return results;
     }
 
     // -------------------------------------------------------------------------
@@ -207,6 +280,31 @@ public class JsonTemplateEvaluator {
     private List<Object> buildFilteredSheetArray(String sheetName, String condition,
                                                    Map<String, Object> elemTemplate,
                                                    TemplateContext ctx) {
+        // ── Col IN Sheet.Col  (multi-value membership filter) ─────────────────
+        int inOpIdx = condition.toUpperCase().indexOf(" IN ");
+        if (inOpIdx >= 0) {
+            String filterColExpr = condition.substring(0, inOpIdx).trim();
+            String filterValExpr = condition.substring(inOpIdx + 4).trim();
+            String filterCol = filterColExpr.contains(".")
+                    ? filterColExpr.substring(filterColExpr.indexOf('.') + 1).trim()
+                    : filterColExpr;
+            // Collect all values from the right-hand side (e.g. all GROUP values for this node)
+            List<String> filterValues = collectValues(filterValExpr, ctx);
+            if (filterValues.isEmpty()) {
+                // fallback: treat as single resolved value
+                Object single = resolveString(filterValExpr, ctx);
+                if (single != null) filterValues.add(single.toString());
+            }
+            if (filterValues.isEmpty()) return Collections.emptyList();
+            List<Object> result = new ArrayList<>();
+            for (CiqRow row : resolveRows(sheetName, ctx)) {
+                if (filterValues.contains(row.get(filterCol)))
+                    result.add(buildObject(elemTemplate, ctx.withRow(row)));
+            }
+            return result;
+        }
+
+        // ── Col = value  (single-value equality filter) ───────────────────────
         int eqIdx = condition.indexOf('=');
         if (eqIdx < 0) return buildSheetArray(sheetName, elemTemplate, ctx);
 

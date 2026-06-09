@@ -354,6 +354,21 @@ data:                      # free-form YAML template evaluated by JsonTemplateEv
 | `_each: <SheetName>` | Iterate all rows of a sheet |
 | `_each: "<Sheet> WHERE <Col> = <value>"` | Iterate filtered rows |
 
+**`_join` directive:**
+
+Collects all non-blank values from a column expression and joins them into a single string.
+
+```yaml
+node_details:
+  _join: "INDEX.NODE WHERE INDEX.REGION = $region"
+  separator: ","     # optional — defaults to ","
+```
+
+| Field | Description |
+|---|---|
+| `_join` | Column expression: `Sheet.Col` or `Sheet.Col WHERE Sheet.Filter = value` |
+| `separator` | Join character (default `,`) |
+
 **Relational lookups:**
 
 | Syntax | Meaning |
@@ -471,6 +486,67 @@ settings:
   caseSensitiveValues: true
 ```
 
+### workbook_rules
+
+Cross-sheet constraints evaluated after all per-sheet validation.
+
+```yaml
+workbook_rules:
+  # All values in INDEX.NODE must exist in Node_Details.NODE
+  - subset:
+      from: INDEX.NODE
+      to:   Node_Details.NODE
+
+  # Bidirectional — sets must be identical
+  - match:
+      from: INDEX.NODE
+      to:   Node_Details.NODE
+
+  # Each value in from must exist in at least one of the to columns (OR logic)
+  - subset_any:
+      from: INDEX.NODE
+      to:
+        - Node_Details.NODE1
+        - Node_Details.NODE2
+
+  # Each REGION must have exactly 2 rows in INDEX
+  - count_per:
+      sheet: INDEX
+      group: REGION
+      count: 2
+
+  # GROUP and CRGROUP must be the same for all rows sharing a REGION value
+  - constant_within:
+      sheet:   INDEX
+      group:   REGION
+      columns: [GROUP, CRGROUP]
+
+  # Composite key must be unique within a sheet
+  - unique:
+      columns: [Node_Details.NODE1, Node_Details.NODE2]
+
+  # Each REGION's NODE set in INDEX must match {NODE1, NODE2} in exactly one Node_Details row
+  - set_match:
+      source:
+        sheet:  INDEX
+        group:  REGION
+        column: NODE
+      target:
+        sheet:   Node_Details
+        columns: [NODE1, NODE2]
+```
+
+| Rule | Description |
+|---|---|
+| `subset` | Every value in `from` must appear in `to` |
+| `superset` | Every value in `to` must appear in `from` |
+| `match` | Bidirectional — value sets must be identical |
+| `subset_any` | Every value in `from` must appear in **at least one** of the `to` columns |
+| `unique` | Composite key formed by `columns` must be unique within the sheet |
+| `count_per` | Each distinct value of `group` must appear exactly `count` times in `sheet` |
+| `constant_within` | Listed `columns` must hold the same value across all rows sharing the same `group` value |
+| `set_match` | Each source group's collected value set must match exactly one target row's column set (bidirectional) |
+
 ### report_output
 
 ```yaml
@@ -584,6 +660,8 @@ sheets:
 | `ignoreCase: true` | boolean | Case-insensitive comparison for `allowedValues` / `values` |
 | `unique: true` | boolean | Values must be unique within the sheet |
 | `multi: true` | boolean | Cell may contain multiple comma-separated values |
+| `consolidate: true` | boolean | After validation, merges all values of this Index column across rows sharing the same CRGroup into a single deduplicated comma-separated string. Runs post-validation so per-row checks still see the original values. Useful for EMAIL so JSON templates resolve `INDEX.EMAIL` as the full CRGroup email list. |
+| `minOnePerGroup: { groupByColumn }` | object | At least one non-blank value must exist in this column for each distinct value of `groupByColumn` (e.g. at least one EMAIL per CRGroup). |
 | `conditionalPattern: { ... }` | object | Validates the cell value against a regex that depends on a value resolved via a multi-hop join chain through other sheets. See **Conditional pattern** section below. |
 | `description: "..."` | string | Shown in Column_Guide sheet of generated template |
 | `messages: { ... }` | object | Per-constraint custom messages (see below) |
@@ -794,7 +872,11 @@ ciq-processor/
 │       │   ├── RowCondition.java              # when: condition model (same-sheet + cross-sheet)
 │       │   ├── WorkbookSettings.java          # Global/per-sheet settings model
 │       │   ├── WorkbookRule.java              # workbook_rules entry model
-│       │   ├── SubsetRule.java                # subset/superset rule model
+│       │   ├── SubsetRule.java                # subset/superset/match rule model
+│       │   ├── SubsetAnyRule.java             # subset_any rule model (OR across columns)
+│       │   ├── CountPerRule.java              # count_per rule model (exact row count per group)
+│       │   ├── ConstantWithinRule.java        # constant_within rule model (column consistency within group)
+│       │   ├── SetMatchRule.java              # set_match rule model (source group set vs target row set)
 │       │   ├── UniqueRule.java                # unique rule model
 │       │   ├── ConditionalRequired.java       # requiredWhen model
 │       │   ├── CrossRef.java                  # crossRef model

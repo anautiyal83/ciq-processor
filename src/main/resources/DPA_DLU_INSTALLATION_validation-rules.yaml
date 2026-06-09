@@ -1,0 +1,201 @@
+# =============================================================================
+# Validation Rules: DPA - DLU_INSTALLATION
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+# Validate DLU installation CIQ sheets and phones.dat configuration data.
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: false
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# -----------------------------------------------------------------------------
+# Workbook-level validation rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  # GROUP values in INDEX must exist in PHONESDAT_FILES
+  - match:
+      from: INDEX.GROUP
+      to:   PHONESDAT_FILES.GROUP
+
+  # Each INDEX.NODE must exist in Node_Details.NODE1 or Node_Details.NODE2
+  - subset_any:
+      from: INDEX.NODE
+      to:
+        - Node_Details.NODE1
+        - Node_Details.NODE2
+
+  # Each REGION must contain exactly 2 entries
+  - count_per:
+      sheet: INDEX
+      group: REGION
+      count: 2
+
+  # GROUP and CRGROUP must be the same within a REGION
+  - constant_within:
+      sheet:   INDEX
+      group:   REGION
+      columns: [GROUP, CRGROUP]
+
+  # NODE must be unique within a REGION
+  - unique:
+      columns: [INDEX.REGION, INDEX.NODE]
+
+#  # EMAIL must be different within a REGION
+#  - unique:
+#      columns: [INDEX.REGION, INDEX.EMAIL]
+
+  # Each REGION's NODE pair in INDEX must match {NODE1, NODE2} in Node_Details
+  - set_match:
+      source:
+        sheet:  INDEX
+        group:  REGION
+        column: NODE
+      target:
+        sheet:   Node_Details
+        columns: [NODE1, NODE2]
+
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: INDEX
+  # ---------------------------------------------------------------------------
+  INDEX:
+    required: true
+
+    columns:
+
+      REGION:
+        required: true
+        type: string
+        description: "Region Name"
+
+      NODE:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "NODE must be unique inside REGION"
+
+      GROUP:
+        required: true
+        type: string
+        description: "GROUP should be same within REGION"
+
+      CRGROUP:
+        required: true
+        type: string
+        description: "CRGROUP should be same within REGION"
+
+      EMAIL:    
+        type: email
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        minOnePerGroup:
+            groupByColumn: CRGroup
+
+    rules:
+
+      - require: REGION
+        when:
+          column: REGION
+          operator: notBlank
+
+  # ---------------------------------------------------------------------------
+  # Sheet: PHONESDAT_FILES
+  # ---------------------------------------------------------------------------
+  PHONESDAT_FILES:
+    required: true
+
+    columns:
+
+      GROUP:
+        required: true
+        type: string
+        description: "Group mapping"
+
+      NEW_FILE_NAME:
+        required: true
+        type: string
+        pattern: '.*\.dat'
+        description: "phones.dat file name"
+
+      NEW_VERSION:
+        required: true
+        type: string
+        pattern: '^DPA[A-Za-z0-9.]+_DLU[0-9]+(-Interim)?$'
+        description: "DLU version"
+
+      TAC_COUNT:
+        required: true
+        type: integer
+        minValue: 1
+        description: "TAC count"
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Node_Details
+  # ---------------------------------------------------------------------------
+  Node_Details:
+    required: true
+
+    columns:
+
+      NODE1:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "DPA Hostname"
+      NODE2:
+        required: true
+        type: string
+        pattern: ".*DPA.*"
+        description: "DPA Hostname"
+      NIAM1_NAME:
+        required: true
+        type: string
+        description: "NIAM CLI name"
+      NIAM2_NAME:
+        required: true
+        type: string
+        description: "NIAM CLI name"
+        
+# ---------------------------------------------------------------------------
+# Validation report output configuration
+# ---------------------------------------------------------------------------
+report_output:
+  formats: [JSON, HTML, MSEXCEL]
+  filename: "{nodeType}_{activity}_VALIDATION_REPORT"
+
+# ---------------------------------------------------------------------------
+# Post-validation outputs (computed only when validation passes)
+# ---------------------------------------------------------------------------
+# Each entry key is used as the parameter name unless 'name' is specified.
+# Supported aggregates: distinct | count | sum
+# ---------------------------------------------------------------------------
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: INDEX
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+
+  # Count of unique CRGroup values
+  CR_COUNT:
+    sheet: INDEX
+    column: CRGROUP
+    aggregate: distinct_count
