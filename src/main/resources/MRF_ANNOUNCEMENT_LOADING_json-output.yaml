@@ -5,11 +5,7 @@
 # via:  json_output_file: "MRF_ANNOUNCEMENT_LOADING_json-output.yaml"
 #
 # It is also consumed directly by:
-#   - mop-generator-utility  (MOP generation + approval summary)
-#   - network-command-executor-utility  (execution reporting)
-#
-# Load it independently using JsonOutputLoader:
-#   Map<String, Object> template = new JsonOutputLoader().load("...path.../MRF_ANNOUNCEMENT_LOADING_json-output.yaml");
+#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
 # ---------------------------------------------------------------------------
 
 output_mode: single

@@ -32,6 +32,15 @@ public class SheetRules {
     /** Whether this sheet is required to be present in the workbook. */
     private boolean required;
 
+    /**
+     * Dynamic presence rule (evaluated only when {@code required: false}).
+     * The sheet is required if and only if its own name appears as a value
+     * in the specified column of another sheet.
+     * Format: {@code SheetName.ColumnName}
+     * Example: {@code required_if_listed_in: Index.TABLES}
+     */
+    private String required_if_listed_in;
+
     /** Alternative sheet name(s) that are treated as equivalent to this sheet. */
     private List<String> aliases;
 
@@ -48,6 +57,9 @@ public class SheetRules {
 
     public boolean isRequired() { return required; }
     public void setRequired(boolean required) { this.required = required; }
+
+    public String getRequired_if_listed_in() { return required_if_listed_in; }
+    public void setRequired_if_listed_in(String s) { this.required_if_listed_in = s; }
 
     public List<String> getAliases() { return aliases; }
     public void setAliases(List<String> aliases) { this.aliases = aliases; }

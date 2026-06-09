@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# JSON output template — SBC FIXED_LINE_CONFIGURATION
+# ---------------------------------------------------------------------------
+# This file is referenced from SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
+# via:  json_output_file: "SBC_FIXED_LINE_CONFIGURATION_json-output.yaml"
+# ---------------------------------------------------------------------------
+# It is also consumed directly by:
+#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
+# ---------------------------------------------------------------------------
+output_mode: single
+data:
+ nodeType: SBC
+ activity: FIXED_LINE_CONFIGURATION
+ nodes:
+   _each: "DISTINCT INDEX.NODE AS $node"
+   node:    $node
+   niamID:  "IP.'NIAM NAME' WHERE IP.NODE = $node"
+   crGroup: INDEX.CRGROUP
+   Group:
+     _join: "INDEX.GROUP"
+   email:   INDEX.EMAIL
+   tables:
+     _each: "DISTINCT INDEX.TABLES AS $sheet_name"
+     tableName: $sheet_name
+     records:
+       _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"
+       data:
+         _row: "*"
