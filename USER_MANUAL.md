@@ -345,9 +345,19 @@ segregation value.
 
 | Syntax | What it produces |
 |---|---|
-| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One element per distinct column value |
-| `_each: <SheetName>` | One element per row of the sheet |
-| `_each: "<Sheet> WHERE <Col> = <value>"` | One element per matching row |
+| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One element per distinct column value; sets `$var` |
+| `_each: <SheetName>` | One element per row of the named sheet |
+| `_each: $var` | One element per row of the sheet whose name is in `$var` |
+| `_each: "<Sheet> WHERE <Col> = <value>"` | One element per row matching equality filter |
+| `_each: "<Sheet> WHERE <Col> IN <S2>.<Col2>"` | One element per row where Col is in S2.Col2 value set |
+| `_each: "$var WHERE <Col> IN <S2>.<Col2>"` | Same, sheet name resolved from variable `$var` |
+
+### `_row` directive — emit current row as a map
+
+| Syntax | What it produces |
+|---|---|
+| `_row: "*"` | Map of all columns from the current row |
+| `_row: "exclude [COL1, COL2]"` | Map of all columns except the named ones |
 
 ### Relational lookups
 
@@ -390,6 +400,27 @@ Naming convention: `{NODE_TYPE}_{ACTIVITY}_validation-rules.yaml`
 | `datetime` | Date / time (`format`, default: `yyyy-MM-dd'T'HH:mm:ss`) |
 | `email` | E-mail address (`multi: true` = comma-separated list) |
 | `ip` | IP address (`accepts`: `ipv4` \| `ipv6` \| `both`) |
+
+### Dynamic sheet presence (`required_if_listed_in`)
+
+A sheet can be declared optional by default but **required** when its own name appears in a specific column of another sheet. This is declared at the sheet level (not on a column):
+
+```yaml
+sheets:
+  CRFTargetList:
+    required_if_listed_in: Index.TABLES   # required only when "CRFTargetList" is found in Index.TABLES
+    columns:
+      ...
+```
+
+Priority order:
+1. `required: true` — always required regardless of data.
+2. `required_if_listed_in: Sheet.Column` — required only when the sheet name appears in that column.
+3. Neither — always optional.
+
+Workbook-level `workbook_rules:` that reference a sheet governed by `required_if_listed_in` are automatically **skipped** when that sheet is absent and not required by the data.
+
+---
 
 ### Special Index column options
 
@@ -686,13 +717,16 @@ relational lookups, and variable substitution.
 
 | Directive | Example | Meaning |
 |---|---|---|
-| `_each: "DISTINCT S.Col AS $var"` | `_each: "DISTINCT Index.Node AS $node"` | Iterate distinct column values |
+| `_each: "DISTINCT S.Col AS $var"` | `_each: "DISTINCT Index.Node AS $node"` | Iterate distinct column values; sets `$var` in child context |
 | `_each: SheetName` | `_each: ANNOUNCEMENT_FILES` | Iterate all rows of a sheet |
-| `_each: "Sheet WHERE Col = value"` | `_each: "ANNOUNCEMENT_FILES WHERE GROUP = A"` | Iterate filtered rows |
+| `_each: $var` | `_each: $sheet_name` | Iterate all rows of the sheet whose name is in `$var` |
+| `_each: "Sheet WHERE Col = value"` | `_each: "ANNOUNCEMENT_FILES WHERE GROUP = A"` | Iterate rows matching an equality filter |
+| `_each: "Sheet WHERE Col IN S2.Col2"` | `_each: "CRFTargetList WHERE GROUP IN INDEX.GROUP"` | Iterate rows where `Col` is in the value set of `S2.Col2` (membership filter) |
+| `_each: "$var WHERE Col IN S2.Col2"` | `_each: "$sheet_name WHERE GROUP IN INDEX.GROUP"` | Same membership filter, sheet name resolved from variable |
 | `key: S.Col WHERE S.Filter = $var` | `email: "USER_ID.EMAIL WHERE USER_ID.CRGroup = $cr"` | Relational scalar lookup |
 | `key: S.Col` | `crGroup: Index.CRGroup` | First non-blank value from sheet+column |
 | `key: $var` | `node: $node` | Inline variable reference |
-| `_join: "S.Col WHERE S.Filter = $var"` | `node_details: {_join: "INDEX.NODE WHERE INDEX.REGION = $region", separator: ","}` | Join all matching column values into a string |
+| `_join: "S.Col [WHERE S.Filter = $var]"` | `Group: {_join: "INDEX.GROUP"}` | Join all matching column values into a string |
 
 **`_join` usage:**
 
@@ -704,7 +738,23 @@ node_details:
 
 Collects every non-blank value of `INDEX.NODE` where `INDEX.REGION` matches `$region` and produces a comma-separated string, e.g. `"DPA-EAST1,DPA-EAST2"`.
 
-#### Example (`MRF_ANNOUNCEMENT_LOADING_json-output.yaml`)
+**`_row` directive — emit all row columns as a map:**
+
+| Syntax | Meaning |
+|---|---|
+| `_row: "*"` | Emit all columns of the current row as a key-value map |
+| `_row: "exclude [COL1, COL2, ...]"` | Emit all columns except the listed ones |
+
+`_row` is only valid inside a `_each` block where a current row is in scope. Column exclusion matching is case- and underscore-insensitive.
+
+```yaml
+records:
+  _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"
+  data:
+    _row: "*"    # all columns: Group, Node, Action, SubAction, ActionKey, ID, NAME, Record.*, …
+```
+
+#### Example — fixed-column schema (`MRF_ANNOUNCEMENT_LOADING_json-output.yaml`)
 
 ```yaml
 output_mode: individual
@@ -725,6 +775,33 @@ data:
       _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
       INPUT_FILE:           INPUT_FILE
       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
+
+#### Example — dynamic table schema (`SBC_FIXED_LINE_CONFIGURATION_json-output.yaml`)
+
+When sheet names are stored in the Index (e.g. in `Index.TABLES`), use `DISTINCT` to
+iterate table names and `$var WHERE ... IN ...` to filter data rows per table.
+
+```yaml
+output_mode: single
+data:
+  nodeType: SBC
+  activity: FIXED_LINE_CONFIGURATION
+  nodes:
+    _each: "DISTINCT INDEX.NODE AS $node"
+    node:    $node
+    niamID:  "IP.'NIAM NAME' WHERE IP.NODE = $node"
+    crGroup: INDEX.CRGROUP
+    Group:
+      _join: "INDEX.GROUP"
+    email:   INDEX.EMAIL
+    tables:
+      _each: "DISTINCT INDEX.TABLES AS $sheet_name"  # sheet name comes from data
+      tableName: $sheet_name
+      records:
+        _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"  # sheet resolved from $sheet_name
+        data:
+          _row: "*"    # all row columns emitted as a map
 ```
 
 **Output JSON** (for CR1):

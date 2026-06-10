@@ -89,6 +89,7 @@ validators:
 sheets:
   <SheetName>:
     required: true              # validation fails if this sheet is missing from the workbook
+    required_if_listed_in: Index.TABLES   # dynamic presence — required only when sheet name appears in that column
     aliases: [AltName, OTHER]   # alternative sheet names accepted in place of <SheetName>
     settings:                   # overrides global settings for this sheet only
       headerRow: 0
@@ -99,6 +100,28 @@ sheets:
     rules:
       ...                       # see Row Rules below
 ```
+
+#### Sheet presence rules
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `required` | boolean | `false` | Sheet must always be present in the workbook |
+| `required_if_listed_in` | string | — | Sheet is required only when its own name appears as a value in the specified `Sheet.Column`. Format: `SheetName.ColumnName`. Evaluated only when `required: false`. |
+
+`required_if_listed_in` is evaluated after `required`.  Priority order:
+1. `required: true` — always required.
+2. `required_if_listed_in: Sheet.Column` — required only when the sheet name is found in that column.
+3. Neither set — optional.
+
+```yaml
+# Example: sheet is required only when it is listed in Index.TABLES
+CRFTargetList:
+  required_if_listed_in: Index.TABLES
+  columns:
+    ...
+```
+
+Workbook-level cross-sheet rules that reference a sheet governed by `required_if_listed_in` are automatically skipped when that sheet is absent and not required.
 
 ### 3.1 Column Properties (common to all types)
 
@@ -594,9 +617,12 @@ json_output:
 
 | Syntax | Meaning |
 |---|---|
-| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One array element per distinct column value |
-| `_each: <SheetName>` | One array element per row of the sheet |
-| `_each: "<Sheet> WHERE <Col> = <value>"` | One array element per matching row |
+| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One array element per distinct column value; sets `$var` in child context |
+| `_each: <SheetName>` | One array element per row of the named sheet |
+| `_each: $var` | One array element per row of the sheet whose name is held in `$var` |
+| `_each: "<Sheet> WHERE <Col> = <value>"` | One element per row where `Col` equals `value` (equality filter) |
+| `_each: "<Sheet> WHERE <Col> IN <Sheet2>.<Col2>"` | One element per row where `Col` is found among values in `Sheet2.Col2` (membership filter) |
+| `_each: "$var WHERE <Col> IN <Sheet2>.<Col2>"` | Same membership filter, but sheet name resolved from variable `$var` |
 
 ### Scalar value expressions
 
@@ -606,7 +632,33 @@ json_output:
 | `key: <Sheet>.<Column>` | First non-blank value from that sheet+column in the current scope |
 | `key: "<Sheet>.<Col> WHERE <Sheet>.<Filter> = $var"` | First value where filter matches |
 
-### Example
+### `_row` directive — emit current row as a map
+
+`_row` emits all (or a subset of) columns from the current data row as a nested map.
+It is only valid inside a `_each` block where a current row is in scope.
+
+| Syntax | Meaning |
+|---|---|
+| `_row: "*"` | All columns from the current row |
+| `_row: "exclude [COL1, COL2, ...]"` | All columns except the named ones |
+| `_row:` `  exclude: [COL1, COL2, ...]` | Same, YAML map form |
+
+Column exclusion matching is case- and underscore-insensitive.
+
+```yaml
+records:
+  _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"
+  data:
+    _row: "*"              # all columns (Group, Node, Action, SubAction, ActionKey, ID, NAME, Record.*, …)
+```
+
+```yaml
+# Exclude housekeeping columns; keep only payload fields
+data:
+  _row: "exclude [GROUP, ACTION, SUBACTION]"
+```
+
+### Example — fixed-column schema (MRF)
 
 ```yaml
 json_output:
@@ -624,6 +676,69 @@ json_output:
         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
         INPUT_FILE:           INPUT_FILE
         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
+
+### Example — dynamic table schema (SBC)
+
+When the sheet names themselves are stored in the Index (e.g. `Index.TABLES`), use
+`DISTINCT ... AS $var` to iterate table names and `$var WHERE ... IN ...` to filter rows.
+
+```yaml
+output_mode: single
+data:
+  nodeType: SBC
+  activity: FIXED_LINE_CONFIGURATION
+  nodes:
+    _each: "DISTINCT INDEX.NODE AS $node"
+    node:    $node
+    niamID:  "IP.'NIAM NAME' WHERE IP.NODE = $node"
+    crGroup: INDEX.CRGROUP
+    Group:
+      _join: "INDEX.GROUP"
+    email:   INDEX.EMAIL
+    tables:
+      _each: "DISTINCT INDEX.TABLES AS $sheet_name"    # iterate over table names stored in Index
+      tableName: $sheet_name
+      records:
+        _each: "$sheet_name WHERE GROUP IN INDEX.GROUP" # $sheet_name resolved to actual sheet
+        data:
+          _row: "*"    # emit all columns of each record row
+```
+
+**Output JSON** (one node, one table):
+
+```json
+{
+  "nodeType": "SBC",
+  "activity": "FIXED_LINE_CONFIGURATION",
+  "nodes": [
+    {
+      "node": "SBC01",
+      "niamID": "RJ-SBC-RJJVSBC01-CLI",
+      "crGroup": "CR-12345",
+      "Group": "G1",
+      "email": "engineer@nokia.com",
+      "tables": [
+        {
+          "tableName": "CRFTargetList",
+          "records": [
+            {
+              "data": {
+                "Group": "G1",
+                "Node": "SBC01",
+                "Action": "CREATE",
+                "SubAction": "RECORD",
+                "ID": "1",
+                "NAME": "Target1",
+                "Record.CRFTargetListEntry.ADDRESS": "10.0.0.1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
 ```
 
 **Output:**
