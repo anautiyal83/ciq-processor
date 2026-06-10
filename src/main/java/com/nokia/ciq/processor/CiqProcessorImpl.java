@@ -1,5 +1,10 @@
 package com.nokia.ciq.processor;
 
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
+import ch.qos.logback.core.OutputStreamAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.nokia.ciq.processor.model.GroupIndex;
@@ -20,10 +25,13 @@ import com.nokia.ciq.validator.report.ReportFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +97,82 @@ public class CiqProcessorImpl implements CiqProcessor {
                                     String reportTemplateName,
                                     String reportTemplatePath) throws IOException {
 
+        ByteArrayOutputStream logCapture = new ByteArrayOutputStream();
+        List<Appender<ILoggingEvent>> detachedAppenders = new ArrayList<>();
+        OutputStreamAppender<ILoggingEvent> captureAppender = null;
+        PatternLayoutEncoder enc = null;
+        ch.qos.logback.classic.Logger rootLogger = null;
+
+        try {
+            if (LoggerFactory.getILoggerFactory() instanceof LoggerContext) {
+                LoggerContext logCtx = (LoggerContext) LoggerFactory.getILoggerFactory();
+                rootLogger = logCtx.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+                Iterator<Appender<ILoggingEvent>> it = rootLogger.iteratorForAppenders();
+                while (it.hasNext()) detachedAppenders.add(it.next());
+                for (Appender<ILoggingEvent> a : detachedAppenders) rootLogger.detachAppender(a);
+
+                enc = new PatternLayoutEncoder();
+                enc.setContext(logCtx);
+                enc.setPattern("%d{HH:mm:ss.SSS} [%-5level] %logger{36} - %msg%n");
+                enc.start();
+
+                captureAppender = new OutputStreamAppender<>();
+                captureAppender.setName("CIQ_CAPTURE");
+                captureAppender.setContext(logCtx);
+                captureAppender.setEncoder(enc);
+                captureAppender.setOutputStream(logCapture);
+                captureAppender.start();
+                rootLogger.addAppender(captureAppender);
+            }
+        } catch (Exception e) {
+            if (rootLogger != null)
+                for (Appender<ILoggingEvent> a : detachedAppenders) rootLogger.addAppender(a);
+            captureAppender = null;
+        }
+
+        ValidationReport report;
+        try {
+            report = doProcess(ciqFilePath, nodeType, activity, rulesFilePath, outputDir,
+                    formatCsv, jsonOutputDir, jsonOutputConfigPath,
+                    reportTemplateName, reportTemplatePath);
+        } finally {
+            if (captureAppender != null) {
+                try {
+                    LoggerContext logCtx = (LoggerContext) LoggerFactory.getILoggerFactory();
+                    ch.qos.logback.classic.Logger rl =
+                            logCtx.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+                    rl.detachAppender("CIQ_CAPTURE");
+                    captureAppender.stop();
+                    if (enc != null) enc.stop();
+                    for (Appender<ILoggingEvent> a : detachedAppenders) rl.addAppender(a);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        if (captureAppender != null) {
+            try {
+                String captured = logCapture.toString("UTF-8");
+                List<String> lines = new ArrayList<>();
+                for (String line : captured.split("\\r?\\n"))
+                    if (!line.trim().isEmpty()) lines.add(line);
+                report.setLogs(lines);
+            } catch (Exception ignored) {}
+        }
+
+        return report;
+    }
+
+    private ValidationReport doProcess(String ciqFilePath,
+                                       String nodeType,
+                                       String activity,
+                                       String rulesFilePath,
+                                       String outputDir,
+                                       String formatCsv,
+                                       String jsonOutputDir,
+                                       String jsonOutputConfigPath,
+                                       String reportTemplateName,
+                                       String reportTemplatePath) throws IOException {
+
         List<ReportFormat> formats = ReportFormat.parseList(
                 formatCsv != null ? formatCsv : "JSON,HTML,MSEXCEL");
 
@@ -142,14 +226,14 @@ public class CiqProcessorImpl implements CiqProcessor {
             }
         }
 
-        // Step 5: Post-validation consolidation — merge multi-row Index values per CRGroup
+        // Step 5: Post-validation consolidation - merge multi-row Index values per CRGroup
         // (e.g. EMAIL consolidate: true) so templates see the full consolidated string.
         // Must run AFTER validation so per-row multi: false checks see original values.
         if (store.getRawIndexSheet() != null) {
             new InMemoryExcelReader().consolidateIndexColumns(store.getRawIndexSheet(), rules);
         }
 
-        // Step 6: JSON output — only when validation passed and both dirs are provided
+        // Step 6: JSON output - only when validation passed and both dirs are provided
         if ("PASSED".equals(report.getStatus())
                 && jsonOutputDir != null && jsonOutputConfigPath != null) {
             File mopOutDir = new File(jsonOutputDir);
@@ -162,18 +246,18 @@ public class CiqProcessorImpl implements CiqProcessor {
             Map<String, Object> template = resolveTemplate(jsonOutputConfig);
 
             if (outputMode == OutputMode.SINGLE) {
-                log.info("output_mode=single → {}", jsonOutputDir);
+                log.info("output_mode=single -> {}", jsonOutputDir);
                 String jsonFileName = segregateSingle(store, nodeType, activity, jsonOutputDir, template);
                 if (jsonFileName != null) {
                     report.getParameters().put("JSON_FILE_NAME", jsonFileName);
                 }
             } else {
-                // INDIVIDUAL — driven entirely by 'segregate_by' in the json-output config
+                // INDIVIDUAL - driven entirely by 'segregate_by' in the json-output config
                 SegregateByConfig seg = resolveSegregateBy(jsonOutputConfig);
                 if (seg == null) {
-                    log.warn("output_mode=individual requires a 'segregate_by' block in the json-output config — skipping JSON output");
+                    log.warn("output_mode=individual requires a 'segregate_by' block in the json-output config - skipping JSON output");
                 } else {
-                    log.info("output_mode=individual — segregating by {}.{} (${}) → {}",
+                    log.info("output_mode=individual - segregating by {}.{} (${}) -> {}",
                             seg.sheet, seg.column, seg.varName, jsonOutputDir);
                     String jsonFileName = segregateIndividual(store, nodeType, activity, jsonOutputDir, template, seg);
                     if (jsonFileName != null) {
@@ -228,7 +312,7 @@ public class CiqProcessorImpl implements CiqProcessor {
     }
 
     // =========================================================================
-    // SINGLE output — one file for the entire workbook
+    // SINGLE output - one file for the entire workbook
     // =========================================================================
 
     private String segregateSingle(InMemoryCiqDataStore store,
@@ -237,7 +321,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                                    String outputDir,
                                    Map<String, Object> template) throws IOException {
         if (template == null || template.isEmpty()) {
-            log.warn("output_mode=single: no 'data' template in json_output — skipping");
+            log.warn("output_mode=single: no 'data' template in json_output - skipping");
             return null;
         }
         JsonTemplateEvaluator.TemplateContext ctx =
@@ -245,12 +329,12 @@ public class CiqProcessorImpl implements CiqProcessor {
         Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
         String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + ".json";
         mapper.writeValue(new File(outputDir, fileName), json);
-        log.info("Single JSON → {}", fileName);
+        log.info("Single JSON -> {}", fileName);
         return fileName;
     }
 
     // =========================================================================
-    // INDIVIDUAL output — one file per distinct value of segregate_by column
+    // INDIVIDUAL output - one file per distinct value of segregate_by column
     // =========================================================================
 
     private String segregateIndividual(InMemoryCiqDataStore store,
@@ -261,14 +345,14 @@ public class CiqProcessorImpl implements CiqProcessor {
                                        SegregateByConfig seg) throws IOException {
         List<String> values = distinctValues(store, seg.sheet, seg.column);
         if (values.isEmpty()) {
-            log.warn("segregate_by: no distinct values found in {}.{} — skipping", seg.sheet, seg.column);
+            log.warn("segregate_by: no distinct values found in {}.{} - skipping", seg.sheet, seg.column);
             return null;
         }
 
         List<String> fileNames = new ArrayList<>();
         for (String value : values) {
             // Scope the segregation sheet to rows matching this value.
-            // All other sheets are NOT in scopedRows — the template engine falls back
+            // All other sheets are NOT in scopedRows - the template engine falls back
             // to store.getSheet() for unfiltered access when a sheet isn't in filteredRows.
             Map<String, List<CiqRow>> scopedRows = filterSheetByColumn(store, seg.sheet, seg.column, value);
 
@@ -286,7 +370,7 @@ public class CiqProcessorImpl implements CiqProcessor {
             String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase()
                     + "_" + sanitize(value) + ".json";
             mapper.writeValue(new File(outputDir, fileName), json);
-            log.info("  [{}.{}={}] → {}", seg.sheet, seg.column, value, fileName);
+            log.info("  [{}.{}={}] -> {}", seg.sheet, seg.column, value, fileName);
             fileNames.add(fileName);
         }
         return String.join(",", fileNames);
@@ -315,9 +399,9 @@ public class CiqProcessorImpl implements CiqProcessor {
      *
      * <pre>
      * segregate_by:
-     *   sheet:  Index      # required — sheet containing the segregation key column
-     *   column: CRGroup    # required — one output file per distinct value of this column
-     *   as:     $cr        # optional — variable name injected into the template (default: $unit)
+     *   sheet:  Index      # required - sheet containing the segregation key column
+     *   column: CRGroup    # required - one output file per distinct value of this column
+     *   as:     $cr        # optional - variable name injected into the template (default: $unit)
      * </pre>
      */
     @SuppressWarnings("unchecked")
@@ -330,7 +414,7 @@ public class CiqProcessorImpl implements CiqProcessor {
         String sheet  = (String) m.get("sheet");
         String column = (String) m.get("column");
         if (sheet == null || column == null) {
-            log.warn("segregate_by: 'sheet' and 'column' are required — skipping");
+            log.warn("segregate_by: 'sheet' and 'column' are required - skipping");
             return null;
         }
         String as      = m.containsKey("as") ? String.valueOf(m.get("as")) : "$unit";
@@ -457,7 +541,7 @@ public class CiqProcessorImpl implements CiqProcessor {
     }
 
     // =========================================================================
-    // SegregateByConfig — parsed 'segregate_by' YAML block
+    // SegregateByConfig - parsed 'segregate_by' YAML block
     // =========================================================================
 
     private static final class SegregateByConfig {
