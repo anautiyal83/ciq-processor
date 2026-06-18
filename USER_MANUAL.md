@@ -383,6 +383,8 @@ segregation value.
 | Validation PASSED but `mop-json/` is empty | `--json-output-dir` or `--json-output-config-file` not specified | Add both `--json-output-dir <dir>` and `--json-output-config-file <file>` to the command |
 | `conditionalPattern: join chain produced no values at step [X.Y -> Z]` | The join key in `lookupChain` does not match any rows in the referenced sheet — `startColumn` value has no corresponding entry | Check that `startColumn`, `joinOn`, and `extract` column names match the actual sheet headers, and that the data is consistent across sheets |
 | `conditionalPattern` rule configured but cell value never validated | `when` regex does not match the resolved lookup value — catch-all `".*"` rule missing | Add a catch-all rule as the last entry: `- when: ".*"` with the default pattern |
+| `Column '"Record.PROFILEID"' is not present in sheet '...'` | The `columns:` map key was written with double quotes inside (e.g. `'"Record.PROFILEID"'`) in a previous version | Remove the double quotes from the `columns:` key — dot-column names are safe as plain keys. Double quotes are only needed inside `rules:` (`require`/`forbid`) entries |
+| Row rule `require: Record.PROFILEID` checks wrong sheet | Bare `Record.PROFILEID` in a rule is parsed as sheet=`Record`, col=`PROFILEID` | Wrap in double quotes: `require: '"Record.PROFILEID"'` |
 
 ---
 
@@ -556,6 +558,20 @@ workbook_rules:
 Row rules are defined under `sheets.<SheetName>.rules:` and apply to every data row.
 
 **Column reference convention:** `ColumnName` means the current sheet. `SheetName.ColumnName` means a column in another sheet. This applies to **all** rule types — `require`, `forbid`, `when.column`, `compare`, `one_of`, `only_one`, `all_or_none`, `sum`, and `equals`.
+
+| Syntax | Meaning |
+|---|---|
+| `ColumnName` | Column in the **current** sheet |
+| `SheetName.ColumnName` | Column in the **named** sheet (cross-sheet reference) |
+| `'"Column.With.Dots"'` | Literal column name — bypasses dot-parsing; use for columns whose headers contain dots (e.g. SBC `Record.PROFILEID`) |
+
+> **SBC-style dot-column names** (e.g. `Record.PROFILEID`, `Record.BORDER_GATEWAY`):
+> In the `columns:` map these are safe without any quoting.  In row `rules:` a bare
+> `Record.PROFILEID` would be read as sheet=`Record`, col=`PROFILEID`.  Wrap in double
+> quotes to force a literal column lookup:
+> ```yaml
+> - require: '"Record.PROFILEID"'   # single-quoted YAML string wrapping double-quoted content
+> ```
 
 | Rule | Description |
 |---|---|

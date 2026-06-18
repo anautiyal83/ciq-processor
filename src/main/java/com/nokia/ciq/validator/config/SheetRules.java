@@ -51,7 +51,27 @@ public class SheetRules {
     private List<SheetRowRule> rules;
 
     public Map<String, ColumnRule> getColumns() { return columns; }
-    public void setColumns(Map<String, ColumnRule> columns) { this.columns = columns; }
+
+    /**
+     * Sets the column rules map, stripping any surrounding double-quotes from
+     * column names.  This allows column names that contain dots (e.g.
+     * {@code Record.PROFILEID}) to be written as {@code '"Record.PROFILEID"'}
+     * in YAML without being mis-parsed as a Sheet.Column reference.
+     */
+    public void setColumns(Map<String, ColumnRule> columns) {
+        if (columns == null) { this.columns = null; return; }
+        Map<String, ColumnRule> cleaned = new LinkedHashMap<>();
+        for (Map.Entry<String, ColumnRule> e : columns.entrySet()) {
+            cleaned.put(stripDoubleQuotes(e.getKey()), e.getValue());
+        }
+        this.columns = cleaned;
+    }
+
+    private static String stripDoubleQuotes(String s) {
+        if (s != null && s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"')
+            return s.substring(1, s.length() - 1);
+        return s;
+    }
 
     // Schema.yaml extension getters/setters
 

@@ -42,10 +42,14 @@ import java.util.Set;
  *
  * <h3>Value resolution (in order)</h3>
  * <pre>
- * $varname              — named variable from the current context (set by DISTINCT)
- * "Sheet.Col WHERE …"   — relational lookup returning first matching non-blank value
- * Sheet.Column          — first non-blank value from (scoped) Sheet rows
- * plain string          — column name when inside a row block; static literal otherwise
+ * $varname                — named variable from the current context (set by DISTINCT)
+ * "Sheet.Col WHERE …"     — relational lookup returning first matching non-blank value
+ * Sheet.Column            — first non-blank value from (scoped) Sheet rows
+ * "Column.With.Dots"      — double-quoted: literal column-name lookup, bypasses Sheet.Col
+ *                           parsing; use for columns whose names contain dots
+ *                           (in YAML: '"Record.BORDER_GATEWAY"' — single-quoted YAML
+ *                            string containing double-quoted content)
+ * plain string            — column name when inside a row block; static literal otherwise
  * </pre>
  */
 public class JsonTemplateEvaluator {
@@ -78,6 +82,15 @@ public class JsonTemplateEvaluator {
 
     private Object resolveString(String value, TemplateContext ctx) {
         if (value.startsWith("$")) return ctx.vars.get(value.substring(1));
+
+        // Double-quoted string → treat entire content as a literal column name.
+        // Use this to reference columns whose names contain dots, e.g. "Record.BORDER_GATEWAY".
+        // In YAML: '"Record.BORDER_GATEWAY"' (single-quoted YAML string wrapping double quotes).
+        if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
+            String colName = value.substring(1, value.length() - 1);
+            if (ctx.currentRow != null) return ctx.currentRow.get(colName);
+            return colName;
+        }
 
         int whereIdx = value.toUpperCase().indexOf(" WHERE ");
         if (whereIdx >= 0) return resolveWhereExpr(value, whereIdx, ctx);

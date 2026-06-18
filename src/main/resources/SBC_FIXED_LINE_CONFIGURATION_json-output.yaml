@@ -22,6 +22,7 @@ data:
    tables:
      _each: "DISTINCT INDEX.TABLES AS $sheet_name"
      tableName: $sheet_name
+     category:  INDEX.CATEGORY
      records:
        _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"
        data:

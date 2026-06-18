@@ -297,7 +297,29 @@ Applies to **all** rule types — `require`, `forbid`, `when.column`, `compare`,
 | Syntax | Meaning |
 |---|---|
 | `ColumnName` | Column in the **current** sheet |
-| `SheetName.ColumnName` | Column in the **named** sheet |
+| `SheetName.ColumnName` | Column in the **named** sheet (cross-sheet reference) |
+| `'"Column.With.Dots"'` | Literal column name — bypasses Sheet.Column parsing; required in rules for columns whose names contain dots (e.g. `Record.PROFILEID`) |
+
+> **Columns with dots in their names** (common in SBC CIQ sheets where column headers follow
+> the `Record.FIELDNAME` convention):
+>
+> - In the **`columns:`** map, dot-columns are always safe without quoting — map keys are
+>   never interpreted as Sheet.Column references.
+> - In **row `rules:`** (`require`, `forbid`, `when.column`), a bare `Record.PROFILEID`
+>   would be parsed as sheet=`Record`, col=`PROFILEID`.  Wrap it in double quotes to force
+>   a literal column lookup:
+>
+> ```yaml
+> rules:
+>   - require: '"Record.PROFILEID"'    # YAML: single-quoted string containing double quotes
+>     when:
+>       column: Action
+>       operator: equals
+>       value: CREATE
+> ```
+>
+> The double-quote wrapping is a YAML quoting trick: the outer single quotes are YAML syntax;
+> the inner double quotes signal to the engine "treat this as a column name, not Sheet.Column".
 
 ### 4.1 `require`
 
@@ -999,6 +1021,7 @@ columns:
 | Sheet name matching | Case-insensitive by default (`caseSensitiveHeaders: false`) |
 | Blank cells | Always skip type/pattern/length checks; only `required: true` fires |
 | Cross-sheet references | `SheetName.ColumnName` syntax everywhere — columns, rules, outputs |
+| Column names with dots | Safe in `columns:` map keys (never parsed as Sheet.Column). In row `rules:` wrap in double quotes: `'"Record.FIELDNAME"'` to prevent dot-splitting |
 | Pattern validation | Full regex match (anchored) — same as `Pattern.matches()` in Java |
 | Invalid regex | Treated as a configuration error and reported on every row rather than silently passing |
 | Outputs | Computed only after all validation passes; none are emitted on FAILED |
