@@ -132,6 +132,7 @@ Workbook-level cross-sheet rules that reference a sheet governed by `required_if
 | `aliases` | list | `[]` | Alternative header names treated as equivalent |
 | `unique` | boolean | `false` | All values in this column must be distinct within the sheet |
 | `ignoreCase` | boolean | `false` | Case-insensitive comparison for `allowedValues` |
+| `dropdownDisabled` | boolean | `false` | Suppresses the Excel dropdown in the generated CIQ template even when `allowedValues`/`values` is set. Use when the value list exceeds Excel's 255-character inline-list limit. Validation is **not** affected. |
 | `description` | string | — | Plain-language description shown in the `Column_Guide` sheet |
 | `validator` | string | — | Name of a registered custom validator (see Section 2) |
 | `messages` | map | — | Override default error messages (see Section 3.3) |
@@ -282,6 +283,55 @@ correspond to the check that failed:
 | `min` / `max` | Integer out of range |
 | `precision` | Too many decimal places |
 | `format` | Datetime format mismatch |
+
+---
+
+### 3.4 `allowedValuesWhen`
+
+Conditional allowed-values constraints applied after `required`/`requiredWhen`.  Each entry is
+evaluated independently — a column can have multiple conditions, all of which are checked.
+
+Each entry has three fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `column` | string | The trigger column in the same row |
+| `value` | string | The trigger value (case-insensitive match) |
+| `allowedValues` | list | Allowed values when condition is met. **Empty list = must be blank.** |
+
+**Use case 1 — Non-modifiable field (must be blank when Action=MODIFY):**
+
+```yaml
+Record.IMMUTABLE_FIELD:
+  allowedValuesWhen:
+    - column: Action
+      value: MODIFY
+      allowedValues: []     # empty list → must be blank when Action=MODIFY
+```
+
+Error message: `Column 'Record.IMMUTABLE_FIELD' must be blank when Action=MODIFY but found 'some-value'`
+
+**Use case 2 — Column value depends on another column:**
+
+```yaml
+ColumnY:
+  allowedValuesWhen:
+    - column: ColumnX
+      value: A
+      allowedValues: [B]
+    - column: ColumnX
+      value: C
+      allowedValues: [D, E]
+```
+
+Error message: `Value 'X' is not allowed when ColumnX=A. Allowed values: [B]`
+
+> **Notes:**
+> - A blank cell always passes the non-empty `allowedValues` check (combine with `required` or
+>   `requiredWhen` to also enforce presence).
+> - For the empty-list (must-be-blank) case, a blank cell passes — the rule only fires when the
+>   field has a value.
+> - Multiple conditions in the same list are all evaluated independently.
 
 ---
 

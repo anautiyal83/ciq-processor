@@ -56,6 +56,26 @@ public class ColumnRule {
      */
     private List<String> allowedValues;
 
+    /**
+     * When {@code true}, the CIQ generator suppresses the Excel dropdown for this column
+     * even when {@code allowedValues} or {@code type: enum} + {@code values} is defined.
+     *
+     * <p>Use for columns whose value list is too long for Excel's 255-character inline-list
+     * limit (many values or long individual strings). Validation still enforces
+     * {@code allowedValues} / {@code values} at submission time — only the UI dropdown
+     * is omitted from the generated CIQ template.
+     *
+     * <p>Default: {@code false} (dropdown is generated whenever allowedValues/values is set).
+     *
+     * <p>YAML usage:
+     * <pre>
+     * Record.CodecBandwidth.CODEC:
+     *   dropdownDisabled: true    # 34 values — exceeds Excel 255-char dropdown limit
+     *   allowedValues: [PCMU, PCMA, G723, ...]
+     * </pre>
+     */
+    private boolean dropdownDisabled;
+
     /** Value must match this regex pattern. */
     private String pattern;
 
@@ -237,6 +257,9 @@ public class ColumnRule {
     public List<String> getAllowedValues() { return allowedValues; }
     public void setAllowedValues(List<String> allowedValues) { this.allowedValues = allowedValues; }
 
+    public boolean isDropdownDisabled() { return dropdownDisabled; }
+    public void setDropdownDisabled(boolean dropdownDisabled) { this.dropdownDisabled = dropdownDisabled; }
+
     public String getPattern() { return pattern; }
     public void setPattern(String pattern) { this.pattern = pattern; }
 
@@ -383,5 +406,44 @@ public class ColumnRule {
     public ConditionalPattern getConditionalPattern() { return conditionalPattern; }
     public void setConditionalPattern(ConditionalPattern conditionalPattern) {
         this.conditionalPattern = conditionalPattern;
+    }
+
+    /**
+     * Conditional allowed-values constraints evaluated after {@code required}/{@code requiredWhen}.
+     *
+     * <p>Each entry is evaluated independently.  When the trigger column equals the trigger value:
+     * <ul>
+     *   <li>Empty {@code allowedValues} → the column must be blank (non-modifiable field pattern).</li>
+     *   <li>Non-empty {@code allowedValues} → the column value must match one of the listed values
+     *       (case-insensitive).</li>
+     * </ul>
+     * Blank cells always pass the non-empty check (combine with {@code required} / {@code requiredWhen}
+     * to also enforce presence).
+     *
+     * <p>YAML usage:
+     * <pre>
+     * # Must be blank when Action=MODIFY (non-modifiable field)
+     * Record.IMMUTABLE_FIELD:
+     *   allowedValuesWhen:
+     *     - column: Action
+     *       value: MODIFY
+     *       allowedValues: []
+     *
+     * # Value depends on another column
+     * ColumnY:
+     *   allowedValuesWhen:
+     *     - column: ColumnX
+     *       value: A
+     *       allowedValues: [B]
+     *     - column: ColumnX
+     *       value: C
+     *       allowedValues: [D, E]
+     * </pre>
+     */
+    private List<ConditionalAllowedValues> allowedValuesWhen;
+
+    public List<ConditionalAllowedValues> getAllowedValuesWhen() { return allowedValuesWhen; }
+    public void setAllowedValuesWhen(List<ConditionalAllowedValues> allowedValuesWhen) {
+        this.allowedValuesWhen = allowedValuesWhen;
     }
 }

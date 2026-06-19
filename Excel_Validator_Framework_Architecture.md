@@ -56,6 +56,7 @@ com.nokia.ciq.validator
 │   ├── IntRange              Min/max range for allowedRanges
 │   ├── ColumnMessages        Custom error messages per constraint
 │   ├── ConditionalRequired   requiredWhen shorthand
+│   ├── ConditionalAllowedValues  allowedValuesWhen condition entry
 │   ├── CrossRef              Cross-sheet value existence check
 │   └── ValidatorDefinition   Custom validator class reference
 │
@@ -82,6 +83,8 @@ com.nokia.ciq.validator
     ├── PatternValidator      pattern: regex, built-in phone/mac patterns
     ├── CrossRefValidator     ref: — value must exist in another sheet column
     ├── SheetRefValidator     sheetRef: true — value must match a sheet name
+    ├── ConditionalPatternValidator   conditionalPattern — lookup-driven pattern
+    ├── AllowedValuesWhenValidator    allowedValuesWhen — conditional allowed/forbidden values
     ├── ConditionalRowRuleValidator   require/forbid with when: conditions
     ├── CompareColumnsValidator       compare: "ColA op ColB"
     ├── GroupPresenceValidator        one_of / only_one / all_or_none

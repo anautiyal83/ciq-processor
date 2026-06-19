@@ -11,6 +11,13 @@ output_mode: single
 data:
  nodeType: SBC
  activity: FIXED_LINE_CONFIGURATION
+ tableKeys:
+    BorderGatewayPublishedRealmTable:
+      recordPrimaryKeys: "BORDER_GATEWAY"
+      subrecordKeys:
+        PUBLISHED_REALM_ENTRY: "PUBLISHED_REALM_ID"     
+    CRFRoutePlan:
+      recordPrimaryKeys: "RT_PLAN_ID"
  nodes:
    _each: "DISTINCT INDEX.NODE AS $node"
    node:    $node

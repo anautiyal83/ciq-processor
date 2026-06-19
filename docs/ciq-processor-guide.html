@@ -921,6 +921,8 @@ entries) may be required depending on the rules.</p>
   <tr><td><code>requiredWhen: { column, value }</code></td><td>object</td><td>Required only when the named column equals the given value</td></tr>
   <tr><td><code>values: [...]</code></td><td>list</td><td>Closed vocabulary for <code>type: enum</code>, <code>type: protocol</code>, <code>type: urlScheme</code></td></tr>
   <tr><td><code>allowedValues: [...]</code></td><td>list</td><td>Allowed values for <code>type: string</code>; generates Excel dropdown</td></tr>
+  <tr><td><code>dropdownDisabled: true</code></td><td>boolean</td><td>Suppresses the Excel dropdown for this column even when <code>allowedValues</code>/<code>values</code> is set. Use when the value list exceeds Excel's 255-character inline-list limit. Validation is <strong>not</strong> affected — only the UI dropdown is omitted.</td></tr>
+  <tr><td><code>allowedValuesWhen: [...]</code></td><td>list</td><td>Conditional allowed/forbidden values. Each entry has <code>column</code>, <code>value</code>, and <code>allowedValues</code>. When the trigger matches: empty list = cell must be blank; non-empty list = cell must match one of the values (case-insensitive). All entries evaluated independently.</td></tr>
   <tr><td><code>allowedRanges: [{min, max}, ...]</code></td><td>list</td><td>Numeric bands (OR logic); requires <code>type: integer</code></td></tr>
   <tr><td><code>minValue</code> / <code>maxValue</code></td><td>number</td><td>Numeric bounds (inclusive); requires <code>type: integer</code></td></tr>
   <tr><td><code>minDecimal</code> / <code>maxDecimal</code></td><td>number</td><td>Decimal bounds (inclusive); requires <code>type: decimal</code></td></tr>
@@ -1082,6 +1084,7 @@ for (SheetValidationResult r : report.getSheets()) {
         │   ├── <span class="file">SubsetRule.java</span>                <span class="comment"># subset/superset rule model</span>
         │   ├── <span class="file">UniqueRule.java</span>                <span class="comment"># unique rule model</span>
         │   ├── <span class="file">ConditionalRequired.java</span>       <span class="comment"># requiredWhen model</span>
+        │   ├── <span class="file">ConditionalAllowedValues.java</span>  <span class="comment"># allowedValuesWhen condition entry model</span>
         │   ├── <span class="file">CrossRef.java</span>                  <span class="comment"># crossRef model</span>
         │   ├── <span class="file">IntRange.java</span>                  <span class="comment"># allowedRanges entry model</span>
         │   ├── <span class="file">ValidatorDefinition.java</span>       <span class="comment"># Custom validator registry entry</span>
@@ -1110,6 +1113,8 @@ for (SheetValidationResult r : report.getSheets()) {
             ├── <span class="file">PatternValidator.java</span>          <span class="comment"># mac, phone (built-in patterns), custom pattern</span>
             ├── <span class="file">CrossRefValidator.java</span>         <span class="comment"># crossRef (cross-sheet column lookup)</span>
             ├── <span class="file">SheetRefValidator.java</span>         <span class="comment"># sheetRef (value must match a sheet name)</span>
+            ├── <span class="file">ConditionalPatternValidator.java</span> <span class="comment"># conditionalPattern (lookup-driven pattern)</span>
+            ├── <span class="file">AllowedValuesWhenValidator.java</span> <span class="comment"># allowedValuesWhen (conditional allowed/forbidden values)</span>
             ├── <span class="file">CompareColumnsValidator.java</span>   <span class="comment"># compare row rule (ColA op ColB)</span>
             ├── <span class="file">ConditionalRowRuleValidator.java</span> <span class="comment"># require/forbid with when condition + cross-sheet</span>
             ├── <span class="file">WorkbookRuleValidator.java</span>     <span class="comment"># workbook_rules (subset/superset/unique/match)</span>
