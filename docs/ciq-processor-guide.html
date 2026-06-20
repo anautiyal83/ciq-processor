@@ -854,6 +854,19 @@ entries) may be required depending on the rules.</p>
         sheetRef: true              # value must match an existing sheet name
         sheetRefIgnoreCase: false   # exact-case match (set true for case-insensitive)
 
+      Record.IMMUTABLE_CODE:
+        allowedValuesWhen:
+          - column: Action          # must be blank when Action=MODIFY (non-modifiable field)
+            value: MODIFY
+            allowedValues: []
+
+      Record.STATUS:
+        allowedValuesWhen:
+          - column: Action
+            operator: notEquals     # must be ACTIVE when Action != DELETE
+            value: DELETE
+            allowedValues: [ACTIVE]
+
     rules:
 
       # require a column when a same-sheet condition is met
@@ -922,7 +935,7 @@ entries) may be required depending on the rules.</p>
   <tr><td><code>values: [...]</code></td><td>list</td><td>Closed vocabulary for <code>type: enum</code>, <code>type: protocol</code>, <code>type: urlScheme</code></td></tr>
   <tr><td><code>allowedValues: [...]</code></td><td>list</td><td>Allowed values for <code>type: string</code>; generates Excel dropdown</td></tr>
   <tr><td><code>dropdownDisabled: true</code></td><td>boolean</td><td>Suppresses the Excel dropdown for this column even when <code>allowedValues</code>/<code>values</code> is set. Use when the value list exceeds Excel's 255-character inline-list limit. Validation is <strong>not</strong> affected — only the UI dropdown is omitted.</td></tr>
-  <tr><td><code>allowedValuesWhen: [...]</code></td><td>list</td><td>Conditional allowed/forbidden values. Each entry has <code>column</code>, <code>value</code>, and <code>allowedValues</code>. When the trigger matches: empty list = cell must be blank; non-empty list = cell must match one of the values (case-insensitive). All entries evaluated independently.</td></tr>
+  <tr><td><code>allowedValuesWhen: [...]</code></td><td>list</td><td>Conditional allowed/forbidden values. Each entry has <code>column</code>, optional <code>operator</code> (default <code>equals</code>), <code>value</code>, and <code>allowedValues</code>. When the trigger condition is met: empty list = cell must be blank; non-empty list = cell must match one of the values (case-insensitive). Supported operators: <code>equals</code>, <code>notEquals</code>, <code>contains</code>, <code>blank</code>, <code>notBlank</code>, <code>greaterThan</code>, <code>greaterThanOrEquals</code>, <code>lessThan</code>, <code>lessThanOrEquals</code> (symbol aliases <code>==</code> <code>!=</code> <code>&gt;</code> <code>&gt;=</code> <code>&lt;</code> <code>&lt;=</code>). All entries evaluated independently.</td></tr>
   <tr><td><code>allowedRanges: [{min, max}, ...]</code></td><td>list</td><td>Numeric bands (OR logic); requires <code>type: integer</code></td></tr>
   <tr><td><code>minValue</code> / <code>maxValue</code></td><td>number</td><td>Numeric bounds (inclusive); requires <code>type: integer</code></td></tr>
   <tr><td><code>minDecimal</code> / <code>maxDecimal</code></td><td>number</td><td>Decimal bounds (inclusive); requires <code>type: decimal</code></td></tr>
@@ -940,6 +953,21 @@ entries) may be required depending on the rules.</p>
   <tr><td><code>unique: true</code></td><td>boolean</td><td>Values must be unique within the sheet</td></tr>
   <tr><td><code>multi: true</code></td><td>boolean</td><td>Cell may contain multiple comma-separated values</td></tr>
   <tr><td><code>messages: { ... }</code></td><td>object</td><td>Per-constraint custom messages: <code>required</code>, <code>minLength</code>, <code>maxLength</code>, <code>pattern</code>, <code>min</code>, <code>max</code>, <code>format</code>, <code>precision</code>, <code>type</code></td></tr>
+</table>
+
+<h4><code>allowedValuesWhen</code> — operators</h4>
+<p>The optional <code>operator</code> field controls how the trigger column is compared. Omitting it defaults to <code>equals</code> (backward-compatible).</p>
+<table>
+  <tr><th>Operator</th><th>Aliases</th><th>Description</th></tr>
+  <tr><td><code>equals</code></td><td><code>==</code></td><td>Trigger column equals <code>value</code> (case-insensitive) — <strong>default</strong></td></tr>
+  <tr><td><code>notEquals</code></td><td><code>!=</code></td><td>Trigger column does not equal <code>value</code></td></tr>
+  <tr><td><code>contains</code></td><td>—</td><td>Trigger column contains <code>value</code> (case-insensitive)</td></tr>
+  <tr><td><code>blank</code></td><td>—</td><td>Trigger column is null or empty (<code>value</code> not used)</td></tr>
+  <tr><td><code>notBlank</code></td><td>—</td><td>Trigger column has any non-empty value (<code>value</code> not used)</td></tr>
+  <tr><td><code>greaterThan</code></td><td><code>&gt;</code></td><td>Numeric, then lexicographic comparison</td></tr>
+  <tr><td><code>greaterThanOrEquals</code></td><td><code>&gt;=</code></td><td></td></tr>
+  <tr><td><code>lessThan</code></td><td><code>&lt;</code></td><td></td></tr>
+  <tr><td><code>lessThanOrEquals</code></td><td><code>&lt;=</code></td><td></td></tr>
 </table>
 
 <h3>Row Rules Reference</h3>

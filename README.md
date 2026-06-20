@@ -596,6 +596,17 @@ sheets:
         required: true
         sheetRef: true              # value must match an existing sheet name in the workbook
         sheetRefIgnoreCase: false
+      Record.IMMUTABLE_CODE:
+        allowedValuesWhen:
+          - column: Action          # must be blank when Action=MODIFY (non-modifiable field)
+            value: MODIFY
+            allowedValues: []
+      Record.STATUS:
+        allowedValuesWhen:
+          - column: Action
+            operator: notEquals     # must be ACTIVE when Action != DELETE
+            value: DELETE
+            allowedValues: [ACTIVE]
 
     rules:
       # require a column when a condition is met
@@ -645,7 +656,7 @@ sheets:
 | `values: [...]` | list | Closed vocabulary for `type: enum`, `type: protocol`, `type: urlScheme` |
 | `allowedValues: [...]` | list | Allowed values for `type: string`; generates Excel dropdown |
 | `dropdownDisabled: true` | boolean | Suppresses the Excel dropdown for this column even when `allowedValues`/`values` is set. Use when the combined value list exceeds Excel's 255-character limit. Validation is **not** affected — only the UI dropdown is omitted. |
-| `allowedValuesWhen: [...]` | list | Conditional allowed/forbidden values. Each entry has `column`, `value`, and `allowedValues`. When the trigger matches: empty list = cell must be blank; non-empty list = cell must match one of the values. All entries evaluated independently. |
+| `allowedValuesWhen: [...]` | list | Conditional allowed/forbidden values. Each entry has `column`, optional `operator` (default `equals`), `value`, and `allowedValues`. When the trigger condition is met: empty list = cell must be blank; non-empty list = cell must match one of the values (case-insensitive). Supported operators: `equals`, `notEquals`, `contains`, `blank`, `notBlank`, `greaterThan`, `greaterThanOrEquals`, `lessThan`, `lessThanOrEquals` (and symbol aliases `==` `!=` `>` `>=` `<` `<=`). All entries evaluated independently. |
 | `allowedRanges: [{min, max}, ...]` | list | Numeric bands (OR logic); requires `type: integer` |
 | `minValue` / `maxValue` | number | Numeric bounds (inclusive); requires `type: integer` |
 | `minDecimal` / `maxDecimal` | number | Decimal bounds (inclusive); requires `type: decimal` |

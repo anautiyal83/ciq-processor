@@ -155,6 +155,11 @@ ColumnName:
   pattern: "^[A-Z]{2}\\d{4}$"          # Java regex — full match required
   patternMessage: "Must be two uppercase letters followed by four digits"
   allowedValues: [CREATE, DELETE, MODIFY]
+  allowedValuesWhen:                    # conditional constraints — all entries evaluated
+    - column: OtherCol                  # trigger column in the same row
+      operator: notEquals               # equals(default)|notEquals|contains|blank|notBlank|>|>=|<|<=
+      value: X                          # comparison value (not used for blank/notBlank)
+      allowedValues: [Y, Z]             # empty list = must be blank; non-empty = must match one
   ref: OtherSheet.OtherColumn           # value must exist in OtherSheet.OtherColumn
   validator: cidrV4                     # custom validator name
   messages:
@@ -291,13 +296,28 @@ correspond to the check that failed:
 Conditional allowed-values constraints applied after `required`/`requiredWhen`.  Each entry is
 evaluated independently — a column can have multiple conditions, all of which are checked.
 
-Each entry has three fields:
+Each entry has the following fields:
 
-| Field | Type | Description |
+| Field | Required | Description |
 |---|---|---|
-| `column` | string | The trigger column in the same row |
-| `value` | string | The trigger value (case-insensitive match) |
-| `allowedValues` | list | Allowed values when condition is met. **Empty list = must be blank.** |
+| `column` | Yes | The trigger column in the same row |
+| `operator` | No | Comparison operator — default `equals` when omitted (backward-compatible) |
+| `value` | Conditional | The value to compare against. Not used for `blank` / `notBlank`. |
+| `allowedValues` | Yes | Allowed values when condition is met. **Empty list = must be blank.** |
+
+**Supported operators:**
+
+| Operator | Aliases | Description |
+|---|---|---|
+| `equals` | `==` | Trigger column equals `value` (case-insensitive) — **default** |
+| `notEquals` | `!=` | Trigger column does not equal `value` |
+| `contains` | — | Trigger column contains `value` (case-insensitive) |
+| `blank` | — | Trigger column is null or empty (`value` not used) |
+| `notBlank` | — | Trigger column has any non-empty value (`value` not used) |
+| `greaterThan` | `>` | Numeric, then lexicographic comparison |
+| `greaterThanOrEquals` | `>=` | |
+| `lessThan` | `<` | |
+| `lessThanOrEquals` | `<=` | |
 
 **Use case 1 — Non-modifiable field (must be blank when Action=MODIFY):**
 
@@ -309,9 +329,18 @@ Record.IMMUTABLE_FIELD:
       allowedValues: []     # empty list → must be blank when Action=MODIFY
 ```
 
-Error message: `Column 'Record.IMMUTABLE_FIELD' must be blank when Action=MODIFY but found 'some-value'`
+**Use case 2 — Must be Y when Column A is not X:**
 
-**Use case 2 — Column value depends on another column:**
+```yaml
+ColumnB:
+  allowedValuesWhen:
+    - column: ColumnA
+      operator: notEquals
+      value: X
+      allowedValues: [Y]
+```
+
+**Use case 3 — Column value depends on another column:**
 
 ```yaml
 ColumnY:
@@ -324,9 +353,25 @@ ColumnY:
       allowedValues: [D, E]
 ```
 
-Error message: `Value 'X' is not allowed when ColumnX=A. Allowed values: [B]`
+**Use case 4 — Numeric / blank / notBlank operators:**
+
+```yaml
+STATUS:
+  allowedValuesWhen:
+    - column: COUNT
+      operator: greaterThan
+      value: "0"
+      allowedValues: [ACTIVE]
+
+OVERRIDE_REASON:
+  allowedValuesWhen:
+    - column: AUTO_MODE
+      operator: notBlank
+      allowedValues: []     # must be blank when AUTO_MODE has any value
+```
 
 > **Notes:**
+> - Omitting `operator` is equivalent to `operator: equals` — fully backward-compatible.
 > - A blank cell always passes the non-empty `allowedValues` check (combine with `required` or
 >   `requiredWhen` to also enforce presence).
 > - For the empty-list (must-be-blank) case, a blank cell passes — the rule only fires when the

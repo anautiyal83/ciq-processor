@@ -330,18 +330,33 @@ Record.IP_ADDRESS:
 |---|---|
 | `list of condition objects` | — |
 
-Defines conditional constraints: when a trigger column has a specific value, this column's value
+Defines conditional constraints: when a trigger condition is satisfied, this column's value
 is checked against a set of allowed values. Multiple entries are evaluated independently.
 
-Each entry has three fields:
+Each entry has the following fields:
 
-| Field | Description |
-|---|---|
-| `column` | The trigger column in the same row |
-| `value` | The trigger value (case-insensitive match) |
-| `allowedValues` | Allowed values when condition is met. **Empty list = must be blank.** |
+| Field | Required | Description |
+|---|---|---|
+| `column` | Yes | The trigger column in the same row |
+| `operator` | No | Comparison operator (default: `equals`) — see table below |
+| `value` | Conditional | The value to compare against. Not used for `blank` / `notBlank`. |
+| `allowedValues` | Yes | Allowed values when condition is met. **Empty list = must be blank.** |
 
-**Use case 1 — Column must be blank when Action=MODIFY** (non-modifiable field):
+**Supported operators:**
+
+| Operator | Aliases | Description |
+|---|---|---|
+| `equals` | `==` | Trigger column equals `value` (case-insensitive) — **default** |
+| `notEquals` | `!=` | Trigger column does not equal `value` |
+| `contains` | — | Trigger column contains `value` (case-insensitive) |
+| `blank` | — | Trigger column is null or empty (`value` not used) |
+| `notBlank` | — | Trigger column has any non-empty value (`value` not used) |
+| `greaterThan` | `>` | Trigger column > `value` (numeric, then lexicographic) |
+| `greaterThanOrEquals` | `>=` | Trigger column >= `value` |
+| `lessThan` | `<` | Trigger column < `value` |
+| `lessThanOrEquals` | `<=` | Trigger column <= `value` |
+
+**Use case 1 — Must be blank when Action=MODIFY** (non-modifiable field):
 
 ```yaml
 Record.IMMUTABLE_FIELD:
@@ -351,9 +366,22 @@ Record.IMMUTABLE_FIELD:
       allowedValues: []     # empty list → must be blank when Action=MODIFY
 ```
 
-**Error message:** `Column 'Record.IMMUTABLE_FIELD' must be blank when Action=MODIFY but found 'some-value'`
+**Error message:** `Column 'Record.IMMUTABLE_FIELD' must be blank when Action = 'MODIFY' but found 'some-value'`
 
-**Use case 2 — Column Y value depends on Column X value**:
+**Use case 2 — Column Y must be Z when Column A is not X**:
+
+```yaml
+ColumnY:
+  allowedValuesWhen:
+    - column: ColumnA
+      operator: notEquals
+      value: X
+      allowedValues: [Z]
+```
+
+**Error message:** `Value 'W' is not allowed when ColumnA != 'X'. Allowed values: [Z]`
+
+**Use case 3 — Value depends on another column**:
 
 ```yaml
 ColumnY:
@@ -366,12 +394,32 @@ ColumnY:
       allowedValues: [D, E]
 ```
 
-**Error message:** `Value 'X' is not allowed when ColumnX=A. Allowed values: [B]`
+**Use case 4 — Must be active when COUNT > 0**:
+
+```yaml
+STATUS:
+  allowedValuesWhen:
+    - column: COUNT
+      operator: greaterThan
+      value: "0"
+      allowedValues: [ACTIVE]
+```
+
+**Use case 5 — Must be blank when trigger column has any value**:
+
+```yaml
+OVERRIDE_REASON:
+  allowedValuesWhen:
+    - column: AUTO_MODE
+      operator: notBlank
+      allowedValues: []
+```
 
 > **Notes:**
+> - Omitting `operator` is equivalent to `operator: equals` — fully backward-compatible.
 > - A blank cell always passes the non-empty `allowedValues` check (combine with `required` or `requiredWhen` to also enforce presence).
 > - For the empty-list (must-be-blank) case, a blank cell passes — the rule only fires when the field has a value.
-> - Multiple conditions in the same list are all evaluated; a cell can trigger more than one entry if multiple conditions match.
+> - Multiple conditions in the same list are all evaluated independently.
 
 ---
 
@@ -478,8 +526,14 @@ sheets:
       Record.IMMUTABLE_CODE:
         allowedValuesWhen:
           - column: Action
-            value: MODIFY
-            allowedValues: []   # must be blank when Action=MODIFY
+            value: MODIFY           # operator defaults to equals
+            allowedValues: []       # must be blank when Action=MODIFY
+      Record.STATUS:
+        allowedValuesWhen:
+          - column: Action
+            operator: notEquals     # must be ACTIVE when Action != DELETE
+            value: DELETE
+            allowedValues: [ACTIVE]
       Record.CRFTargetListEntry.TARGET_ID:
         allowedRanges:
           - min: 1
@@ -527,4 +581,4 @@ sheets:
 | `allowedRanges` | Numeric | Yes | — |
 | `pattern` | Any | Yes | Depends on regex |
 | `crossRef` | Any | Yes | Yes (exact match) |
-| `allowedValuesWhen` | Any | Yes (non-blank check) / No (must-be-blank check) | No (trigger + values) |
+| `allowedValuesWhen` | Any | Yes (non-blank check) / No (must-be-blank check) | No (values); operator-dependent (trigger) |
