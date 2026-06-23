@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +39,17 @@ import java.util.Set;
  *     Scopes Sheet's rows to the current value so Sheet.AnyCol lookups
  *     automatically return per-value data.
  *     Sets currentRow to the first matching row so bare column names also resolve.
+ * </pre>
+ *
+ * <h3>_join directive (string joining)</h3>
+ * <pre>
+ * field:
+ *   _join: "Sheet.Column [WHERE Sheet.FilterCol = value]"
+ *   separator: ","     # optional, default ","
+ *
+ *     Collects all distinct non-blank values of Column (with optional filter),
+ *     deduplicates them (first-occurrence order preserved), and joins with separator.
+ *     Useful when multiple rows share the same value (e.g. GROUP column in INDEX sheet).
  * </pre>
  *
  * <h3>Value resolution (in order)</h3>
@@ -152,20 +164,28 @@ public class JsonTemplateEvaluator {
     // -------------------------------------------------------------------------
 
     /**
-     * Collects all non-blank values from a column expression and joins them with a separator.
+     * Collects all distinct (deduplicated) non-blank values from a column expression
+     * and joins them with a separator.  First-occurrence order is preserved.
      *
      * <pre>
      * node_details:
      *   _join: "INDEX.NODE WHERE INDEX.REGION = $region"
      *   separator: ","     # optional, default ","
+     *
+     * # Duplicate values are automatically removed, so if multiple INDEX rows share
+     * # the same GROUP value only one occurrence appears in the result:
+     * group:
+     *   _join: "INDEX.GROUP"
      * </pre>
      */
     private String buildJoin(Map<String, Object> map, TemplateContext ctx) {
         String expr      = String.valueOf(map.get("_join"));
         String separator = map.containsKey("separator") ? String.valueOf(map.get("separator")) : ",";
         List<String> values = collectValues(expr, ctx);
+        // Deduplicate while preserving first-occurrence order
+        Set<String> seen = new LinkedHashSet<>(values);
         StringBuilder sb = new StringBuilder();
-        for (String v : values) {
+        for (String v : seen) {
             if (sb.length() > 0) sb.append(separator);
             sb.append(v);
         }
