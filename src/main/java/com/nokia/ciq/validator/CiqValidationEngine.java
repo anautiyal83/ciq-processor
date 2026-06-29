@@ -247,6 +247,14 @@ public class CiqValidationEngine {
 
             logActiveValidators(tableName, sheetRules, missingColumns);
 
+            // Record column-level checks applied
+            if (sheetRules != null && sheetRules.getColumns() != null) {
+                for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
+                    if (missingColumns.contains(entry.getKey())) continue;
+                    result.addCheck(columnCheckSummary(entry.getKey(), entry.getValue()));
+                }
+            }
+
             for (CiqRow row : sheet.getRows()) {
                 // Column rules - delegated to the validator chain; skip missing columns
                 if (sheetRules != null) {
@@ -259,12 +267,17 @@ public class CiqValidationEngine {
 
             // Apply per-sheet row rules (require/forbid/compare/one_of/etc.)
             if (sheetRules != null && sheetRules.getRules() != null) {
+                for (SheetRowRule rowRule : sheetRules.getRules()) {
+                    result.addCheck("Row Rule \u2014 " + rowRuleSummary(rowRule));
+                }
                 for (CiqRow row : sheet.getRows()) {
                     for (SheetRowRule rowRule : sheetRules.getRules()) {
                         List<ValidationError> errors = applyRowRule(row, rowRule);
                         for (ValidationError e : errors) result.addError(e);
                     }
                 }
+                // Composite key uniqueness — requires all rows; handled as a separate pass
+                checkCompositeKeys(sheet, sheetRules.getRules(), result);
             }
 
             // Post-row aggregate checks: minOnePerGroup
@@ -312,6 +325,7 @@ public class CiqValidationEngine {
                     }
                 }
                 if (skip) continue;
+                report.addWorkbookCheck(workbookRuleSummary(wbRule));
                 List<ValidationError> errors = workbookCrossRefValidator.validate(wbRule, store);
                 for (ValidationError e : errors) {
                     report.getGlobalErrors().add("[workbook_rule] " + e.getMessage());
@@ -382,6 +396,14 @@ public class CiqValidationEngine {
 
         logActiveValidators(sheetLabel, sheetRules, missingColumns);
 
+        // Record column-level checks applied
+        if (sheetRules.getColumns() != null) {
+            for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
+                if (missingColumns.contains(entry.getKey())) continue;
+                result.addCheck(columnCheckSummary(entry.getKey(), entry.getValue()));
+            }
+        }
+
         for (CiqRow row : sheet.getRows()) {
             for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
                 if (missingColumns.contains(entry.getKey())) continue;
@@ -391,12 +413,16 @@ public class CiqValidationEngine {
 
         // Apply per-sheet row rules (require/forbid/compare/one_of/etc.)
         if (sheetRules.getRules() != null) {
+            for (SheetRowRule rowRule : sheetRules.getRules()) {
+                result.addCheck("Row rule: " + rowRuleSummary(rowRule));
+            }
             for (CiqRow row : sheet.getRows()) {
                 for (SheetRowRule rowRule : sheetRules.getRules()) {
                     List<ValidationError> errors = applyRowRule(row, rowRule);
                     for (ValidationError e : errors) result.addError(e);
                 }
             }
+            checkCompositeKeys(sheet, sheetRules.getRules(), result);
         }
 
         // Post-row aggregate checks: minOnePerGroup
@@ -418,6 +444,41 @@ public class CiqValidationEngine {
      * verifies that at least one non-blank value exists in that column for every
      * unique value of the groupByColumn.
      */
+    /**
+     * Checks composite key uniqueness for every {@code unique_key} rule in {@code rowRules}.
+     * A composite key is the concatenation of trimmed values from the specified columns,
+     * joined by {@code "\u0000"} (null byte) to avoid false collisions.
+     * Rows where ALL key columns are blank are skipped.
+     */
+    private void checkCompositeKeys(CiqSheet sheet, List<SheetRowRule> rowRules,
+                                    SheetValidationResult result) {
+        for (SheetRowRule rule : rowRules) {
+            List<String> keyCols = rule.getUnique_key();
+            if (keyCols == null || keyCols.isEmpty()) continue;
+
+            Map<String, Integer> seen = new LinkedHashMap<>();
+            for (CiqRow row : sheet.getRows()) {
+                boolean allBlank = true;
+                StringBuilder key = new StringBuilder();
+                for (String col : keyCols) {
+                    String val = row.get(col);
+                    String trimmed = val != null ? val.trim() : "";
+                    if (!trimmed.isEmpty()) allBlank = false;
+                    key.append(trimmed).append('\u0000');
+                }
+                if (allBlank) continue;
+                String composite = key.toString();
+                if (seen.containsKey(composite)) {
+                    result.addError(new ValidationError(row.getRowNumber(), String.join("+", keyCols), null,
+                            "Duplicate composite key [" + String.join(", ", keyCols) + "]"
+                            + " (first seen at row " + seen.get(composite) + ")"));
+                } else {
+                    seen.put(composite, row.getRowNumber());
+                }
+            }
+        }
+    }
+
     private void checkMinOnePerGroup(CiqSheet sheet, SheetRules sheetRules,
                                      SheetValidationResult result) {
         if (sheetRules.getColumns() == null) return;
@@ -915,5 +976,102 @@ public class CiqValidationEngine {
         if (ref == null || !ref.contains(".")) return;
         String sheet = ref.substring(0, ref.indexOf('.')).trim();
         if (!sheet.isEmpty()) sheets.add(sheet);
+    }
+
+    // -------------------------------------------------------------------------
+    // Check summary helpers — produce human-readable descriptions of applied rules
+    // -------------------------------------------------------------------------
+
+    /**
+     * Builds a one-line description of every constraint on a column.
+     * Example: {@code "Column 'Action': required, enum[CREATE, MODIFY, DELETE]"}
+     */
+    static String columnCheckSummary(String colName, ColumnRule rule) {
+        List<String> parts = new ArrayList<>();
+        if (rule.isRequired()) parts.add("Required");
+        if (rule.getRequiredWhen() != null) parts.add("Required (conditional)");
+        if (rule.getType() != null && !"string".equalsIgnoreCase(rule.getType()))
+            parts.add("Type: " + rule.getType());
+        if (rule.getValues() != null && !rule.getValues().isEmpty())
+            parts.add("Allowed values: " + String.join(", ", rule.getValues()));
+        if (rule.getAllowedValues() != null && !rule.getAllowedValues().isEmpty())
+            parts.add("Allowed values: " + String.join(", ", rule.getAllowedValues()));
+        if (rule.getPattern() != null) parts.add("Pattern match");
+        if (rule.getMinLength() != null || rule.getMaxLength() != null)
+            parts.add("Length: " + rule.getMinLength() + "\u2013" + rule.getMaxLength());
+        if (rule.getMinValue() != null || rule.getMaxValue() != null)
+            parts.add("Range: " + rule.getMinValue() + "\u2013" + rule.getMaxValue());
+        if (rule.getAllowedRanges() != null && !rule.getAllowedRanges().isEmpty())
+            parts.add("Range restrictions");
+        if (rule.getCrossRef() != null) parts.add("Cross-reference");
+        if (rule.isSheetRef()) parts.add("Sheet reference");
+        if (rule.isUnique()) parts.add("Unique");
+        if (rule.isMulti()) parts.add("Multi-value");
+        if (rule.getAllowedValuesWhen() != null && !rule.getAllowedValuesWhen().isEmpty())
+            parts.add("Conditional values");
+        if (rule.getConditionalPattern() != null) parts.add("Conditional pattern");
+        if (rule.getMinOnePerGroup() != null) parts.add("Min. one per group");
+        if (parts.isEmpty()) parts.add("Present");
+        return colName + " \u2014 " + String.join(" | ", parts);
+    }
+
+    /**
+     * Builds a one-line description of a row-level rule.
+     * Example: {@code "compare StartPort lessThanOrEquals EndPort"}
+     */
+    static String rowRuleSummary(SheetRowRule rule) {
+        if (rule.getCompare() != null) return "Compare: " + rule.getCompare();
+        if (rule.getRequire() != null) {
+            String base = "Require: " + rule.getRequire();
+            return rule.getWhen() != null ? base + " (when " + rule.getWhen().getColumn()
+                    + " " + rule.getWhen().getOperator() + " " + rule.getWhen().getValue() + ")" : base;
+        }
+        if (rule.getForbid() != null) {
+            String base = "Forbid: " + rule.getForbid();
+            return rule.getWhen() != null ? base + " (when " + rule.getWhen().getColumn()
+                    + " " + rule.getWhen().getOperator() + " " + rule.getWhen().getValue() + ")" : base;
+        }
+        if (rule.getOne_of() != null)    return "One of: "      + rule.getOne_of();
+        if (rule.getOnly_one() != null)  return "Only one of: " + rule.getOnly_one();
+        if (rule.getAll_or_none() != null) return "All or none: " + rule.getAll_or_none();
+        if (rule.getSum() != null)        return "Sum: " + rule.getSum() + " = " + rule.getEquals();
+        if (rule.getUnique_key() != null) return "Unique key: [" + String.join(", ", rule.getUnique_key()) + "]";
+        return "unknown rule";
+    }
+
+    /**
+     * Builds a one-line description of a workbook-level cross-sheet rule.
+     * Example: {@code "match: Index.NODE ↔ IP.NODE"}
+     */
+    static String workbookRuleSummary(WorkbookRule rule) {
+        if (rule.getMatch() != null) {
+            SubsetRule r = rule.getMatch();
+            String from = r.getWhere() != null
+                    ? r.getFrom() + " (where " + r.getWhere() + ")" : r.getFrom();
+            return "match: " + from + " \u2194 " + r.getTo();
+        }
+        if (rule.getSubset() != null) {
+            SubsetRule r = rule.getSubset();
+            String from = r.getWhere() != null
+                    ? r.getFrom() + " (where " + r.getWhere() + ")" : r.getFrom();
+            return "subset: " + from + " \u2192 " + r.getTo();
+        }
+        if (rule.getSuperset() != null) {
+            SubsetRule r = rule.getSuperset();
+            return "superset: " + r.getFrom() + " \u2190 " + r.getTo();
+        }
+        if (rule.getUnique() != null)
+            return "unique: " + rule.getUnique().getColumns();
+        if (rule.getSubsetAny() != null)
+            return "subset_any: " + rule.getSubsetAny().getFrom() + " in " + rule.getSubsetAny().getTo();
+        if (rule.getCountPer() != null)
+            return "count_per: " + rule.getCountPer().getGroup() + " in " + rule.getCountPer().getSheet();
+        if (rule.getConstantWithin() != null)
+            return "constant_within: " + rule.getConstantWithin().getColumns()
+                    + " per " + rule.getConstantWithin().getGroup();
+        if (rule.getSetMatch() != null)
+            return "set_match: " + rule.getSetMatch().getSource().getSheet()
+                    + " \u2194 " + rule.getSetMatch().getTarget().getSheet();
+        return "unknown workbook rule";
     }
 }

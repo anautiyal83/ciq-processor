@@ -33,9 +33,11 @@ import java.util.regex.Pattern;
 public class CompareColumnsValidator implements RowValidator {
 
     // Matches:  ColumnA  <operator>  ColumnB
+    // Column names may be plain words or double-quoted (to support names containing dots,
+    // e.g. "Record.TLS_SERVER_PORT").  Quotes are stripped before row lookup.
     // Operator can be a symbol (>=, <=, ==, !=, >, <) or a word (greaterThanOrEquals, etc.)
     private static final Pattern COMPARE_PATTERN = Pattern.compile(
-            "(\\w+)\\s+(>=|<=|==|!=|>|<|\\w+)\\s+(\\w+)",
+            "(\"[^\"]+\"|\\w+)\\s+(>=|<=|==|!=|>|<|\\w+)\\s+(\"[^\"]+\"|\\w+)",
             Pattern.CASE_INSENSITIVE);
 
     @Override
@@ -45,9 +47,9 @@ public class CompareColumnsValidator implements RowValidator {
         Matcher m = COMPARE_PATTERN.matcher(rule.getCompare().trim());
         if (!m.matches()) return Collections.emptyList();
 
-        String colA = m.group(1);
+        String colA = stripQuotes(m.group(1));
         String op   = Operator.normalize(m.group(2));
-        String colB = m.group(3);
+        String colB = stripQuotes(m.group(3));
 
         String valA = row.get(colA);
         String valB = row.get(colB);
@@ -71,5 +73,11 @@ public class CompareColumnsValidator implements RowValidator {
 
     private static boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
+    }
+
+    private static String stripQuotes(String s) {
+        if (s != null && s.length() >= 2 && s.charAt(0) == '"' && s.charAt(s.length() - 1) == '"')
+            return s.substring(1, s.length() - 1);
+        return s;
     }
 }

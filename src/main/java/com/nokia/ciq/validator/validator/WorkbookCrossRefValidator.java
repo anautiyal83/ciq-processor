@@ -89,13 +89,19 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
         List<ValidationError> errors = new ArrayList<>();
         if (subsetRule.getFrom() == null || subsetRule.getTo() == null) return errors;
 
-        Set<String> fromVals = resolveColumn(subsetRule.getFrom(), store);
-        Set<String> toVals   = resolveColumn(subsetRule.getTo(),   store);
+        Set<String> fromVals = subsetRule.getWhere() != null
+                ? resolveColumnWhere(subsetRule.getFrom(), subsetRule.getWhere(), store)
+                : resolveColumn(subsetRule.getFrom(), store);
+        Set<String> toVals   = resolveColumn(subsetRule.getTo(), store);
+
+        String fromDesc = subsetRule.getWhere() != null
+                ? subsetRule.getFrom() + " WHERE " + subsetRule.getWhere()
+                : subsetRule.getFrom();
 
         for (String v : fromVals) {
             if (!toVals.contains(v)) {
                 errors.add(new ValidationError(0, subsetRule.getFrom(), v,
-                        "Value '" + v + "' from [" + subsetRule.getFrom()
+                        "Value '" + v + "' from [" + fromDesc
                         + "] not found in [" + subsetRule.getTo() + "]"));
             }
         }
@@ -282,6 +288,46 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
         if (sheet == null) return values;
 
         for (CiqRow row : sheet.getRows()) {
+            String val = row.get(colName);
+            if (val != null && !val.trim().isEmpty()) {
+                values.add(val.trim());
+            }
+        }
+        return values;
+    }
+
+    /**
+     * Resolves a {@code "SheetName.ColumnName"} reference to the set of distinct
+     * non-blank values, but only for rows that match the {@code where} filter.
+     *
+     * <p>{@code where} format: {@code "ColumnName = value"} (single equality condition).
+     */
+    private Set<String> resolveColumnWhere(String ref, String where, CiqDataStore store) {
+        Set<String> values = new LinkedHashSet<>();
+        String sheetName = parseSheetName(ref);
+        String colName   = parseColumnName(ref);
+        if (sheetName == null || colName == null || where == null) return values;
+
+        int eqIdx = where.indexOf('=');
+        if (eqIdx < 0) {
+            log.warn("Invalid where clause (no '='): {}", where);
+            return values;
+        }
+        String filterCol = where.substring(0, eqIdx).trim();
+        String filterVal = where.substring(eqIdx + 1).trim();
+
+        CiqSheet sheet;
+        try {
+            sheet = store.getSheet(sheetName);
+        } catch (IOException e) {
+            log.warn("Cannot read sheet '{}' for cross-ref: {}", sheetName, e.getMessage());
+            return values;
+        }
+        if (sheet == null) return values;
+
+        for (CiqRow row : sheet.getRows()) {
+            String rowFilterVal = row.get(filterCol);
+            if (!filterVal.equals(rowFilterVal != null ? rowFilterVal.trim() : null)) continue;
             String val = row.get(colName);
             if (val != null && !val.trim().isEmpty()) {
                 values.add(val.trim());

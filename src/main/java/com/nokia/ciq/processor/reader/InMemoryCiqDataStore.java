@@ -5,6 +5,7 @@ import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +35,14 @@ public class InMemoryCiqDataStore implements CiqDataStore {
      */
     private List<String> allWorkbookSheetNames = new ArrayList<>();
 
+    /**
+     * Maps logical (full) table names to actual Excel sheet names.
+     * Populated from {@code sheet_aliases} in the validation-rules YAML.
+     * Used as a last-resort fallback in {@link #getSheet(String)} when the requested
+     * name does not match any loaded sheet directly.
+     */
+    private Map<String, String> sheetAliases = Collections.emptyMap();
+
 
     InMemoryCiqDataStore(CiqIndex index, Map<String, CiqSheet> sheets) {
         this.index  = index;
@@ -49,6 +58,11 @@ public class InMemoryCiqDataStore implements CiqDataStore {
     public List<String> getAllWorkbookSheetNames() { return allWorkbookSheetNames; }
     public void setAllWorkbookSheetNames(List<String> names) { this.allWorkbookSheetNames = names; }
 
+    public Map<String, String> getSheetAliases()                           { return sheetAliases; }
+    public void                setSheetAliases(Map<String, String> aliases) {
+        this.sheetAliases = aliases != null ? aliases : Collections.emptyMap();
+    }
+
 
 
     @Override
@@ -59,9 +73,14 @@ public class InMemoryCiqDataStore implements CiqDataStore {
     /**
      * Returns the in-memory sheet, or {@code null} if the table was not found in the workbook.
      *
-     * <p>When {@code sheetName} is not in the main data-sheets map, falls back to the raw
-     * special sheets (Index, Node_ID) so that workbook_rules and crossRef validators can
-     * reference those sheets by name (e.g. {@code Index.CRGroup}).
+     * <p>Resolution order:
+     * <ol>
+     *   <li>Exact match in data-sheets map.</li>
+     *   <li>Case-insensitive match in data-sheets map.</li>
+     *   <li>Special sheets: Index, Node_ID.</li>
+     *   <li>Alias lookup via {@code sheet_aliases} — resolves a logical full name to the
+     *       actual (possibly truncated) Excel sheet name, then repeats steps 1–2.</li>
+     * </ol>
      */
     @Override
     public CiqSheet getSheet(String sheetName) {
@@ -75,6 +94,21 @@ public class InMemoryCiqDataStore implements CiqDataStore {
         // Special sheets stored outside the main map
         if ("Index".equalsIgnoreCase(sheetName) && rawIndexSheet != null)  return rawIndexSheet;
         if ("Node_ID".equalsIgnoreCase(sheetName) && rawNodeIdSheet != null) return rawNodeIdSheet;
+        // Alias lookup: logical name → actual sheet name (handles Excel 31-char truncation)
+        String aliased = sheetAliases.get(sheetName);
+        if (aliased == null) {
+            // Case-insensitive alias lookup
+            for (Map.Entry<String, String> e : sheetAliases.entrySet()) {
+                if (e.getKey().equalsIgnoreCase(sheetName)) { aliased = e.getValue(); break; }
+            }
+        }
+        if (aliased != null) {
+            s = sheets.get(aliased);
+            if (s != null) return s;
+            for (Map.Entry<String, CiqSheet> e : sheets.entrySet()) {
+                if (e.getKey().equalsIgnoreCase(aliased)) return e.getValue();
+            }
+        }
         return null;
     }
 

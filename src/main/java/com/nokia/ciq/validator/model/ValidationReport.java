@@ -1,5 +1,6 @@
 package com.nokia.ciq.validator.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nokia.ciq.reader.model.CiqIndex;
 import com.nokia.ciq.reader.model.NodeEntry;
 
@@ -42,8 +43,26 @@ public class ValidationReport {
     private Map<String, String> parameters = new LinkedHashMap<>();
     private List<String> logs = new ArrayList<>();
 
+    /**
+     * Human-readable summary of every workbook-level cross-sheet rule that was evaluated.
+     * Present regardless of pass/fail outcome so the caller knows what was checked.
+     * Example entries:
+     * <ul>
+     *   <li>{@code "match: Index.NODE ↔ IP.NODE"}</li>
+     *   <li>{@code "match: Index.GROUP (where TABLES=CRFTargetList) ↔ CRFTargetList.Group"}</li>
+     *   <li>{@code "subset: DataSheet.Node → Node_ID.Node"}</li>
+     *   <li>{@code "unique: [Node, Interface] in CRFTargetList"}</li>
+     * </ul>
+     */
+    @JsonIgnore
+    private List<String> workbookChecks = new ArrayList<>();
+
     public List<String> getLogs()                  { return logs; }
     public void setLogs(List<String> logs)         { this.logs = logs; }
+
+    public List<String> getWorkbookChecks()                      { return workbookChecks; }
+    public void setWorkbookChecks(List<String> workbookChecks)   { this.workbookChecks = workbookChecks; }
+    public void addWorkbookCheck(String check)                   { this.workbookChecks.add(check); }
 
     public String getNodeType() { return nodeType; }
     public void setNodeType(String nodeType) { this.nodeType = nodeType; }

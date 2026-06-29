@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # Validation Rules: SBC - FIXED_LINE_CONFIGURATION
 # File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
 #
@@ -30,57 +30,73 @@ workbook_rules:
       from: Index.NODE
       to: IP.NODE
 
-  # Every GROUP declared in Index must exist in each included table sheet's Group column.
-  # If a table sheet is present in the CIQ but missing the declared group, validation fails.
-  # If a table sheet is absent (required: false), the rule is skipped for that sheet.
+  # GROUP validation scoped by TABLES column.
+  # Each match only checks Index.GROUP values where Index.TABLES = the target sheet.
+  # This prevents false failures when different tables use different group names.
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFTargetList"
       to: CRFTargetList.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = PeeringSDPProfileTable"
       to: PeeringSDPProfileTable.Group
   - match:
       from: Index.GROUP
-      to: BorderGatewayPublishedRealmTab.Group
+      where: "TABLES = BorderGatewayPublishedRealmTable"
+      to: BorderGatewayPublishedRealmTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = IbcfVirtualNetworkTable"
       to: IbcfVirtualNetworkTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = ServiceProfileTable"
       to: ServiceProfileTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = PFEDPortTable"
       to: PFEDPortTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = PublishedRealmTable"
       to: PublishedRealmTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = IbcfSipProfileTable"
       to: IbcfSipProfileTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = IbcfTrunkGroupTable"
       to: IbcfTrunkGroupTable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFDATable"
       to: CRFDATable.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFRoutePlan"
       to: CRFRoutePlan.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFRoutePriorityList"
       to: CRFRoutePriorityList.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFRouteProfile"
       to: CRFRouteProfile.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFTreatment"
       to: CRFTreatment.Group
   - match:
       from: Index.GROUP
+      where: "TABLES = CRFHostURITable"
       to: CRFHostURITable.Group
   - match:
       from: Index.GROUP
-      to: IbcfIngressTrunkGroupMappingTab.Group
+      where: "TABLES = IbcfIngressTrunkGroupMappingTable"
+      to: IbcfIngressTrunkGroupMappingTable.Group
 
 # -----------------------------------------------------------------------------
 # Sheet-wise validation rules
@@ -105,6 +121,10 @@ sheets:
         type: string
         description: "Group name for the configuration changes"
 
+      CRGROUP:
+        required: true
+        description: "CR Number"
+
       TABLES:
         required: true
         type: string
@@ -116,10 +136,14 @@ sheets:
         allowedValues: [RecordBased, Global]
         description: "Category - RecordBased or Global level configuration"
 
-      EMAIL:
-        required: true
+      EMAIL:    
         type: email
-        description: "Email ID of the requestor"
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        consolidate_separator: ";"
+        minOnePerGroup:
+            groupByColumn: CRGroup
 
   # ---------------------------------------------------------------------------
   # Sheet: IP
@@ -168,6 +192,7 @@ sheets:
       ActionKey:
         required: false
         type: string
+        allowedValues: [Record.CRFTargetListEntry]
         description: "Required when SubAction is SUBRECORD"
 
       ID:
@@ -178,7 +203,7 @@ sheets:
         description: "ID of the table"
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -201,7 +226,12 @@ sheets:
       Record.LOCATION:
         required: false
         type: string
-        allowedValues: [Access, Core, Fixed-Access]
+        allowedValues: [Access, Core]
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 2"
+          allowedValues: [Core]
         description: "Required when Action is CREATE"
 
       Record.TARGET_TYPE:
@@ -213,8 +243,15 @@ sheets:
       Record.CRFTargetListEntry.TARGET_ID:
         required: false
         type: integer
-        minValue: 0
-        maxValue: 7048
+        allowedRanges:
+          - { min: 1, max: 1024 }
+          - { min: 5001, max: 7048 }
+          - { min: 0, max: 0 }
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "IBCF Trunk Group"
+          allowedValues: [0]
         description: "Required when Action is CREATE; range 1..1024, 5001..7048, or 0"
 
       Record.CRFTargetListEntry.TRANSPORT_TYPE:
@@ -228,13 +265,23 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 4096
-        description: "Virtual Network ID; must be 0 when TARGET_TYPE is IBCF Trunk Group"
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: "notEquals"
+          value: "IBCF Trunk Group"
+          allowedValues: [0]
+        description: "Virtual Network ID; must be 0 when TARGET_TYPE is not IBCF Trunk Group"
 
       Record.CRFTargetListEntry.TG_ID:
         required: false
         type: integer
         minValue: 0
         maxValue: 32
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: "notEquals"
+          value: "IBCF Trunk Group"
+          allowedValues: [0]
         description: "Trunk Group ID; must be 0 when TARGET_TYPE is not IBCF Trunk Group"
 
       Record.CRFTargetListEntry.ORDER:
@@ -274,21 +321,6 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.LOCATION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.TARGET_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
       - require: '"Record.CRFTargetListEntry.TARGET_ID"'
         when:
           column: Action
@@ -324,16 +356,16 @@ sheets:
           column: Action
           operator: equals
           value: CREATE
-      - require: '"Record.CRFTargetListEntry.COST_TBL_INDEX"'
+      - forbid: '"Record.LOCATION"'
         when:
           column: Action
           operator: equals
-          value: CREATE
-      - require: '"Record.TARGET_LIST_SELECTION_OPTION"'
+          value: MODIFY
+      - forbid: '"Record.TARGET_TYPE"'
         when:
           column: Action
           operator: equals
-          value: CREATE
+          value: MODIFY
 
   # ---------------------------------------------------------------------------
   # Sheet: PeeringSDPProfileTable
@@ -360,6 +392,7 @@ sheets:
       ActionKey:
         required: false
         type: string
+        allowedValues: [Record.CodecBandwidth, Record.MsrpBandwidth]
 
       ID:
         required: true
@@ -368,13 +401,13 @@ sheets:
         maxValue: 1630
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PROFILEID:
-        required: false
+        required: true
         type: integer
         minValue: 1
         maxValue: 2048
@@ -505,6 +538,12 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        allowedValuesWhen:
+        - column: Record.ICE_SUPPORT
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "If Record.ICE_SUPPORT is 'No', then Record.SIGNAL_ICE_LITE_IN_SDP must be 'No'"
 
       Record.RINGBACK_TONE_FOR_CALLING_PARTY:
         required: false
@@ -516,47 +555,266 @@ sheets:
         type: string
         allowedValues: [On, Off]
 
+      Record.DEFAULT_TEXT_CODEC_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 256
+        description: "Required when Action is CREATE; applicable on a per media type basis"
+
+      Record.DEFAULT_TEXT_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_TEXT_CODEC_MAXBURSTSIZE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE:
+        required: false
+        type: string
+        allowedValues: [text, image, audio, video, application, multipart, message]
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.MODE_CHANGE_PERIOD:
+        required: false
+        type: string
+        allowedValues: ["NULL", "1", "2"]
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_AMR_NB_CODEC_WITH_MODE_SET:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET:
+        required: false
+        type: string
+        allowedValues: ["4.75", "5.15", "5.9", "6.7", "7.4", "7.95", "10.2", "12.2"]
+        description: "Required when Action is CREATE"
+
+      Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET:
+        required: false
+        type: string
+        allowedValues: ["6.6", "8.85", "12.65", "14.25", "15.85", "18.25", "19.85", "23.05", "23.85"]
+        description: "Required when Action is CREATE"
+
+      Record.REUSE_SDP_PAYLOAD_NUMBER_IF_NO_MODE_SET_IN_SDP_OFFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.AMR_PREFERRED_MODESET_PRIORITY:
+        required: false
+        type: string
+        allowedValues: [Before, After]
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Default peak bandwidth allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Default max burst size allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= line media type of 'image'"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default allowable Peak bandwidth settings for image media type"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default allowable Max Burst Size settings for image media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= lines of unknown media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default peak bandwidth allowed for m= lines of unknown media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default max burst size allowed for m= lines of unknown media type"
+
+      Record.VIDEO_FRAME_RATE_4_IPV4_IPV6_BANDWIDTH_INTERWORKING:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 250
+        description: "Required when Action is CREATE"
+
+      Record.INTELLIGENT_TRANSCODING_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        allowedValuesWhen:
+        - column: Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS
+          operator: equals
+          value: "Yes"
+          allowedValues: [Yes]
+        description: "Must be 'Yes' when STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS is 'Yes'"
+
+      Record.SUPPORT_EVS_AMR_WB_IO_MODE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.MIN_ALLOWED_EVS_BR:
+        required: false
+        type: string
+        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.MIN_ALLOWED_EVS_BW:
+        required: false
+        type: string
+        allowedValues: [none, nb, wb, swb, fb]
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.MAX_ALLOWED_EVS_BW:
+        required: false
+        type: string
+        allowedValues: [none, nb, wb, swb, fb]
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Enable strict matching of clock-rate of selected GCL codecs to OCL codecs"
+
+      Record.PRESCRIBED_DTMF_PT_FOR_EGRESS_SDP_OFFER:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 96, max: 127 }
+        description: "Required when Action is CREATE; 0 or range 96..127"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_AMR_WB_CODEC_WITH_MODE_SET:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.MAX_ALLOWED_EVS_BR:
+        required: false
+        type: string
+        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
     rules:
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.PROFILEID"'
+      - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
         when:
           column: Action
           operator: equals
           value: CREATE
-      - require: '"Record.DESCRIPTION"'
+      - require: '"Record.CodecBandwidth.CODEC"'
         when:
           column: Action
           operator: equals
           value: CREATE
-      - require: '"Record.SDP_OFFER_FROM_PEERING_SIDE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.SDP_ANSWER_FROM_PEERING_SIDE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.SDP_OFFER_FROM_CORE_SIDE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.SDP_ANSWER_FROM_CORE_SIDE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
+      
 
   # ---------------------------------------------------------------------------
-  # Sheet: BorderGatewayPublishedRealmTab
+  # Sheet: BorderGatewayPublishedRealmTable (Excel sheet name is truncated to 31 chars)
   # ---------------------------------------------------------------------------
-  BorderGatewayPublishedRealmTab:
+  BorderGatewayPublishedRealmTable:
+    aliases:
+      - BorderGatewayPublishedRealmTab
     required: false
     required_if_listed_in: Index.TABLES
     columns:
@@ -578,6 +836,7 @@ sheets:
       ActionKey:
         required: false
         type: string
+        allowedValues: [Record.PUBLISHED_REALM_ENTRY]
 
       ID:
         required: true
@@ -587,13 +846,13 @@ sheets:
         description: "ID of the table"
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.BORDER_GATEWAY:
-        required: false
+        required: true
         type: integer
         minValue: 1024
         maxValue: 1346
@@ -612,11 +871,6 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.BORDER_GATEWAY"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
       - require: '"Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID"'
         when:
           column: Action
@@ -643,7 +897,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -656,7 +910,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -664,6 +918,7 @@ sheets:
       Record.VN_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 4096
         description: "Virtual Network ID"
@@ -682,7 +937,7 @@ sheets:
         description: "Required when Action is CREATE; cannot be changed for existing VN"
 
       Record.SERVICE_LEVEL_POLICY_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         description: "0 or equal to ServiceProfileTable.POLICY_ID"
@@ -695,7 +950,7 @@ sheets:
         description: "Required when Action is CREATE; error response sent when request rejected due to CAC"
 
       Record.PEERING_ISGW_PROFILE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
@@ -720,10 +975,15 @@ sheets:
       Record.PFED_PORT:
         required: false
         type: string
+        allowedValuesWhen:
+        - column: Record.VN_TYPE
+          operator: equals
+          value: "Core"
+          allowedValues: [""]
         description: "Required when Action is CREATE; empty when VN_TYPE=Core"
 
       Record.SPARE_TABLE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 10000
@@ -758,53 +1018,85 @@ sheets:
         allowedValues: ["Verification Server Action", Continue]
         description: "Required when Action is CREATE; must be 0 if ENABLE_STIR_SHAKEN is No"
 
+      Record.IPSEC_SA_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = no IPsec SA profile; 1..2048 = profile ID"
+
+      Record.REMOTE_IPSEC_TUNNEL_GW_ADDR:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE; IPv4/IPv6 remote IPsec tunnel gateway address"
+
+      Record.IKE_REMOTE_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 500, max: 500 }
+          - { min: 1024, max: 65535 }
+        description: "Required when Action is CREATE; 0, 500, or 1024..65535"
+
+      Record.IC_INTERFACE_ALLOWED_SIP_HEADERS_LIST:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 100 }
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.ENABLE_DIV_SIGNING_VERIFICATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.HONOR_RECEIVED_IDENTITY_HEADERS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.HONOR_RECEIVED_VERSTAT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.MAX_DIV_SIGNING_DEPTH:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 127
+        description: "Required when Action is CREATE"
+
     rules:
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.VN_NAME"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.VN_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.SIP_ERROR_RESP_CODE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.MEDIA_REALM"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.TRUNK_CONTEXT"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.MEASUREMENT_TG_TRAFFIC"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.MEASUREMENT_ISGW_POLICY"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.MEASUREMENT_CAC"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
+      - forbid: '"Record.IPSEC_SA_PROFILE_ID"'
+        when:
+          column: Action
+          operator: equals
+          value: MODIFY
+      - forbid: '"Record.REMOTE_IPSEC_TUNNEL_GW_ADDR"'
+        when:
+          column: Action
+          operator: equals
+          value: MODIFY
+      - forbid: '"Record.IKE_REMOTE_SERVER_PORT"'
+        when:
+          column: Action
+          operator: equals
+          value: MODIFY
   # ---------------------------------------------------------------------------
   # Sheet: ServiceProfileTable
   # ---------------------------------------------------------------------------
@@ -825,7 +1117,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -838,13 +1130,14 @@ sheets:
         maxValue: 2051
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
 
       Record.POLICY_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -866,6 +1159,11 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 100000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_IN_SESSION
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
         description: "Must be 0 when ALLOW_ALL_IN_SESSION is Yes"
 
       Record.ALLOW_ALL_OUT_SESSION:
@@ -879,6 +1177,11 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 100000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_OUT_SESSION
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
         description: "Must be 0 when ALLOW_ALL_OUT_SESSION is Yes"
 
       Record.ALLOW_ALL_IN_BANDWIDTH:
@@ -931,6 +1234,11 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 60000000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_BANDWIDTH
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
         description: "Must be 0 when ALLOW_ALL_TOTAL_BANDWIDTH is Yes"
 
       Record.ALLOW_ALL_TOTAL_CPS:
@@ -944,6 +1252,11 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 64000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_CPS
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
         description: "Must be 0 when ALLOW_ALL_TOTAL_CPS is Yes"
 
       Record.ALLOW_ALL_IN_CPS:
@@ -956,6 +1269,12 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 32000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_IN_CPS
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when Record.ALLOW_ALL_IN_CPS is 'Yes'"
 
       Record.ALLOW_ALL_OUT_CPS:
         required: false
@@ -967,6 +1286,12 @@ sheets:
         type: integer
         minValue: 0
         maxValue: 32000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_OUT_CPS
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when Record.ALLOW_ALL_OUT_CPS is 'Yes'"
 
       Record.PER_USER:
         required: false
@@ -974,37 +1299,48 @@ sheets:
         allowedValues: [Yes, No]
         description: "Required when Action is CREATE"
 
+      Record.ALLOW_ALL_TOTAL_AUDIO_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_AUDIO_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_AUDIO_BANDWIDTH
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_VIDEO_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 50000000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH is 'Yes'"
+
     rules:
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.SERVICE_DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ALLOW_ALL_IN_SESSION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ALLOW_ALL_OUT_SESSION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ALLOW_ALL_IN_BANDWIDTH"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ALLOW_ALL_OUT_BANDWIDTH"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
   # Sheet: PFEDPortTable
@@ -1026,7 +1362,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -1039,7 +1375,7 @@ sheets:
         maxValue: 99
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1050,8 +1386,9 @@ sheets:
         description: "Must match /PFEDServiceTable/Record/PFED_ID"
 
       Record.PORT_NAME:
-        required: false
+        required: true
         type: string
+        unique: true
         maxLength: 4
         pattern: "[a-z0-9]{4}"
         description: "Required when Action is CREATE; exactly 4 lowercase alphanumeric chars"
@@ -1068,6 +1405,8 @@ sheets:
         minValue: 1024
         maxValue: 32767
         description: "Required when Action is CREATE"
+        aliases:
+          - EXTERNAL_PORT_NUMBER
 
       Record.ADMINISTRATIVE_STATE:
         required: false
@@ -1099,6 +1438,8 @@ sheets:
         type: integer
         minValue: 0
         description: "Required when Action is CREATE"
+        aliases:
+          - TLS_SERVER_PORT
 
       Record.PUBLISHED_V4_EXTERNAL_FLOATING_IP_ADDRESS:
         required: false
@@ -1112,14 +1453,14 @@ sheets:
         description: "Required when Action is CREATE; IPv6 address or 'No v6'"
 
       Record.IPV4_VLAN_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 4094
         description: "0 means no VLAN tagging"
 
       Record.IPV6_VLAN_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 4094
@@ -1137,43 +1478,57 @@ sheets:
         allowedValues: [Yes, No]
         description: "Required when Action is CREATE"
 
+      Record.SECONDARY_PUBLISHED_V4_EXTERNAL_FLOATING_IP_ADDRESS:
+        required: false
+        type: string
+        pattern: "((([0-1]?[0-9]?[0-9])|(2[0-4][0-9])|(25[0-5]))\\.){3}((25[0-5])|(2[0-4][0-9])|([0-1]?[0-9]?[0-9]))|No v4|"
+        description: "Required when Action is CREATE; secondary IPv4 address or 'No v4' or empty"
+
+      Record.SECONDARY_PUBLISHED_V6_EXTERNAL_FLOATING_IP_ADDRESS:
+        required: false
+        type: string
+        description: "Required when Action is CREATE; secondary IPv6 address or 'No v6' or empty"
+
+      Record.IPSEC_LOCAL_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1024, max: 32767 }
+        description: "Required when Action is CREATE; 0 or 1024..32767; provisioned only when IPSEC_ALLOWED is Yes"
+
+      Record.IKE_LOCAL_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 500, max: 500 }
+          - { min: 1024, max: 32767 }
+        description: "Required when Action is CREATE; 0, 500, or 1024..32767; provisioned only when IPSEC_ALLOWED is Yes"
+
+      Record.SIP_DSCP:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 63
+        description: "Required when Action is CREATE; 0..63 or empty; when empty uses SIP DSCP from PFED Service Data"
+
+      Record.SIP_FILTER_SET_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 600 }
+        description: "0 = SIP message screening not configured; 1..600 = Filter Set ID from SIP Filter Set table"
+
     rules:
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.PORT_NAME"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.EXTERNAL_HOST_NAME"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.EXTERNAL_PORT_NUMBER"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ADMINISTRATIVE_STATE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.OVERLOAD_SPECIAL_TREATMENT"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.INCLUDE_SERVER_PORT_IN_EXT_PFED_URI"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.EIPM_MONITOR_MODE"'
+      
+      - compare: TLS_SERVER_PORT notEquals EXTERNAL_PORT_NUMBER
         when:
           column: Action
           operator: equals
@@ -1199,7 +1554,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -1212,7 +1567,7 @@ sheets:
         maxValue: 999
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1220,6 +1575,7 @@ sheets:
       Record.PUBLISHED_REALM_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -1239,22 +1595,32 @@ sheets:
       Record.SIGNALING_V4_VLAN:
         required: false
         type: string
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v6"
+          allowedValues: [""]
         description: "Required when Action is CREATE; blank when IP_VERSION=v6"
 
       Record.SIGNALING_V6_VLAN:
         required: false
         type: string
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v4"
+          allowedValues: [""]
         description: "Required when Action is CREATE; blank when IP_VERSION=v4"
 
       Record.CORE_PRIMARY_BEARER_REALM_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
         description: "0 or equal to CoreBearerRealmTable.CORE_BEARER_REALM_ID"
 
       Record.CORE_ALTERNATE_BEARER_REALM_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
@@ -1264,16 +1630,26 @@ sheets:
         required: false
         type: string
         maxLength: 128
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v6"
+          allowedValues: [""]
         description: "Required when Action is CREATE; blank when IP_VERSION=v6"
 
       Record.BYPASS_IPV6_DOMAIN_SUFFIX:
         required: false
         type: string
         maxLength: 128
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v4"
+          allowedValues: [""]
         description: "Required when Action is CREATE; blank when IP_VERSION=v4"
 
       Record.SPARE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 255
@@ -1291,16 +1667,6 @@ sheets:
           operator: equals
           value: SUBRECORD
       - require: '"Record.PUBLISHED_REALM_NAME"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.IP_VERSION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.EIPM_INTER_MONITOR_MODE"'
         when:
           column: Action
           operator: equals
@@ -1326,7 +1692,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -1339,7 +1705,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1347,6 +1713,7 @@ sheets:
       Record.PROFILE_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -1425,7 +1792,7 @@ sheets:
         description: "Required when Action is CREATE"
 
       Record.SPARE_TABLE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 10000
@@ -1466,37 +1833,166 @@ sheets:
         allowedValues: ["Pass Through", Disabled, Enabled]
         description: "Required when Action is CREATE"
 
+      Record.IOI:
+        required: false
+        type: string
+        maxLength: 64
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.REMOVE_HEADERS:
+        required: false
+        type: string
+        allowedValues: ["",P-Access-Network-Info, P-Preferred-Service, P-Asserted-Service, P-Charging-Function-Addresses, P-Served-User, P-DCS-Billing-Info, P-Early-Media, P-Private-Network-Indication, P-Profile-Key, Feature-Caps, Priority, Restoration-Info, Relayed-Charge, Service-Interact-Info, Cellular-Network-Info, Resource-Priority, Diversion, Remote-Party-ID, P-Called-Party-ID, P-Charge-Info, Alert-Info, Accept-Contact, User-to-User, Reason]
+        description: "Required when Action is CREATE"
+
+      Record.SIP_ERROR_TREATMENT_TABLE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 1630 }
+        description: "0 = not configured; 1..1630 = SIP Error Treatment Table ID"
+
+      Record.MAX_3XX_REDIRECT_ALLOWED:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 12
+        description: "Required when Action is CREATE"
+
+      Record.REFER_TO_REINVITE_CALL_TRANSFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        allowedValuesWhen:
+        - column: Record.REFER_TO_INVITE_CALL_TRANSFER
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "Required when Action is CREATE; must be 'No' when Record.REFER_TO_INVITE_CALL_TRANSFER is 'No'"
+
+      Record.REFER_TO_BYE_CALL_TRANSFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.PRESERVE_DIALOG_ID_BY_B2BUA:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.SEND_SDPLESS_REINVITE_TO_TRANSFEREE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.SEND_NOTIFY_FOR_PROVISIONAL_RESPONSE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.CALL_TRANSFER_NO_ANSWER_TIMER:
+        required: false
+        type: integer
+        minValue: 15
+        maxValue: 360
+        description: "Required when Action is CREATE"
+
+      Record.TIMER_TO_WAITE_FOR_REINVITE_FROM_B:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 180
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_INCOMING_REQ_ON_PFED_OUTBOUND_CONN:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.HEADER_FOR_CALL_DIVERSION:
+        required: false
+        type: string
+        allowedValues: [DIVHDR, HISTINFOHDR]
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_SDP_IN_200OK_AFTER_REL_18X:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.ADD_SDP_WITH_CODECS_FOR_INITIAL_INVITE:
+        required: false
+        type: string
+        allowedValues: ["From GCS", No]
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_100REL_INTERWORKING:
+        required: false
+        type: string
+        allowedValues: [Disabled, Enabled]
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_TRANSPORT_TLS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_REFERRED_BY_HEADER_INTO_INVITE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        allowedValuesWhen:
+        - column: Record.REFER_TO_INVITE_CALL_TRANSFER
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "Required when Action is CREATE"
+
+      Record.STRENGTH_TAG:
+        required: false
+        type: string
+        allowedValues: [Optional, Mandatory]
+        description: "Required when Action is CREATE"
+
+      Record.KEEP_SDP_UNRELIABLE_TO_RELIABLE_RESPONSE:
+        required: false
+        type: string
+        allowedValues: [Disabled, Enabled]
+        description: "Required when Action is CREATE"
+
+      Record.ROUTE_OPTION_FOR_REFER_TO_INVITE:
+        required: false
+        type: string
+        allowedValues: [Transferee, Transferor]
+        description: "Required when Action is CREATE"
+
+      Record.SDES_SRTP_MINIMUM_SUPPORTED_CRYPTO_SUITE:
+        required: false
+        type: string
+        allowedValues: [AES_CM_128_HMAC_SHA1_80, AES_CM_128_HMAC_SHA1_32]
+        description: "Required when Action is CREATE"
+
+      Record.PASS_THROUGH_INVITE_FROM:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
     rules:
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.URI_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.RURI_POPULATION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.PAID_POPULATION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.HANDLING_3XX"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfTrunkGroupTable
@@ -1518,7 +2014,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -1531,7 +2027,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1539,11 +2035,13 @@ sheets:
       Record.VN_ID:
         required: true
         type: integer
+        unique: true
         description: "Must equal IbcfVirtualNetworkTable.VN_ID"
 
       Record.TG_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 32
         description: "Max 32 TGs per VN"
@@ -1575,42 +2073,42 @@ sheets:
         description: "Required when Action is CREATE"
 
       Record.CRF_ROUTINE_PROFILE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
         description: "0 or equal to CRFRouteProfile.ROUTE_PROFILE_ID"
 
       Record.EGRESS_CRF_TASK_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
         description: "0 or equal to CRFRouteProfile.ROUTE_PROFILE_ID"
 
       Record.SERVICE_LEVEL_POLICY_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
         description: "0 or equal to ServiceProfileTable.POLICY_ID"
 
       Record.IBCF_SIP_PROFILE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
         description: "0 or equal to IbcfSipProfileTable.PROFILE_ID"
 
       Record.IBCF_SDP_PROFILE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
         description: "0 or equal to PeeringSDPProfileTable.PROFILEID"
 
       Record.IBCF_SBLP_PROFILE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 0
         maxValue: 2048
@@ -1651,57 +2149,142 @@ sheets:
         allowedValues: [NONE, FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
         description: "Required when Action is CREATE"
 
+      Record.REMOTEIPADDRESSList.REMOTEIPADDRESS:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE"
+
+      Record.MEDIA_DSCP_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 64 }
+        description: "0 = not configured; 1..64 = DSCP profile ID"
+
+      Record.SECOND_STAGE_INGRESS_TG_SELECTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.SCTP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 31
+        description: "0 = no SCTP profile"
+
+      Record.SCTP_SECONDARY_REMOTE_DEST_IP:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE; secondary remote destination IP"
+
+      Record.CRF_ROUTINE_PROFILE_ID_REGISTER:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.INSERT_SERVICE_ROUTE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_PATH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_SERVICE_ROUTE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_REGISTER_CONTACT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.BYPASS_IBCF_DEFAULT_ENUM:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.SIPI_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = not configured; 1..2048 = SIPI profile ID"
+
+      Record.POST_3XX_CRF_ROUTE_PROFILE_ID:
+        required: false
+        type: string
+        description: "None = not configured; or 1..2048 route profile ID"
+
+      Record.DD_OPTIONS:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 50 }
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.IPSEC_REMOTE_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1024, max: 65535 }
+        description: "Required when Action is CREATE; 0 or 1024..65535"
+
+      Record.TLS_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 64 }
+        description: "0 = no TLS profile; 1..64 = TLS profile ID"
+
+      Record.CA_LIST_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = not configured; 1..2048 = CA list ID"
+
+      Record.DETECT_FAREND_NAPT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_TLS_SYMMETRIC:
+        required: false
+        type: string
+        allowedValues: [No, Always, NAT]
+        description: "Required when Action is CREATE"
+
     rules:
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.TG_NAME"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.REMOTE_DEST_ADDR_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.REMOTE_DEST_IP_FQDN"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.REMOTE_DEST_PORT"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.TRANSPORT_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.SIP_HEARTBEAT_OPTIONS"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.THIG"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.MEDIA_IP_VERSION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ADMINISTRATIVE_STATE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFDATable
@@ -1723,7 +2306,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -1736,14 +2319,15 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.DIGIT_STRING:
-        required: false
+        required: true
         type: string
+        unique: true
         maxLength: 20
         pattern: "[a-fA-Fx0-9\\*#+&]*"
         description: "Required when Action is CREATE; 0-9, A-F, x, *, #, +, &; + only at start, & only at end"
@@ -1784,21 +2368,6 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DIGIT_STRING"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.AREA_CODE_FOR_CALL_BARRING"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.NEGATION_FOR_CALL_BARRING"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRoutePlan
@@ -1820,7 +2389,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -1833,7 +2402,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1841,6 +2410,7 @@ sheets:
       Record.RT_PLAN_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 1024
 
@@ -1861,6 +2431,11 @@ sheets:
         required: false
         type: string
         allowedValues: [Origination, Destination]
+        allowedValuesWhen:
+        - column: Record.ROUTE_PLAN_TYPE
+          operator: equals
+          value: "Programmable Routing"
+          allowedValues: [Origination]
         description: "Required when Action is CREATE; must be Origination when ROUTE_PLAN_TYPE is Programmable Routing"
 
       Record.RT_PLAN_DATA_TBL_ID:
@@ -1876,21 +2451,6 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.ROUTE_PLAN_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRoutePriorityList
@@ -1917,6 +2477,7 @@ sheets:
       ActionKey:
         required: false
         type: string
+        allowedValues: [Record.CRFRoutePriorityListEntry]
 
       ID:
         required: true
@@ -1925,7 +2486,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1953,6 +2514,11 @@ sheets:
         required: false
         type: string
         allowedValues: [Route, Task]
+        allowedValuesWhen:
+        - column: Record.CRF_PRIORITY_LIST_TYPE
+          operator: equals
+          value: "Statistics Type"
+          allowedValues: [Task]
         description: "Required when Action is CREATE; must be Task when CRF_PRIORITY_LIST_TYPE is Statistics Type"
 
       Record.CRFRoutePriorityListEntry.PLAN_ID:
@@ -1968,16 +2534,6 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.CRF_PRIORITY_LIST_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
       - require: '"Record.CRFRoutePriorityListEntry.PLAN_TYPE"'
         when:
           column: Action
@@ -2009,7 +2565,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -2022,7 +2578,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2030,6 +2586,7 @@ sheets:
       Record.ROUTE_PROFILE_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -2104,36 +2661,6 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.RT_PRIORITY_LIST_1"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.NO_MATCH_ACTION_FOR_RT_LIST1"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.CRF_PROG_ROUTE_PLAN"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.CRF_MESSAGE_MANIPULATION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.TAC_MATCHING"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFTreatment
@@ -2155,7 +2682,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -2168,7 +2695,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2176,6 +2703,7 @@ sheets:
       Record.TREATMENT_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 100000
 
@@ -2195,6 +2723,27 @@ sheets:
       Record.TREATMENT:
         required: false
         type: string
+        allowedValuesWhen:
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "Type 1 Target List"
+          allowedValues: [None]
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "Type 2 Target List"
+          allowedValues: [None]
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "Continue Re-Route"
+          allowedValues: [None]
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "SIP Error Response"
+          allowedValues: [403 Forbidden, 404 Not Found, 480 Temporarily Not Available, 486 Busy Here, 500 Internal Error, 503 Service Unavailable]
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "Continue With"
+          allowedValues: [CM-Call-Disposition]
         description: "Required when Action is CREATE; value depends on TREATMENT_TYPE"
 
     rules:
@@ -2203,17 +2752,7 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.DESCRIPTION"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
       - require: '"Record.TREATMENT_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.TREATMENT"'
         when:
           column: Action
           operator: equals
@@ -2239,7 +2778,7 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
@@ -2252,21 +2791,23 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.HOST_URI:
-        required: false
+        required: true
         type: string
+        unique: true
         minLength: 1
         maxLength: 128
         description: "Required when Action is CREATE"
 
       Record.HOST_URI_TYPE:
-        required: false
+        required: true
         type: string
+        unique: true
         allowedValues: [IPv4, IPv6, Domain]
         description: "Required when Action is CREATE"
 
@@ -2279,9 +2820,8 @@ sheets:
 
       Record.CRF_TREATMENT_ID:
         required: false
-        type: integer
-        minValue: 1
-        maxValue: 100000
+        type: string
+        pattern: "^(None|100000|[1-9][0-9]{0,4})$"
         description: "Required when Action is CREATE; equal to CRFTreatment.TREATMENT_ID"
 
     rules:
@@ -2290,31 +2830,13 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.HOST_URI"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.HOST_URI_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.NETMASK"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.CRF_TREATMENT_ID"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
   # ---------------------------------------------------------------------------
-  # Sheet: IbcfIngressTrunkGroupMappingTab
+  # Sheet: IbcfIngressTrunkGroupMappingTable (Excel sheet name is truncated to 31 chars)
   # ---------------------------------------------------------------------------
-  IbcfIngressTrunkGroupMappingTab:
+  IbcfIngressTrunkGroupMappingTable:
+    aliases:
+      - IbcfIngressTrunkGroupMappingTab
     required: false
     required_if_listed_in: Index.TABLES
     columns:
@@ -2331,12 +2853,11 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD]
 
       ActionKey:
         required: false
         type: string
-
       ID:
         required: true
         type: integer
@@ -2344,7 +2865,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2352,6 +2873,7 @@ sheets:
       Record.POLICY_ID:
         required: true
         type: integer
+        unique: true
         minValue: 1
         maxValue: 10000
 
@@ -2370,26 +2892,36 @@ sheets:
       Record.ADDRESS:
         required: false
         type: string
+        allowedValues: [DEFAULT]
         description: "Required when Action is CREATE; Via header address or DEFAULT"
 
       Record.PORT:
         required: false
         type: string
-        description: "Required when Action is CREATE; port number, DEFAULT, or NOTPRESENT"
+        pattern: "^(NOTPRESENT|DEFAULT|[1-9][0-9]{0,4})$"
+        allowedValuesWhen:
+        - column: Record.ADDRESS
+          operator: equals
+          value: "DEFAULT"
+          allowedValues: [DEFAULT]
+        description: "Must be 'DEFAULT' when Record.ADDRESS is 'DEFAULT'. Allowed values: NOTPRESENT, DEFAULT, or numeric range 1-65535"
 
       Record.RFC4904_TGRP:
         required: false
         type: string
+        allowedValues: [NOTPRESENT]
         description: "Required when Action is CREATE; TGRP or NOTPRESENT"
 
       Record.RFC4904_TRUNK_CONTEXT:
         required: false
         type: string
+        allowedValues: [NOTPRESENT]
         description: "Required when Action is CREATE; Trunk-Context or NOTPRESENT"
 
       Record.CFED_PORT:
         required: false
         type: string
+        allowedValues: [NOTPRESENT]
         description: "Required when Action is CREATE; CFED port name or NOTPRESENT"
 
     rules:
@@ -2398,38 +2930,36 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.IBCF_VN_ID"'
+      - forbid: '"Record.ADDRESS"'
         when:
           column: Action
           operator: equals
-          value: CREATE
-      - require: '"Record.IBCF_TG_ID"'
+          value: MODIFY
+      - forbid: '"Record.PORT"'
         when:
           column: Action
           operator: equals
-          value: CREATE
-      - require: '"Record.ADDRESS"'
+          value: MODIFY
+      - forbid: '"Record.RFC4904_TGRP"'
         when:
           column: Action
           operator: equals
-          value: CREATE
-      - require: '"Record.PORT"'
+          value: MODIFY
+      - forbid: '"Record.RFC4904_TRUNK_CONTEXT"'
         when:
           column: Action
           operator: equals
-          value: CREATE
-      - require: '"Record.RFC4904_TGRP"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.RFC4904_TRUNK_CONTEXT"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.CFED_PORT"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
+          value: MODIFY
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+ 
+  # Total number of announcement file rows
+  CR_COUNT:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct_count

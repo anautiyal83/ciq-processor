@@ -191,6 +191,21 @@ public class CiqProcessorImpl implements CiqProcessor {
         // Step 2: Read Excel into memory
         InMemoryCiqDataStore store = new InMemoryExcelReader()
                 .read(ciqFilePath, nodeType, activity, rules);
+        // Build alias map from sheet-level aliases: logicalName → actual Excel sheet name.
+        // Handles Excel's 31-character sheet name limit (e.g. BorderGatewayPublishedRealmTable
+        // → BorderGatewayPublishedRealmTab).
+        if (rules.getSheets() != null) {
+            Map<String, String> aliasMap = new LinkedHashMap<>();
+            for (Map.Entry<String, com.nokia.ciq.validator.config.SheetRules> e
+                    : rules.getSheets().entrySet()) {
+                if (e.getValue().getAliases() != null) {
+                    for (String alias : e.getValue().getAliases()) {
+                        aliasMap.put(e.getKey(), alias);  // logicalName → truncated Excel name
+                    }
+                }
+            }
+            if (!aliasMap.isEmpty()) store.setSheetAliases(aliasMap);
+        }
 
         // Step 3: Validate
         ValidationReport report =

@@ -22,6 +22,8 @@ import java.util.List;
  *   - compare: "Price greaterThan MinPrice"
  *   - sum: [Col1, Col2]
  *     equals: Total
+ *   - unique_key: [Node, Interface]
+ *   - unique_key: [Node, Slot, Port]
  * </pre>
  *
  * <p>Supported {@code compare} operators (string form only):
@@ -56,6 +58,19 @@ public class SheetRowRule {
     /** Either all columns are non-blank or all are blank. */
     private List<String> all_or_none;
 
+    /**
+     * Composite uniqueness constraint: the combined value of these columns must be unique
+     * across all rows in the sheet.  Rows where ALL listed columns are blank are skipped.
+     *
+     * <p>YAML example:
+     * <pre>
+     * rules:
+     *   - unique_key: [Node, Interface]
+     *   - unique_key: [Node, Slot, Port]
+     * </pre>
+     */
+    private List<String> unique_key;
+
     /** Columns whose numeric values are summed. Must be used together with {@code equals}. */
     private List<String> sum;
 
@@ -82,6 +97,9 @@ public class SheetRowRule {
 
     public List<String> getAll_or_none() { return all_or_none; }
     public void setAll_or_none(List<String> all_or_none) { this.all_or_none = all_or_none; }
+
+    public List<String> getUnique_key() { return unique_key; }
+    public void setUnique_key(List<String> unique_key) { this.unique_key = unique_key; }
 
     public List<String> getSum() { return sum; }
     public void setSum(List<String> sum) { this.sum = sum; }
