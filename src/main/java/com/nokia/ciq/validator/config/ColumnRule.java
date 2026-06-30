@@ -195,6 +195,19 @@ public class ColumnRule {
     /** Values in this column must be unique within the sheet. */
     private boolean unique;
 
+    /**
+     * Conditional uniqueness: values must be unique only across the subset of rows
+     * that satisfy this {@code when} condition (same shape as {@code when:} on row rules).
+     * Rows that do not match the condition are excluded from the uniqueness check.
+     * <pre>
+     * uniqueWhen:
+     *   column: SubAction
+     *   operator: equals
+     *   value: RECORD
+     * </pre>
+     */
+    private RowCondition uniqueWhen;
+
     /** Value comparison for this column ignores case. */
     private boolean ignoreCase;
 
@@ -327,6 +340,9 @@ public class ColumnRule {
 
     public boolean isUnique() { return unique; }
     public void setUnique(boolean unique) { this.unique = unique; }
+
+    public RowCondition getUniqueWhen() { return uniqueWhen; }
+    public void setUniqueWhen(RowCondition uniqueWhen) { this.uniqueWhen = uniqueWhen; }
 
     public boolean isIgnoreCase() { return ignoreCase; }
     public void setIgnoreCase(boolean ignoreCase) { this.ignoreCase = ignoreCase; }

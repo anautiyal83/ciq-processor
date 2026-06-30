@@ -8,6 +8,7 @@ import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
 import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
+import com.nokia.ciq.validator.config.RowCondition;
 import com.nokia.ciq.validator.config.SheetRowRule;
 import com.nokia.ciq.validator.config.SheetRules;
 import com.nokia.ciq.validator.config.SubsetRule;
@@ -220,13 +221,22 @@ public class CiqValidationEngine {
                 continue;
             }
 
-            // Uniqueness pre-pass: collect duplicate errors for columns marked unique: true
+            // Uniqueness pre-pass: collect duplicate errors for columns marked
+            // 'unique: true' (all rows) or 'uniqueWhen:' (only rows matching the condition).
             if (sheetRules != null && sheetRules.getColumns() != null) {
                 for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
-                    if (entry.getValue().isUnique()) {
+                    ColumnRule cr = entry.getValue();
+                    RowCondition uniqueWhen = cr.getUniqueWhen();
+                    if (cr.isUnique() || uniqueWhen != null) {
                         String colName = entry.getKey();
                         Map<String, Integer> seen = new LinkedHashMap<>();
                         for (CiqRow row : sheet.getRows()) {
+                            // uniqueWhen: enforce uniqueness only across rows that satisfy the
+                            // condition; rows that don't match are excluded from the check.
+                            if (uniqueWhen != null
+                                    && !conditionalRowRuleValidator.evaluateCondition(uniqueWhen, row)) {
+                                continue;
+                            }
                             String val = row.get(colName);
                             if (val == null || val.trim().isEmpty()) continue;
                             if (seen.containsKey(val)) {

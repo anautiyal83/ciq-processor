@@ -121,7 +121,7 @@ public class ConditionalRowRuleValidator implements RowValidator {
      * Evaluates a {@link RowCondition} against the given row.
      * A {@code null} condition always returns {@code true} (no condition = always apply).
      */
-    boolean evaluateCondition(RowCondition cond, CiqRow row) {
+    public boolean evaluateCondition(RowCondition cond, CiqRow row) {
         if (cond == null) return true;
 
         // Compound conditions
