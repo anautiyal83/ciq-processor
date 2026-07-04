@@ -26,7 +26,7 @@ settings:
 workbook_rules:
 
   # Index.NODE must exist in IP.NODE
-  - match:
+  - subset:
       from: Index.NODE
       to: IP.NODE
 
@@ -113,9 +113,7 @@ sheets:
       NODE:
         required: true
         type: string
-        pattern: ".*SBC.*"
-        description: "SBC Hostname (must contain SBC)"
-
+        
       GROUP:
         required: true
         type: string
@@ -134,6 +132,7 @@ sheets:
         required: true
         type: string
         allowedValues: [RecordBased, Global]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Category - RecordBased or Global level configuration"
 
       EMAIL:    
@@ -145,6 +144,9 @@ sheets:
         minOnePerGroup:
             groupByColumn: CRGroup
 
+    rules:
+      - unique_key: [NODE, GROUP, TABLES]
+
   # ---------------------------------------------------------------------------
   # Sheet: IP
   # ---------------------------------------------------------------------------
@@ -155,13 +157,11 @@ sheets:
       NODE:
         required: true
         type: string
-        pattern: ".*SBC.*"
-        description: "SBC Hostname (must contain SBC)"
 
       NIAM NAME:
         required: true
         type: string
-        unique: true
+        unique: false
         description: "NIAM ID for the hostname - must be unique to each node"
 
   # ---------------------------------------------------------------------------
@@ -181,18 +181,21 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Action to be performed"
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Operation level"
 
       ActionKey:
         required: false
         type: string
         allowedValues: [Record.CRFTargetListEntry]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when SubAction is SUBRECORD"
 
       ID:
@@ -203,7 +206,7 @@ sheets:
         description: "ID of the table"
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -214,7 +217,11 @@ sheets:
         type: integer
         minValue: 1
         maxValue: 100000
-        description: "The CRF Target List Record ID"
+        uniqueWhen:
+          column: SubAction
+          operator: equals
+          value: RECORD
+        description: "The CRF Target List Record ID; must be unique across rows where SubAction = RECORD"
 
       Record.DESCRIPTION:
         required: false
@@ -227,6 +234,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Access, Core]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.TARGET_TYPE
           operator: equals
@@ -238,6 +246,7 @@ sheets:
         required: false
         type: string
         allowedValues: ["Type 1", "Type 2", "IBCF Trunk Group"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CRFTargetListEntry.TARGET_ID:
@@ -258,6 +267,7 @@ sheets:
         required: false
         type: string
         allowedValues: [UDP, TCP, SCTP, TLS, ANY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CRFTargetListEntry.VN_ID:
@@ -288,12 +298,14 @@ sheets:
         required: false
         type: string
         allowedValues: ["10", "20"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "10=preferred, 20=alternate"
 
       Record.CRFTargetListEntry.PRIORITY:
         required: false
         type: string
         allowedValues: ["10", "20", "30"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "10=preferred, 20=second choice, 30=tertiary"
 
       Record.CRFTargetListEntry.WEIGHT:
@@ -314,8 +326,12 @@ sheets:
         required: false
         type: string
         allowedValues: ["Order/Priority/Weight", "TOD Cost Index"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
     rules:
+      
+      - unique_key: [Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+      
       - require: ActionKey
         when:
           column: SubAction
@@ -366,6 +382,7 @@ sheets:
           column: Action
           operator: equals
           value: MODIFY
+      
 
   # ---------------------------------------------------------------------------
   # Sheet: PeeringSDPProfileTable
@@ -383,16 +400,19 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
         type: string
         allowedValues: [Record.CodecBandwidth, Record.MsrpBandwidth]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ID:
         required: true
@@ -401,7 +421,7 @@ sheets:
         maxValue: 1630
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -423,31 +443,37 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.SDP_ANSWER_FROM_PEERING_SIDE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.SDP_OFFER_FROM_CORE_SIDE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.SDP_ANSWER_FROM_CORE_SIDE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.GoldenCodecSet.GOLDEN_CODEC:
         required: false
         type: string
         allowedValues: [PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, G726-16, G726-24, G726-32, G726-40, G728, AMR-WB, GSM, GSM-EFR, GSM-HR, G722, OPUS, EVS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.CodecBandwidth.CODEC:
         required: false
         type: string
         allowedValues: [H263-2000, H264, MP4V-ES, PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, G726-16, G726-24, G726-32, G726-40, G728, AMR-WB, GSM, GSM-EFR, GSM-HR, G722, OPUS, EVS, SILK-NB, SILK-MB, SILK-WB, SILK-SWB, iSAC-16, iSAC-32, VP8, t140]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.CodecBandwidth.BANDWIDTH:
         required: false
@@ -513,31 +539,37 @@ sheets:
         required: false
         type: string
         allowedValues: [CN, DTMF]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.SDES_SRTP_SUPPORTED:
         required: false
         type: string
         allowedValues: [No, "Non-3GPP SDES-SRTP", "3GPP SDES-SRTP"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.LATCH_4_MEDIA_CONNECTIONS:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.RTCP_MUX_SUPPORT:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.ICE_SUPPORT:
         required: false
         type: string
         allowedValues: [No, "ICE Lite Support Peering"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.SIGNAL_ICE_LITE_IN_SDP:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.ICE_SUPPORT
           operator: equals
@@ -549,11 +581,13 @@ sheets:
         required: false
         type: string
         allowedValues: [Off, "MS Teams Support", "Carrier Support"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.SEND_RBT_SDP_ANSWER_TO_CALLING_PARTY:
         required: false
         type: string
         allowedValues: [On, Off]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.DEFAULT_TEXT_CODEC_BANDWIDTH:
         required: false
@@ -580,6 +614,7 @@ sheets:
         required: false
         type: string
         allowedValues: [text, image, audio, video, application, multipart, message]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
@@ -621,36 +656,42 @@ sheets:
         required: false
         type: string
         allowedValues: ["NULL", "1", "2"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.INSERT_AMR_NB_CODEC_WITH_MODE_SET:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET:
         required: false
         type: string
         allowedValues: ["4.75", "5.15", "5.9", "6.7", "7.4", "7.95", "10.2", "12.2"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET:
         required: false
         type: string
         allowedValues: ["6.6", "8.85", "12.65", "14.25", "15.85", "18.25", "19.85", "23.05", "23.85"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.REUSE_SDP_PAYLOAD_NUMBER_IF_NO_MODE_SET_IN_SDP_OFFER:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.AMR_PREFERRED_MODESET_PRIORITY:
         required: false
         type: string
         allowedValues: [Before, After]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.DEFAULT_APPLICATION_MEDIA_TYPE_BANDWIDTH:
@@ -727,6 +768,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS
           operator: equals
@@ -738,30 +780,35 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MIN_ALLOWED_EVS_BR:
         required: false
         type: string
         allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; applicable when SDP validation is enabled"
 
       Record.MIN_ALLOWED_EVS_BW:
         required: false
         type: string
         allowedValues: [none, nb, wb, swb, fb]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; applicable when SDP validation is enabled"
 
       Record.MAX_ALLOWED_EVS_BW:
         required: false
         type: string
         allowedValues: [none, nb, wb, swb, fb]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; applicable when SDP validation is enabled"
 
       Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Enable strict matching of clock-rate of selected GCL codecs to OCL codecs"
 
       Record.PRESCRIBED_DTMF_PT_FOR_EGRESS_SDP_OFFER:
@@ -783,15 +830,20 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_ALLOWED_EVS_BR:
         required: false
         type: string
         allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; applicable when SDP validation is enabled"
 
     rules:
+      
+      - unique_key: [Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -827,16 +879,19 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
         type: string
         allowedValues: [Record.PUBLISHED_REALM_ENTRY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ID:
         required: true
@@ -846,7 +901,7 @@ sheets:
         description: "ID of the table"
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -866,6 +921,7 @@ sheets:
         description: "Required when Action is CREATE; must be previously created in PublishedRealmTable"
 
     rules:
+
       - require: ActionKey
         when:
           column: SubAction
@@ -876,6 +932,14 @@ sheets:
           column: Action
           operator: equals
           value: CREATE
+      - require: '"Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID"'
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      
+      - unique_key: [Record.BORDER_GATEWAY, Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID]
+
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfVirtualNetworkTable
@@ -893,11 +957,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -910,7 +976,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -934,6 +1000,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Core, Peer]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; cannot be changed for existing VN"
 
       Record.SERVICE_LEVEL_POLICY_ID:
@@ -958,23 +1025,26 @@ sheets:
       Record.MEDIA_REALM:
         required: false
         type: integer
+        maxValue: 32767
         description: "Required when Action is CREATE"
 
       Record.TRUNK_CONTEXT:
         required: false
         type: string
         maxLength: 128
-        pattern: "[a-zA-Z0-9\\*#\\.,\\-'!$()&><%/=;\\\\ ]*"
+        pattern: '^[a-zA-Z0-9\*#\.,\-''!$()&><%/=;\\ ]{0,128}$'
         description: "Required when Action is CREATE"
 
       Record.CFED_PORT:
         required: false
         type: string
+        pattern: '^([a-zA-Z0-9\*#\.,\-+''~`!@$%^:]{4})?$'
         description: "Required when Action is CREATE; empty when VN_TYPE=Peer"
 
       Record.PFED_PORT:
         required: false
         type: string
+        pattern: "^([a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:]{4})?$"
         allowedValuesWhen:
         - column: Record.VN_TYPE
           operator: equals
@@ -992,30 +1062,35 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MEASUREMENT_ISGW_POLICY:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MEASUREMENT_CAC:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.ENABLE_STIR_SHAKEN:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.VERIFICATION_FAILURE_ACTION:
         required: false
         type: string
         allowedValues: ["Verification Server Action", Continue]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; must be 0 if ENABLE_STIR_SHAKEN is No"
 
       Record.IPSEC_SA_PROFILE_ID:
@@ -1054,18 +1129,21 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.HONOR_RECEIVED_IDENTITY_HEADERS:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.HONOR_RECEIVED_VERSTAT:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_DIV_SIGNING_DEPTH:
@@ -1097,6 +1175,12 @@ sheets:
           column: Action
           operator: equals
           value: MODIFY
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
+          
   # ---------------------------------------------------------------------------
   # Sheet: ServiceProfileTable
   # ---------------------------------------------------------------------------
@@ -1113,11 +1197,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -1130,7 +1216,7 @@ sheets:
         maxValue: 2051
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
 
@@ -1152,6 +1238,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_INCOMING_SESSION:
@@ -1170,6 +1257,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_OUTGOING_SESSION:
@@ -1188,6 +1276,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_INCOMING_BANDWIDTH:
@@ -1201,6 +1290,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_OUTGOING_BANDWIDTH:
@@ -1214,6 +1304,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_TOTAL_SESSION:
@@ -1227,6 +1318,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_TOTAL_BANDWIDTH:
@@ -1245,6 +1337,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_TOTAL_CPS:
@@ -1263,6 +1356,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.MAX_INCOMING_CPS:
         required: false
@@ -1280,6 +1374,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       Record.MAX_OUTGOING_CPS:
         required: false
@@ -1297,12 +1392,14 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.ALLOW_ALL_TOTAL_AUDIO_BANDWIDTH:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_TOTAL_AUDIO_BANDWIDTH:
@@ -1321,6 +1418,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MAX_TOTAL_VIDEO_BANDWIDTH:
@@ -1342,6 +1440,12 @@ sheets:
           operator: equals
           value: SUBRECORD
 
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
+
   # ---------------------------------------------------------------------------
   # Sheet: PFEDPortTable
   # ---------------------------------------------------------------------------
@@ -1358,11 +1462,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -1375,7 +1481,7 @@ sheets:
         maxValue: 99
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1388,7 +1494,6 @@ sheets:
       Record.PORT_NAME:
         required: true
         type: string
-        unique: true
         maxLength: 4
         pattern: "[a-z0-9]{4}"
         description: "Required when Action is CREATE; exactly 4 lowercase alphanumeric chars"
@@ -1412,18 +1517,21 @@ sheets:
         required: false
         type: string
         allowedValues: [Unlocked, Locked]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.OVERLOAD_SPECIAL_TREATMENT:
         required: false
         type: string
         allowedValues: ["Reject with 500", "Pass Through"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.INCLUDE_SERVER_PORT_IN_EXT_PFED_URI:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.TLS_PROFILE:
@@ -1436,7 +1544,7 @@ sheets:
       Record.TLS_SERVER_PORT:
         required: false
         type: integer
-        minValue: 0
+        allowedValues: [0, 80, 443]
         description: "Required when Action is CREATE"
         aliases:
           - TLS_SERVER_PORT
@@ -1444,12 +1552,13 @@ sheets:
       Record.PUBLISHED_V4_EXTERNAL_FLOATING_IP_ADDRESS:
         required: false
         type: string
-        pattern: "((([0-1]?[0-9]?[0-9])|(2[0-4][0-9])|(25[0-5]))\\.){3}((25[0-5])|(2[0-4][0-9])|([0-1]?[0-9]?[0-9]))|No v4|"
+        pattern: 'No v4|(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])'
         description: "Required when Action is CREATE; IPv4 address or 'No v4'"
 
       Record.PUBLISHED_V6_EXTERNAL_FLOATING_IP_ADDRESS:
         required: false
         type: string
+        pattern: 'No v6|(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])|::(?:ffff(?::0{1,4})?:)?(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9]))(?:%[\p{N}\p{L}]+)?'
         description: "Required when Action is CREATE; IPv6 address or 'No v6'"
 
       Record.IPV4_VLAN_ID:
@@ -1470,23 +1579,26 @@ sheets:
         required: false
         type: string
         allowedValues: [Disabled, Heartbeat-only, Monitor]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.IPSEC_ALLOWED:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SECONDARY_PUBLISHED_V4_EXTERNAL_FLOATING_IP_ADDRESS:
         required: false
         type: string
-        pattern: "((([0-1]?[0-9]?[0-9])|(2[0-4][0-9])|(25[0-5]))\\.){3}((25[0-5])|(2[0-4][0-9])|([0-1]?[0-9]?[0-9]))|No v4|"
+        pattern: 'No v4|(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])'
         description: "Required when Action is CREATE; secondary IPv4 address or 'No v4' or empty"
 
       Record.SECONDARY_PUBLISHED_V6_EXTERNAL_FLOATING_IP_ADDRESS:
         required: false
         type: string
+        pattern: 'No v6|(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])|::(?:ffff(?::0{1,4})?:)?(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9]))(?:%[\p{N}\p{L}]+)?'
         description: "Required when Action is CREATE; secondary IPv6 address or 'No v6' or empty"
 
       Record.IPSEC_LOCAL_SERVER_PORT:
@@ -1522,18 +1634,22 @@ sheets:
         description: "0 = SIP message screening not configured; 1..600 = Filter Set ID from SIP Filter Set table"
 
     rules:
+
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      
-      - compare: TLS_SERVER_PORT notEquals EXTERNAL_PORT_NUMBER
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
 
+      - unique_key: [Record.PFED_ID, Record.PORT_NAME]
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
+
+      - compare: '"Record.TLS_SERVER_PORT" notEquals "Record.EXTERNAL_PORT_NUMBER"'
   # ---------------------------------------------------------------------------
   # Sheet: PublishedRealmTable
   # ---------------------------------------------------------------------------
@@ -1550,11 +1666,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -1567,7 +1685,7 @@ sheets:
         maxValue: 999
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1590,11 +1708,13 @@ sheets:
         required: false
         type: string
         allowedValues: [v4, v6, "v4/v6"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SIGNALING_V4_VLAN:
         required: false
         type: string
+        allowedValues: [untagged,""]
         allowedValuesWhen:
         - column: Record.IP_VERSION
           operator: equals
@@ -1605,6 +1725,7 @@ sheets:
       Record.SIGNALING_V6_VLAN:
         required: false
         type: string
+        allowedValues: [untagged,""]
         allowedValuesWhen:
         - column: Record.IP_VERSION
           operator: equals
@@ -1658,6 +1779,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Disabled, Heartbeat-only, Monitor]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
     rules:
@@ -1671,6 +1793,11 @@ sheets:
           column: Action
           operator: equals
           value: CREATE
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfSipProfileTable
@@ -1688,11 +1815,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -1705,7 +1834,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -1735,60 +1864,70 @@ sheets:
         required: false
         type: string
         allowedValues: [SIP, TEL, SIPS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.RURI_POPULATION:
         required: false
         type: string
         allowedValues: ["Egress TG destination", "Pass through", "Pass through w/o inserting Route"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.INVITE_PRELOADED_ROUTE_HEADER_PASS_THRU:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.P_CHARGING_VECTOR_HANDLING:
         required: false
         type: string
         allowedValues: ["Not handle", "Pass through", "Generate Transit IOI", "Generate Transit IOI and Void Received", "Generate Orig IOI", "Generate Term IOI"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CONTACT_HEADER_RFC4904_TGRP_OR_TRUNK_CONTEXT_POPULATION:
         required: false
         type: string
         allowedValues: ["Not Populate", "Local TG", "Pass through"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.RURI_HEADER_RFC4904_TGRP_OR_TRUNK_CONTEXT_POPULATION:
         required: false
         type: string
         allowedValues: ["Not Populate", "Local TG", "Pass through"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CALLING_PARTY_IDENTITY_HEADER:
         required: false
         type: string
         allowedValues: ["P-Asserted-ID header only", "P-Asserted-ID then From header", "From header only"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PAID_PRECEDENCE:
         required: false
         type: string
         allowedValues: [SIPUSERPHONE-TEL, SIP-TEL, TEL-SIP, TEL-SIPUSERPHONE, TOP, SIPUSERPHONE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PAID_POPULATION:
         required: false
         type: string
         allowedValues: ["Pass through", Remove, "Remove PAID with Privacy", "Pass through entire header"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.HANDLING_3XX:
         required: false
         type: string
         allowedValues: ["Release Call", "Pass through", "Evaluate Route", "Route Direct"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SPARE_TABLE_ID:
@@ -1801,36 +1940,42 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.HISTORY_INFO_HANDLING:
         required: false
         type: string
         allowedValues: ["Pass through", Remove, "Remove only entries with privacy", "Mapping History-Info to Diversion"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.DIVERSION_HANDLING:
         required: false
         type: string
         allowedValues: ["Pass through", Remove, "Remove only Diversion with privacy", "Mapping Diversion to History-Info"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.REFER_TO_INVITE_CALL_TRANSFER:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MS_TEAMS:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PRECONDITION_HANDLING:
         required: false
         type: string
         allowedValues: ["Pass Through", Disabled, Enabled]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.IOI:
@@ -1844,6 +1989,7 @@ sheets:
         required: false
         type: string
         allowedValues: ["",P-Access-Network-Info, P-Preferred-Service, P-Asserted-Service, P-Charging-Function-Addresses, P-Served-User, P-DCS-Billing-Info, P-Early-Media, P-Private-Network-Indication, P-Profile-Key, Feature-Caps, Priority, Restoration-Info, Relayed-Charge, Service-Interact-Info, Cellular-Network-Info, Resource-Priority, Diversion, Remote-Party-ID, P-Called-Party-ID, P-Charge-Info, Alert-Info, Accept-Contact, User-to-User, Reason]
+        dropdownDisabled: true
         description: "Required when Action is CREATE"
 
       Record.SIP_ERROR_TREATMENT_TABLE_ID:
@@ -1865,6 +2011,7 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.REFER_TO_INVITE_CALL_TRANSFER
           operator: equals
@@ -1876,24 +2023,28 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PRESERVE_DIALOG_ID_BY_B2BUA:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SEND_SDPLESS_REINVITE_TO_TRANSFEREE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SEND_NOTIFY_FOR_PROVISIONAL_RESPONSE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CALL_TRANSFER_NO_ANSWER_TIMER:
@@ -1914,42 +2065,49 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.HEADER_FOR_CALL_DIVERSION:
         required: false
         type: string
         allowedValues: [DIVHDR, HISTINFOHDR]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.ALLOW_SDP_IN_200OK_AFTER_REL_18X:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.ADD_SDP_WITH_CODECS_FOR_INITIAL_INVITE:
         required: false
         type: string
         allowedValues: ["From GCS", No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SUPPORT_100REL_INTERWORKING:
         required: false
         type: string
         allowedValues: [Disabled, Enabled]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SUPPORT_TRANSPORT_TLS:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.INSERT_REFERRED_BY_HEADER_INTO_INVITE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.REFER_TO_INVITE_CALL_TRANSFER
           operator: equals
@@ -1961,30 +2119,35 @@ sheets:
         required: false
         type: string
         allowedValues: [Optional, Mandatory]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.KEEP_SDP_UNRELIABLE_TO_RELIABLE_RESPONSE:
         required: false
         type: string
         allowedValues: [Disabled, Enabled]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.ROUTE_OPTION_FOR_REFER_TO_INVITE:
         required: false
         type: string
         allowedValues: [Transferee, Transferor]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SDES_SRTP_MINIMUM_SUPPORTED_CRYPTO_SUITE:
         required: false
         type: string
         allowedValues: [AES_CM_128_HMAC_SHA1_80, AES_CM_128_HMAC_SHA1_32]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PASS_THROUGH_INVITE_FROM:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
     rules:
@@ -1993,6 +2156,12 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfTrunkGroupTable
@@ -2010,11 +2179,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -2027,7 +2198,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2035,13 +2206,11 @@ sheets:
       Record.VN_ID:
         required: true
         type: integer
-        unique: true
         description: "Must equal IbcfVirtualNetworkTable.VN_ID"
 
       Record.TG_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 32
         description: "Max 32 TGs per VN"
@@ -2050,13 +2219,14 @@ sheets:
         required: false
         type: string
         maxLength: 32
-        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        pattern:  "^[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*$"
         description: "Required when Action is CREATE"
 
       Record.REMOTE_DEST_ADDR_TYPE:
         required: false
         type: string
         allowedValues: [FQDN, IPv4, IPv6]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.REMOTE_DEST_IP_FQDN:
@@ -2117,36 +2287,47 @@ sheets:
         required: false
         type: string
         allowedValues: [UDP, TCP, SCTP, TLS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SIP_HEARTBEAT_OPTIONS:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.THIG:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.MEDIA_IP_VERSION:
         required: false
         type: string
         allowedValues: [IPv4, IPv6]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.ADMINISTRATIVE_STATE:
         required: false
         type: string
         allowedValues: [Unlocked, Locked]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SIPI_VARIANT:
         required: false
         type: string
         allowedValues: [NONE, FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
+        allowedValuesWhen:
+        - column: Record.SIPI_PROFILE_ID
+          operator: notEquals
+          value: "0"
+          allowedValues: [FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.REMOTEIPADDRESSList.REMOTEIPADDRESS:
@@ -2168,7 +2349,14 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
 
       Record.SCTP_PROFILE_ID:
         required: false
@@ -2196,30 +2384,35 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.THIG_2_PATH:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.THIG_2_SERVICE_ROUTE:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.THIG_2_REGISTER_CONTACT:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.BYPASS_IBCF_DEFAULT_ENUM:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SIPI_PROFILE_ID:
@@ -2233,6 +2426,7 @@ sheets:
       Record.POST_3XX_CRF_ROUTE_PROFILE_ID:
         required: false
         type: string
+        pattern: "^(None|([1-9][0-9]{0,2}|1[0-9]{3}|20[0-3][0-9]|204[0-8]))$"
         description: "None = not configured; or 1..2048 route profile ID"
 
       Record.DD_OPTIONS:
@@ -2271,12 +2465,14 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.SUPPORT_TLS_SYMMETRIC:
         required: false
         type: string
         allowedValues: [No, Always, NAT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
     rules:
@@ -2285,6 +2481,14 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
+      
+      - unique_key: [Record.VN_ID, Record.TG_ID]
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFDATable
@@ -2302,11 +2506,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -2319,7 +2525,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2327,32 +2533,36 @@ sheets:
       Record.DIGIT_STRING:
         required: true
         type: string
-        unique: true
+        unique: false
         maxLength: 20
-        pattern: "[a-fA-Fx0-9\\*#+&]*"
+        pattern: '^\+?[0-9A-Fa-f*#x]*&?$'
         description: "Required when Action is CREATE; 0-9, A-F, x, *, #, +, &; + only at start, & only at end"
 
       Record.CRF_TREATMENT_ID:
         required: false
         type: string
+        pattern: '^([1-9][0-9]{0,4}|100000|None)$'
         description: "Required when Action is CREATE or MODIFY; None or equal to CRFTreatment.TREATMENT_ID"
 
       Record.AREA_CODE_FOR_CALL_BARRING:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.PASS_VISIT_AREA_CODE_FOR_CALL_BARRING:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Only when AREA_CODE_FOR_CALL_BARRING is Yes"
 
       Record.NEGATION_FOR_CALL_BARRING:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.AREA_CODE:
@@ -2368,6 +2578,12 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRoutePlan
@@ -2385,11 +2601,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -2402,7 +2620,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2425,12 +2643,14 @@ sheets:
         required: false
         type: string
         allowedValues: ["Digit Analysis", "Trunk Group", "Host URI", "Programmable Routing"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.TYPE:
         required: false
         type: string
         allowedValues: [Origination, Destination]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.ROUTE_PLAN_TYPE
           operator: equals
@@ -2440,9 +2660,8 @@ sheets:
 
       Record.RT_PLAN_DATA_TBL_ID:
         required: false
-        type: integer
-        minValue: 0
-        maxValue: 6000
+        type: string
+        pattern: '^([0-9]{1,4}|[1-5][0-9]{3}|6000|None)$'
         description: "Required when Action is CREATE"
 
     rules:
@@ -2451,6 +2670,12 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRoutePriorityList
@@ -2468,16 +2693,19 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
         type: string
         allowedValues: [Record.CRFRoutePriorityListEntry]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ID:
         required: true
@@ -2486,13 +2714,14 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PRIORITY_LIST_ID:
         required: true
+        unique: true
         type: integer
         minValue: 1
         maxValue: 4096
@@ -2508,12 +2737,14 @@ sheets:
         required: false
         type: string
         allowedValues: ["Routing Type", "Statistics Type"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CRFRoutePriorityListEntry.PLAN_TYPE:
         required: false
         type: string
         allowedValues: [Route, Task]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.CRF_PRIORITY_LIST_TYPE
           operator: equals
@@ -2529,6 +2760,9 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      
+      - unique_key: [Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -2544,6 +2778,11 @@ sheets:
           column: Action
           operator: equals
           value: CREATE
+      - require: '"Record.CRFRoutePriorityListEntry.PLAN_ID"'
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRouteProfile
@@ -2561,11 +2800,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -2578,7 +2819,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2599,28 +2840,31 @@ sheets:
 
       Record.RT_PRIORITY_LIST_1:
         required: false
-        type: integer
+        type: string
         minValue: 1
         maxValue: 4096
+        pattern: '^(4096|409[0-5]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|None)$'
         description: "Required when Action is CREATE"
 
       Record.NO_MATCH_ACTION_FOR_RT_LIST1:
         required: false
         type: string
         allowedValues: ["Return No Match", "Continue Next Route Priority List"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.RT_PRIORITY_LIST_2:
         required: false
-        type: integer
+        type: string
         minValue: 1
         maxValue: 4096
+        pattern: '^(4096|409[0-5]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|None)$'
         description: "Optional; used when NO_MATCH_ACTION_FOR_RT_LIST1 is Continue Next Route Priority List"
 
       Record.SPARE_ID:
         required: false
         type: integer
-        minValue: 1
+        minValue: 0
         maxValue: 10000
         description: "Required when Action is CREATE"
 
@@ -2628,24 +2872,28 @@ sheets:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CRF_MESSAGE_MANIPULATION:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.CRF_ENUM_TLD:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.TAC_MATCHING:
         required: false
         type: string
         allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.GNB_ID_LENGTH:
@@ -2661,6 +2909,12 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFTreatment
@@ -2678,11 +2932,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -2695,7 +2951,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2718,32 +2974,13 @@ sheets:
         required: false
         type: string
         allowedValues: ["Type 1 Target List", "Type 2 Target List", "Continue Re-Route", "SIP Error Response", "IBCF TG Target List", "Continue With"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.TREATMENT:
         required: false
         type: string
-        allowedValuesWhen:
-        - column: Record.TREATMENT_TYPE
-          operator: equals
-          value: "Type 1 Target List"
-          allowedValues: [None]
-        - column: Record.TREATMENT_TYPE
-          operator: equals
-          value: "Type 2 Target List"
-          allowedValues: [None]
-        - column: Record.TREATMENT_TYPE
-          operator: equals
-          value: "Continue Re-Route"
-          allowedValues: [None]
-        - column: Record.TREATMENT_TYPE
-          operator: equals
-          value: "SIP Error Response"
-          allowedValues: [403 Forbidden, 404 Not Found, 480 Temporarily Not Available, 486 Busy Here, 500 Internal Error, 503 Service Unavailable]
-        - column: Record.TREATMENT_TYPE
-          operator: equals
-          value: "Continue With"
-          allowedValues: [CM-Call-Disposition]
+        pattern: '^(100000|[1-9][0-9]{0,4}|None|403 Forbidden|404 Not Found|480 Temporarily Not Available|486 Busy Here|500 Internal Error|503 Service Unavailable|CM-Call-Disposition)$'
         description: "Required when Action is CREATE; value depends on TREATMENT_TYPE"
 
     rules:
@@ -2752,11 +2989,18 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
       - require: '"Record.TREATMENT_TYPE"'
         when:
           column: Action
           operator: equals
           value: CREATE
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFHostURITable
@@ -2774,11 +3018,13 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
@@ -2791,24 +3037,24 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.HOST_URI:
-        required: true
+        required: false
         type: string
-        unique: true
         minLength: 1
         maxLength: 128
+        pattern: '^[^`]+$'
         description: "Required when Action is CREATE"
 
       Record.HOST_URI_TYPE:
-        required: true
+        required: false
         type: string
-        unique: true
         allowedValues: [IPv4, IPv6, Domain]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE"
 
       Record.NETMASK:
@@ -2830,6 +3076,14 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
+
+      - unique_key: [Record.HOST_URI, Record.HOST_URI_TYPE]
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfIngressTrunkGroupMappingTable (Excel sheet name is truncated to 31 chars)
@@ -2849,15 +3103,18 @@ sheets:
         required: true
         type: string
         allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       SubAction:
         required: true
         type: string
         allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
         type: string
+
       ID:
         required: true
         type: integer
@@ -2865,7 +3122,7 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: true
+        required: false
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -2880,6 +3137,7 @@ sheets:
       Record.IBCF_VN_ID:
         required: false
         type: integer
+        maxValue: 32767
         description: "Required when Action is CREATE; must match IbcfVirtualNetworkTable.VN_ID"
 
       Record.IBCF_TG_ID:
@@ -2892,7 +3150,7 @@ sheets:
       Record.ADDRESS:
         required: false
         type: string
-        allowedValues: [DEFAULT]
+        pattern: "^(DEFAULT|.{1,256})$"
         description: "Required when Action is CREATE; Via header address or DEFAULT"
 
       Record.PORT:
@@ -2909,19 +3167,34 @@ sheets:
       Record.RFC4904_TGRP:
         required: false
         type: string
+        maxLength: 64
         allowedValues: [NOTPRESENT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; TGRP or NOTPRESENT"
 
       Record.RFC4904_TRUNK_CONTEXT:
         required: false
         type: string
+        maxLength: 64
         allowedValues: [NOTPRESENT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.CFED_PORT
+          operator: notEquals
+          value: "NOTPRESENT"
+          allowedValues: [NOTPRESENT]
         description: "Required when Action is CREATE; Trunk-Context or NOTPRESENT"
 
       Record.CFED_PORT:
         required: false
         type: string
         allowedValues: [NOTPRESENT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.RFC4904_TGRP
+          operator: notEquals
+          value: "NOTPRESENT"
+          allowedValues: [NOTPRESENT]
         description: "Required when Action is CREATE; CFED port name or NOTPRESENT"
 
     rules:
@@ -2950,6 +3223,12 @@ sheets:
           column: Action
           operator: equals
           value: MODIFY
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: Record
 outputs:
   # Distinct CR group identifiers from the Index sheet
   CR_LIST:

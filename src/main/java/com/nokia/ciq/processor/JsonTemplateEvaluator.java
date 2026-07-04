@@ -27,10 +27,14 @@ import java.util.Set;
  *     One element per row of SheetName.
  *     Inside the block, plain strings resolve as column names in the current row.
  *
- * _each: "[Sheet.Column |] Sheet WHERE [Sheet.]Col = value"
- *     One element per row of Sheet where Col equals the resolved value.
- *     An optional "Sheet.Column" prefix (column hint) is stripped — only the
- *     sheet name is used.
+ * _each: "SheetExpr WHERE [Sheet.]Col = value"
+ *     One element per row of the resolved sheet where Col equals the resolved value.
+ *     SheetExpr is resolved to the actual sheet name as follows:
+ *       $variable    → named variable (set by DISTINCT); null → empty list
+ *       Sheet.Column → currentRow's Column value (dynamic); falls back to
+ *                      firstNonBlank(Sheet, Column) when no current row
+ *       PlainName    → currentRow's PlainName column value if non-blank (dynamic);
+ *                      otherwise used as a literal sheet name
  *     value may be a $variable, Sheet.Col reference, current-row column, or literal.
  *
  * _each: "DISTINCT [FROM] Sheet.Column [AS $varname]"
@@ -109,8 +113,16 @@ public class JsonTemplateEvaluator {
 
         if (value.contains(".")) {
             int dot = value.indexOf('.');
-            return firstNonBlank(value.substring(0, dot).trim(),
-                                 value.substring(dot + 1).trim(), ctx);
+            String sheetName = value.substring(0, dot).trim();
+            String colName   = stripQuotes(value.substring(dot + 1).trim());
+            // Prefer the current iteration row's column value so that Sheet.Column
+            // expressions (e.g. INDEX.TABLES) return the per-row value rather than
+            // always the first non-blank across all scoped rows.
+            if (ctx.currentRow != null) {
+                String fromRow = ctx.currentRow.get(colName);
+                if (fromRow != null && !fromRow.trim().isEmpty()) return fromRow.trim();
+            }
+            return firstNonBlank(sheetName, colName, ctx);
         }
         if (ctx.currentRow != null) return ctx.currentRow.get(value);
         return value;
@@ -332,17 +344,35 @@ public class JsonTemplateEvaluator {
             return buildDistinctArray(elemTemplate, ctx, srcSheet, srcCol, varName);
         }
 
-        // ── [Sheet.Column |] Sheet WHERE FilterCol = value ───────────────────
+        // ── Sheet WHERE FilterCol = value ────────────────────────────────────
+        // The "sheet" token before WHERE is resolved as follows:
+        //   $variable    → named variable set by DISTINCT (must resolve; null → empty list)
+        //   Sheet.Column → the Column value from the current row (dynamic sheet name);
+        //                  falls back to firstNonBlank(Sheet, Column) when no current row
+        //   PlainName    → currentRow column lookup first (enables "TABLES" → actual sheet
+        //                  name stored in that column); falls back to the literal string
+        //                  so bare sheet names like "INDEX" continue to work unchanged
         int whereIdx = each.toUpperCase().indexOf(" WHERE ");
         if (whereIdx >= 0) {
-            String sheetPart = each.substring(0, whereIdx).trim();
-            if (sheetPart.contains("."))
-                sheetPart = sheetPart.substring(0, sheetPart.indexOf('.')).trim();
-            // Resolve $variable to actual sheet name
-            if (sheetPart.startsWith("$")) {
-                Object resolved = ctx.vars.get(sheetPart.substring(1));
+            String sheetExpr = each.substring(0, whereIdx).trim();
+            String sheetPart;
+            if (sheetExpr.startsWith("$")) {
+                Object resolved = ctx.vars.get(sheetExpr.substring(1));
                 if (resolved == null) return Collections.emptyList();
                 sheetPart = resolved.toString();
+            } else if (sheetExpr.contains(".")) {
+                String col     = sheetExpr.substring(sheetExpr.indexOf('.') + 1).trim();
+                String fromRow = ctx.currentRow != null ? ctx.currentRow.get(col) : null;
+                if (fromRow != null && !fromRow.trim().isEmpty()) {
+                    sheetPart = fromRow.trim();
+                } else {
+                    Object resolved = resolveString(sheetExpr, ctx);
+                    if (resolved == null) return Collections.emptyList();
+                    sheetPart = resolved.toString();
+                }
+            } else {
+                String fromRow = ctx.currentRow != null ? ctx.currentRow.get(sheetExpr) : null;
+                sheetPart = (fromRow != null && !fromRow.trim().isEmpty()) ? fromRow.trim() : sheetExpr;
             }
             String condition = each.substring(whereIdx + 7).trim();
             return buildFilteredSheetArray(sheetPart, condition, elemTemplate, ctx);

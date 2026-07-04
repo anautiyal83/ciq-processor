@@ -77,10 +77,11 @@ data:
      _join: "INDEX.GROUP"
    email:   INDEX.EMAIL
    tableData:
-     _each: "DISTINCT INDEX.TABLES AS $sheet_name"
-     table_row: $sheet_name
-     category:  INDEX.CATEGORY
+     _each: "INDEX WHERE INDEX.NODE = $node"
+     table_row: INDEX.TABLES
+     group:     GROUP
+     category:  CATEGORY
      records:
-       _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"
+       _each: "INDEX.TABLES WHERE GROUP = GROUP"
        data:
          _row: "*"
