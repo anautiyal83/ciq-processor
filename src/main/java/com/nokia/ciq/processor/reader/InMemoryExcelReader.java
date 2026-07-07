@@ -151,7 +151,7 @@ public class InMemoryExcelReader {
 
             Map<String, CiqSheet> sheets = new LinkedHashMap<>();
             for (String tableName : tables) {
-                Sheet sheet = findSheet(wb, tableName);
+                Sheet sheet = findSheet(wb, tableName, rules);
                 if (sheet == null) {
                     log.warn("Sheet not found for table '{}' - skipping", tableName);
                     continue;
@@ -172,7 +172,7 @@ public class InMemoryExcelReader {
                         java.util.Arrays.asList("Index", "Node_ID"));
                 for (String sheetName : rules.getSheets().keySet()) {
                     if (!alwaysSpecial.contains(sheetName) && !sheets.containsKey(sheetName)) {
-                        Sheet auxSheet = findSheet(wb, sheetName);
+                        Sheet auxSheet = findSheet(wb, sheetName, rules);
                         if (auxSheet != null) {
                             Set<String> cols = configuredColumns(rules, sheetName);
                             WorkbookSettings sheetSettings = effectiveSettings(rules, sheetName);
@@ -203,7 +203,7 @@ public class InMemoryExcelReader {
             // and special data extraction (NIAM mapping, CR-email mapping).
             // Stored outside the main sheets map so they don't appear in getAvailableSheets()
             // and cannot interfere with the validateIndexSheets cross-check.
-            Sheet rawIndex = findSheet(wb, SHEET_INDEX);
+            Sheet rawIndex = findSheet(wb, SHEET_INDEX, rules);
             if (rawIndex != null) {
                 // Read ALL columns (null) so extra columns like GROUP are preserved for the
                 // template engine even if they are not listed in the validation-rules YAML.
@@ -217,7 +217,7 @@ public class InMemoryExcelReader {
                 // the original per-row values. Call consolidateIndexColumns(rawIndexSheet, rules)
                 // from CiqProcessorImpl after the validation step.
             }
-            Sheet rawNodeId = findSheet(wb, niamSheet);
+            Sheet rawNodeId = findSheet(wb, niamSheet, rules);
             if (rawNodeId != null) {
                 store.setRawNodeIdSheet(
                         readNodeIdSheet(rawNodeId, niamSheet, niamNodeCol, niamNiamCol));
@@ -700,9 +700,32 @@ public class InMemoryExcelReader {
     // Sheet lookup (handles Excel 31-char name truncation)
     // -------------------------------------------------------------------------
 
-    private Sheet findSheet(Workbook wb, String tableName) {
+    private Sheet findSheet(Workbook wb, String tableName, ValidationRulesConfig rules) {
         Sheet sheet = wb.getSheet(tableName);
         if (sheet != null) return sheet;
+
+        // Alias lookup: YAML may declare the actual (truncated) sheet name explicitly.
+        // Needed because Excel disambiguates truncated names with a suffix (e.g. '...T01'),
+        // which breaks prefix matching below.
+        if (rules != null && rules.getSheets() != null) {
+            SheetRules sr = rules.getSheets().get(tableName);
+            if (sr != null && sr.getAliases() != null) {
+                for (String alias : sr.getAliases()) {
+                    Sheet aliased = wb.getSheet(alias);
+                    if (aliased != null) {
+                        log.debug("Matched table '{}' to sheet '{}' (alias)", tableName, alias);
+                        return aliased;
+                    }
+                    for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                        if (wb.getSheetName(i).equalsIgnoreCase(alias)) {
+                            log.debug("Matched table '{}' to sheet '{}' (alias, case-insensitive)",
+                                    tableName, wb.getSheetName(i));
+                            return wb.getSheetAt(i);
+                        }
+                    }
+                }
+            }
+        }
 
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
             String sheetName = wb.getSheetName(i);
