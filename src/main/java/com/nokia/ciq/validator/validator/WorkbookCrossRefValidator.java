@@ -41,11 +41,7 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
         }
 
         if (rule.getSuperset() != null) {
-            // Superset = reverse subset: every value in "to" must appear in "from"
-            SubsetRule reversed = new SubsetRule();
-            reversed.setFrom(rule.getSuperset().getTo());
-            reversed.setTo(rule.getSuperset().getFrom());
-            errors.addAll(checkSubset(reversed, store, false));
+            errors.addAll(checkSuperset(rule.getSuperset(), store));
         }
 
         if (rule.getMatch() != null) {
@@ -103,6 +99,35 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
                 errors.add(new ValidationError(0, subsetRule.getFrom(), v,
                         "Value '" + v + "' from [" + fromDesc
                         + "] not found in [" + subsetRule.getTo() + "]"));
+            }
+        }
+        return errors;
+    }
+
+    // -------------------------------------------------------------------------
+    // Superset check — every value in `to` must appear in `from`.
+    // An optional `where` filters the `from` side (same "column must live in the
+    // `from` sheet" rule as subset), mirroring checkSubset.
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkSuperset(SubsetRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        if (rule.getFrom() == null || rule.getTo() == null) return errors;
+
+        Set<String> allowedVals = rule.getWhere() != null
+                ? resolveColumnWhere(rule.getFrom(), rule.getWhere(), store)
+                : resolveColumn(rule.getFrom(), store);
+        Set<String> requiredVals = resolveColumn(rule.getTo(), store);
+
+        String fromDesc = rule.getWhere() != null
+                ? rule.getFrom() + " WHERE " + rule.getWhere()
+                : rule.getFrom();
+
+        for (String v : requiredVals) {
+            if (!allowedVals.contains(v)) {
+                errors.add(new ValidationError(0, rule.getTo(), v,
+                        "Value '" + v + "' from [" + rule.getTo()
+                        + "] not found in [" + fromDesc + "]"));
             }
         }
         return errors;
