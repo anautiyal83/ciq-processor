@@ -10,6 +10,7 @@
 
 output_mode: single
 data:
+  schemaVersion: "1"
   nodeType: MRF
   activity: ANNOUNCEMENT_LOADING
   nodes:

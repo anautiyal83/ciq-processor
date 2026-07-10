@@ -129,8 +129,8 @@ public class JsonTemplateEvaluator {
     }
 
     /**
-     * Resolves: {@code Sheet.Column WHERE [Sheet.]FilterCol = value}
-     * Returns the first non-blank Column value in Sheet where FilterCol matches.
+     * Resolves: {@code Sheet.Column WHERE [Sheet.]FilterCol = value [AND ...]}
+     * Returns the first non-blank Column value in Sheet where all AND-conditions match.
      */
     private Object resolveWhereExpr(String expr, int whereIdx, TemplateContext ctx) {
         String targetExpr = expr.substring(0, whereIdx).trim();
@@ -141,21 +141,8 @@ public class JsonTemplateEvaluator {
         String sheet     = targetExpr.substring(0, dot).trim();
         String targetCol = stripQuotes(targetExpr.substring(dot + 1).trim());
 
-        int eqIdx = condExpr.indexOf('=');
-        if (eqIdx < 0) return null;
-        String condLeft  = condExpr.substring(0, eqIdx).trim();
-        String condRight = condExpr.substring(eqIdx + 1).trim();
-
-        String filterCol = condLeft.contains(".")
-                ? stripQuotes(condLeft.substring(condLeft.indexOf('.') + 1).trim())
-                : stripQuotes(condLeft);
-
-        Object filterVal = resolveString(condRight, ctx);
-        if (filterVal == null) return null;
-        String filterValStr = filterVal.toString();
-
         for (CiqRow row : resolveRows(sheet, ctx)) {
-            if (filterValStr.equals(row.get(filterCol))) {
+            if (matchesAllConditions(condExpr, row, ctx)) {
                 String v = row.get(targetCol);
                 if (v != null && !v.trim().isEmpty()) return v.trim();
             }
@@ -287,18 +274,8 @@ public class JsonTemplateEvaluator {
             if (dot < 0) return results;
             String sheet     = targetExpr.substring(0, dot).trim();
             String targetCol = stripQuotes(targetExpr.substring(dot + 1).trim());
-            int eqIdx = condExpr.indexOf('=');
-            if (eqIdx < 0) return results;
-            String condLeft  = condExpr.substring(0, eqIdx).trim();
-            String condRight = condExpr.substring(eqIdx + 1).trim();
-            String filterCol = condLeft.contains(".")
-                    ? stripQuotes(condLeft.substring(condLeft.indexOf('.') + 1).trim())
-                    : stripQuotes(condLeft);
-            Object filterVal = resolveString(condRight, ctx);
-            if (filterVal == null) return results;
-            String filterValStr = filterVal.toString();
             for (CiqRow row : resolveRows(sheet, ctx)) {
-                if (filterValStr.equals(row.get(filterCol))) {
+                if (matchesAllConditions(condExpr, row, ctx)) {
                     String v = row.get(targetCol);
                     if (v != null && !v.trim().isEmpty()) results.add(v.trim());
                 }
@@ -324,24 +301,38 @@ public class JsonTemplateEvaluator {
         Map<String, Object> elemTemplate = new LinkedHashMap<>(template);
         elemTemplate.remove("_each");
 
-        // ── DISTINCT [FROM] Sheet.Column [AS $varname] ──────────────────────
+        // ── DISTINCT [FROM] Sheet.Column [WHERE cond] [AS $varname] ─────────
         if (each.toUpperCase().startsWith("DISTINCT ")) {
             String rest = each.substring(9).trim();
             if (rest.toUpperCase().startsWith("FROM ")) rest = rest.substring(5).trim();
-            String ref, varName;
-            int asIdx = rest.toUpperCase().indexOf(" AS ");
+            String ref, varName, whereClause = null;
+
+            // Extract " AS $varname" first (using lastIndexOf to avoid matching
+            // "AS" that might appear inside a WHERE condition value)
+            int asIdx = rest.toUpperCase().lastIndexOf(" AS ");
+            String beforeAs;
             if (asIdx >= 0) {
-                ref     = rest.substring(0, asIdx).trim();
-                varName = rest.substring(asIdx + 4).trim();
+                beforeAs = rest.substring(0, asIdx).trim();
+                varName  = rest.substring(asIdx + 4).trim();
                 if (varName.startsWith("$")) varName = varName.substring(1);
             } else {
-                ref     = rest;
-                varName = "item";
+                beforeAs = rest;
+                varName  = "item";
             }
+
+            // Extract optional " WHERE condition" from the part before AS
+            int whereIdx2 = beforeAs.toUpperCase().indexOf(" WHERE ");
+            if (whereIdx2 >= 0) {
+                ref         = beforeAs.substring(0, whereIdx2).trim();
+                whereClause = beforeAs.substring(whereIdx2 + 7).trim();
+            } else {
+                ref = beforeAs;
+            }
+
             int dot = ref.indexOf('.');
             String srcSheet = dot >= 0 ? ref.substring(0, dot).trim() : ref;
             String srcCol   = dot >= 0 ? ref.substring(dot + 1).trim() : ref;
-            return buildDistinctArray(elemTemplate, ctx, srcSheet, srcCol, varName);
+            return buildDistinctArray(elemTemplate, ctx, srcSheet, srcCol, varName, whereClause);
         }
 
         // ── Sheet WHERE FilterCol = value ────────────────────────────────────
@@ -390,12 +381,16 @@ public class JsonTemplateEvaluator {
     /**
      * One element per distinct value of {@code srcCol} in {@code srcSheet}.
      * Scopes the source sheet's rows per value and sets {@code $varName}.
+     * If {@code whereClause} is non-null, only rows satisfying all AND-conditions
+     * in the clause are considered when collecting distinct values and when scoping.
      */
     private List<Object> buildDistinctArray(Map<String, Object> elemTemplate,
                                              TemplateContext ctx,
-                                             String srcSheet, String srcCol, String varName) {
+                                             String srcSheet, String srcCol, String varName,
+                                             String whereClause) {
         List<String> values = new ArrayList<>();
         for (CiqRow row : resolveRows(srcSheet, ctx)) {
+            if (whereClause != null && !matchesAllConditions(whereClause, row, ctx)) continue;
             String v = row.get(srcCol);
             if (v != null && !v.trim().isEmpty() && !values.contains(v.trim()))
                 values.add(v.trim());
@@ -404,10 +399,11 @@ public class JsonTemplateEvaluator {
         List<Object> result = new ArrayList<>();
         for (String value : values) {
             Map<String, List<CiqRow>> scoped =
-                    scopeSheetByColumn(ctx.filteredRows, srcSheet, srcCol, value);
+                    scopeSheetByColumn(ctx.filteredRows, srcSheet, srcCol, value, whereClause, ctx);
 
             CiqRow firstRow = null;
             for (CiqRow row : resolveRows(srcSheet, ctx)) {
+                if (whereClause != null && !matchesAllConditions(whereClause, row, ctx)) continue;
                 if (value.equals(row.get(srcCol))) { firstRow = row; break; }
             }
 
@@ -446,24 +442,12 @@ public class JsonTemplateEvaluator {
             return result;
         }
 
-        // ── Col = value  (single-value equality filter) ───────────────────────
-        int eqIdx = condition.indexOf('=');
-        if (eqIdx < 0) return buildSheetArray(sheetName, elemTemplate, ctx);
-
-        String filterColExpr = condition.substring(0, eqIdx).trim();
-        String filterValExpr = condition.substring(eqIdx + 1).trim();
-
-        String filterCol = filterColExpr.contains(".")
-                ? filterColExpr.substring(filterColExpr.indexOf('.') + 1).trim()
-                : filterColExpr;
-
-        Object filterVal = resolveString(filterValExpr, ctx);
-        if (filterVal == null) return Collections.emptyList();
-        String filterValStr = filterVal.toString();
+        // ── Col = value [AND Col = value ...]  (equality filter, supports AND) ─
+        if (condition.indexOf('=') < 0) return buildSheetArray(sheetName, elemTemplate, ctx);
 
         List<Object> result = new ArrayList<>();
         for (CiqRow row : resolveRows(sheetName, ctx)) {
-            if (filterValStr.equals(row.get(filterCol)))
+            if (matchesAllConditions(condition, row, ctx))
                 result.add(buildObject(elemTemplate, ctx.withRow(row)));
         }
         return result;
@@ -501,18 +485,22 @@ public class JsonTemplateEvaluator {
 
     /**
      * Returns a copy of {@code filteredRows} where the named sheet's list is
-     * restricted to rows where {@code col} equals {@code value}.
+     * restricted to rows where {@code col} equals {@code value} AND all conditions
+     * in {@code whereClause} (if non-null) are satisfied.
      * All other sheets are left unchanged.
      */
     private Map<String, List<CiqRow>> scopeSheetByColumn(
             Map<String, List<CiqRow>> filteredRows,
-            String srcSheet, String srcCol, String value) {
+            String srcSheet, String srcCol, String value,
+            String whereClause, TemplateContext ctx) {
         Map<String, List<CiqRow>> result = new LinkedHashMap<>();
         for (Map.Entry<String, List<CiqRow>> e : filteredRows.entrySet()) {
             if (e.getKey().equalsIgnoreCase(srcSheet)) {
                 List<CiqRow> scoped = new ArrayList<>();
                 for (CiqRow row : e.getValue()) {
-                    if (value.equals(row.get(srcCol))) scoped.add(row);
+                    if (!value.equals(row.get(srcCol))) continue;
+                    if (whereClause != null && !matchesAllConditions(whereClause, row, ctx)) continue;
+                    scoped.add(row);
                 }
                 result.put(e.getKey(), scoped);
             } else {
@@ -527,6 +515,44 @@ public class JsonTemplateEvaluator {
                 && s.charAt(0) == '\'' && s.charAt(s.length() - 1) == '\'')
             return s.substring(1, s.length() - 1);
         return s;
+    }
+
+    /**
+     * Splits a condition expression on top-level {@code AND} keywords (case-insensitive)
+     * and returns the individual sub-conditions.
+     * e.g. {@code "INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq"} →
+     *      {@code ["INDEX.NODEGROUP = $ng", "INDEX.CONFIG_SEQ = $seq"]}
+     */
+    private static List<String> splitAndConditions(String condExpr) {
+        List<String> parts = new ArrayList<>();
+        if (condExpr == null || condExpr.trim().isEmpty()) return parts;
+        for (String part : condExpr.split("(?i)\\s+AND\\s+")) {
+            String trimmed = part.trim();
+            if (!trimmed.isEmpty()) parts.add(trimmed);
+        }
+        return parts;
+    }
+
+    /**
+     * Returns {@code true} when {@code row} satisfies every AND-separated equality
+     * condition in {@code condExpr}.
+     * Condition format: {@code [Sheet.]Col = $var|literal}
+     * Conditions with no {@code =} are skipped (treated as always-true).
+     */
+    private boolean matchesAllConditions(String condExpr, CiqRow row, TemplateContext ctx) {
+        for (String cond : splitAndConditions(condExpr)) {
+            int eqIdx = cond.indexOf('=');
+            if (eqIdx < 0) continue;
+            String condLeft  = cond.substring(0, eqIdx).trim();
+            String condRight = cond.substring(eqIdx + 1).trim();
+            String filterCol = condLeft.contains(".")
+                    ? stripQuotes(condLeft.substring(condLeft.indexOf('.') + 1).trim())
+                    : stripQuotes(condLeft);
+            Object filterVal = resolveString(condRight, ctx);
+            if (filterVal == null) return false;
+            if (!filterVal.toString().equals(row.get(filterCol))) return false;
+        }
+        return true;
     }
 
     // =========================================================================
