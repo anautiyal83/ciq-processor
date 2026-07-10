@@ -81,8 +81,26 @@ public class ConditionalAllowedValues {
      */
     private List<String> allowedValues;
 
+    /**
+     * Compound trigger expression (alternative to {@code column}/{@code operator}/{@code value}).
+     * When set, the trigger fires if this expression evaluates true for the current row.
+     * Supports {@code &&} / {@code ||} and per-term comparisons
+     * {@code ==}, {@code !=}, {@code >}, {@code >=}, {@code <}, {@code <=}, with string
+     * literals in single or double quotes. Column names may be the full header or the
+     * leaf (last dotted segment). Example:
+     * <pre>
+     * allowedValuesWhen:
+     *   - when: "INVITE_DLG == 'No' && ROAMING_CALLS == 'No' && INVITE_DLG_FOR_EMERGENCY_CALLS == 'No'"
+     *     allowedValues: ["No"]
+     * </pre>
+     */
+    private String when;
+
     public String getColumn() { return column; }
     public void setColumn(String column) { this.column = column; }
+
+    public String getWhen() { return when; }
+    public void setWhen(String when) { this.when = when; }
 
     public String getOperator() { return operator; }
     public void setOperator(String operator) { this.operator = operator; }

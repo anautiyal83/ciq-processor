@@ -466,8 +466,13 @@ public class CiqValidationEngine {
             List<String> keyCols = rule.getUnique_key();
             if (keyCols == null || keyCols.isEmpty()) continue;
 
+            RowCondition when = rule.getWhen();
             Map<String, Integer> seen = new LinkedHashMap<>();
             for (CiqRow row : sheet.getRows()) {
+                if (when != null
+                        && !conditionalRowRuleValidator.evaluateCondition(when, row)) {
+                    continue;
+                }
                 boolean allBlank = true;
                 StringBuilder key = new StringBuilder();
                 for (String col : keyCols) {
