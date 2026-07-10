@@ -27,76 +27,143 @@ workbook_rules:
 
   # Index.NODE must exist in IP.NODE
   - subset:
-      from: Index.NODE
-      to: IP.NODE
+      from: Index.NodeGroup
+      to: IP.NodeGroup
 
   # GROUP validation scoped by TABLES column.
-  # Each match only checks Index.GROUP values where Index.TABLES = the target sheet.
+  # Each match only checks Index.NodeGroup values where Index.TABLES = the target sheet.
   # This prevents false failures when different tables use different group names.
-  - match:
-      from: Index.GROUP
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFTargetList"
-      to: CRFTargetList.Group
-  - match:
-      from: Index.GROUP
+      to: CRFTargetList.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = PeeringSDPProfileTable"
-      to: PeeringSDPProfileTable.Group
-  - match:
-      from: Index.GROUP
+      to: PeeringSDPProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = BorderGatewayPublishedRealmTable"
-      to: BorderGatewayPublishedRealmTable.Group
-  - match:
-      from: Index.GROUP
+      to: BorderGatewayPublishedRealmTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = IbcfVirtualNetworkTable"
-      to: IbcfVirtualNetworkTable.Group
-  - match:
-      from: Index.GROUP
+      to: IbcfVirtualNetworkTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = ServiceProfileTable"
-      to: ServiceProfileTable.Group
-  - match:
-      from: Index.GROUP
+      to: ServiceProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = PFEDPortTable"
-      to: PFEDPortTable.Group
-  - match:
-      from: Index.GROUP
+      to: PFEDPortTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = PublishedRealmTable"
-      to: PublishedRealmTable.Group
-  - match:
-      from: Index.GROUP
+      to: PublishedRealmTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = IbcfSipProfileTable"
-      to: IbcfSipProfileTable.Group
-  - match:
-      from: Index.GROUP
+      to: IbcfSipProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = IbcfTrunkGroupTable"
-      to: IbcfTrunkGroupTable.Group
-  - match:
-      from: Index.GROUP
+      to: IbcfTrunkGroupTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFDATable"
-      to: CRFDATable.Group
-  - match:
-      from: Index.GROUP
+      to: CRFDATable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFRoutePlan"
-      to: CRFRoutePlan.Group
-  - match:
-      from: Index.GROUP
+      to: CRFRoutePlan.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFRoutePriorityList"
-      to: CRFRoutePriorityList.Group
-  - match:
-      from: Index.GROUP
+      to: CRFRoutePriorityList.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFRouteProfile"
-      to: CRFRouteProfile.Group
-  - match:
-      from: Index.GROUP
+      to: CRFRouteProfile.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFTreatment"
-      to: CRFTreatment.Group
-  - match:
-      from: Index.GROUP
+      to: CRFTreatment.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = CRFHostURITable"
-      to: CRFHostURITable.Group
-  - match:
-      from: Index.GROUP
+      to: CRFHostURITable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
       where: "TABLES = IbcfIngressTrunkGroupMappingTable"
-      to: IbcfIngressTrunkGroupMappingTable.Group
+      to: IbcfIngressTrunkGroupMappingTable.NodeGroup
+
+
+
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFTargetList"
+      to: CRFTargetList.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = PeeringSDPProfileTable"
+      to: PeeringSDPProfileTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = BorderGatewayPublishedRealmTable"
+      to: BorderGatewayPublishedRealmTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = IbcfVirtualNetworkTable"
+      to: IbcfVirtualNetworkTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = ServiceProfileTable"
+      to: ServiceProfileTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = PFEDPortTable"
+      to: PFEDPortTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = PublishedRealmTable"
+      to: PublishedRealmTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = IbcfSipProfileTable"
+      to: IbcfSipProfileTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = IbcfTrunkGroupTable"
+      to: IbcfTrunkGroupTable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFDATable"
+      to: CRFDATable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFRoutePlan"
+      to: CRFRoutePlan.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFRoutePriorityList"
+      to: CRFRoutePriorityList.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFRouteProfile"
+      to: CRFRouteProfile.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFTreatment"
+      to: CRFTreatment.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = CRFHostURITable"
+      to: CRFHostURITable.CONFIG_SEQ
+  - superset:
+      from: Index.CONFIG_SEQ
+      where: "TABLES = IbcfIngressTrunkGroupMappingTable"
+      to: IbcfIngressTrunkGroupMappingTable.CONFIG_SEQ
 
 # -----------------------------------------------------------------------------
 # Sheet-wise validation rules
@@ -110,18 +177,19 @@ sheets:
     required: true
     columns:
 
-      NODE:
+      NodeGroup:
         required: true
         type: string
-        
-      GROUP:
-        required: true
-        type: string
-        description: "Group name for the configuration changes"
 
       CRGROUP:
         required: true
         description: "CR Number"
+        type: string
+        pattern: "^CR[0-9]+$"
+
+      CONFIG_SEQ:
+        required: true
+        type: string
 
       TABLES:
         required: true
@@ -144,8 +212,6 @@ sheets:
         minOnePerGroup:
             groupByColumn: CRGroup
 
-    rules:
-      - unique_key: [NODE, GROUP, TABLES]
 
   # ---------------------------------------------------------------------------
   # Sheet: IP
@@ -163,6 +229,10 @@ sheets:
         type: string
         unique: false
         description: "NIAM ID for the hostname - must be unique to each node"
+      
+      NodeGroup:
+        required: false
+        type: string
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFTargetList
@@ -172,11 +242,14 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
         required: true
         type: string
-        description: "Group name for the configuration changes"
-
+        
+      CONFIG_SEQ:
+        required: true
+        type: string
+        
       Action:
         required: true
         type: string
@@ -330,7 +403,13 @@ sheets:
 
     rules:
       
-      - unique_key: [Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+        when:
+          column: Action
+          operator: equals
+          value: CREATE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.TARGET_LIST_ID]
       
       - require: ActionKey
         when:
@@ -392,7 +471,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -842,7 +925,8 @@ sheets:
 
     rules:
       
-      - unique_key: [Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PROFILEID]
 
       - require: ActionKey
         when:
@@ -866,12 +950,16 @@ sheets:
   # ---------------------------------------------------------------------------
   BorderGatewayPublishedRealmTable:
     aliases:
-      - BorderGatewayPublishedRealmTab
+      - BorderGatewayPublishedRealmTa01
     required: false
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -938,7 +1026,8 @@ sheets:
           operator: equals
           value: SUBRECORD
       
-      - unique_key: [Record.BORDER_GATEWAY, Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.BORDER_GATEWAY, Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.BORDER_GATEWAY]
 
 
   # ---------------------------------------------------------------------------
@@ -949,7 +1038,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -984,7 +1077,6 @@ sheets:
       Record.VN_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 4096
         description: "Virtual Network ID"
@@ -1154,6 +1246,8 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -1189,7 +1283,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -1223,7 +1321,6 @@ sheets:
       Record.POLICY_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -1434,6 +1531,8 @@ sheets:
         description: "Must be 0 when Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH is 'Yes'"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -1454,7 +1553,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -1641,7 +1744,7 @@ sheets:
           operator: equals
           value: SUBRECORD
 
-      - unique_key: [Record.PFED_ID, Record.PORT_NAME]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PFED_ID, Record.PORT_NAME]
       
       - forbid: ActionKey
         when:
@@ -1658,7 +1761,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -1693,7 +1800,6 @@ sheets:
       Record.PUBLISHED_REALM_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -1714,7 +1820,7 @@ sheets:
       Record.SIGNALING_V4_VLAN:
         required: false
         type: string
-        allowedValues: [untagged,""]
+        pattern: '^(409[0-4]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|untagged)?$'
         allowedValuesWhen:
         - column: Record.IP_VERSION
           operator: equals
@@ -1725,7 +1831,7 @@ sheets:
       Record.SIGNALING_V6_VLAN:
         required: false
         type: string
-        allowedValues: [untagged,""]
+        pattern: '^(409[0-4]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|untagged)?$'
         allowedValuesWhen:
         - column: Record.IP_VERSION
           operator: equals
@@ -1783,6 +1889,8 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -1807,7 +1915,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -1842,7 +1954,6 @@ sheets:
       Record.PROFILE_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -2151,6 +2262,8 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PROFILE_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -2171,7 +2284,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -2488,7 +2605,7 @@ sheets:
           operator: equals
           value: Record
       
-      - unique_key: [Record.VN_ID, Record.TG_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID, Record.TG_ID]
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFDATable
@@ -2498,7 +2615,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -2533,7 +2654,6 @@ sheets:
       Record.DIGIT_STRING:
         required: true
         type: string
-        unique: false
         maxLength: 20
         pattern: '^\+?[0-9A-Fa-f*#x]*&?$'
         description: "Required when Action is CREATE; 0-9, A-F, x, *, #, +, &; + only at start, & only at end"
@@ -2573,6 +2693,8 @@ sheets:
         description: "Only when AREA_CODE_FOR_CALL_BARRING is Yes"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.DIGIT_STRING]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -2593,7 +2715,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -2628,7 +2754,6 @@ sheets:
       Record.RT_PLAN_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 1024
 
@@ -2665,6 +2790,8 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.RT_PLAN_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -2685,7 +2812,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -2721,7 +2852,6 @@ sheets:
 
       Record.PRIORITY_LIST_ID:
         required: true
-        unique: true
         type: integer
         minValue: 1
         maxValue: 4096
@@ -2761,7 +2891,8 @@ sheets:
 
     rules:
       
-      - unique_key: [Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PRIORITY_LIST_ID]
 
       - require: ActionKey
         when:
@@ -2792,7 +2923,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -2904,6 +3039,8 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.ROUTE_PROFILE_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -2924,7 +3061,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -2959,7 +3100,6 @@ sheets:
       Record.TREATMENT_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 100000
 
@@ -2984,6 +3124,8 @@ sheets:
         description: "Required when Action is CREATE; value depends on TREATMENT_TYPE"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TREATMENT_ID]
+
       - require: ActionKey
         when:
           column: SubAction
@@ -3010,7 +3152,11 @@ sheets:
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -3083,19 +3229,23 @@ sheets:
           operator: equals
           value: Record
 
-      - unique_key: [Record.HOST_URI, Record.HOST_URI_TYPE]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.HOST_URI, Record.HOST_URI_TYPE]
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfIngressTrunkGroupMappingTable (Excel sheet name is truncated to 31 chars)
   # ---------------------------------------------------------------------------
   IbcfIngressTrunkGroupMappingTable:
     aliases:
-      - IbcfIngressTrunkGroupMappingTab
+      - IbcfIngressTrunkGroupMappingT01
     required: false
     required_if_listed_in: Index.TABLES
     columns:
 
-      Group:
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
         required: true
         type: string
 
@@ -3130,7 +3280,6 @@ sheets:
       Record.POLICY_ID:
         required: true
         type: integer
-        unique: true
         minValue: 1
         maxValue: 10000
 
@@ -3198,6 +3347,8 @@ sheets:
         description: "Required when Action is CREATE; CFED port name or NOTPRESENT"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+
       - require: ActionKey
         when:
           column: SubAction

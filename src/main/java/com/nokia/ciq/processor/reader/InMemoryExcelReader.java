@@ -205,9 +205,12 @@ public class InMemoryExcelReader {
             // and cannot interfere with the validateIndexSheets cross-check.
             Sheet rawIndex = findSheet(wb, SHEET_INDEX, rules);
             if (rawIndex != null) {
-                // Read ALL columns (null) so extra columns like GROUP are preserved for the
-                // template engine even if they are not listed in the validation-rules YAML.
-                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, null,
+                // Use columns declared in the validation-rules YAML to locate the header row
+                // generically (avoids hardcoding column names as heuristics).
+                // When no Index columns are configured (other activities), falls back to null
+                // which retains the legacy Node/Group heuristics in readSheet.
+                Set<String> indexCols = configuredColumns(rules, SHEET_INDEX);
+                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, indexCols,
                         effectiveSettings(rules, SHEET_INDEX), true /* stripTrailingBlanks */));
                 log.debug("Captured raw Index sheet ({} rows)",
                         store.getRawIndexSheet().getRows().size());
@@ -315,7 +318,42 @@ public class InMemoryExcelReader {
             return index;   // CiqIndex intentionally empty - sheets loaded directly
         }
 
-        log.warn("Header row not found in Index sheet (no Node+CRGroup and no Group+Node columns)");
+        // --- Attempt 3: NodeGroup mode (NodeGroup + Tables columns, no Node) ---
+        headerRowIdx = findHeaderRow(sheet, "NodeGroup", "Tables");
+        if (headerRowIdx >= 0) {
+            Row headerRow     = sheet.getRow(headerRowIdx);
+            int nodeGroupCol  = findColumnIndex(headerRow, "NodeGroup");
+            int crGroupCol    = findColumnIndex(headerRow, "CRGroup");
+            int tablesCol     = findColumnIndex(headerRow, "Tables");
+
+            Map<String, NodeEntry> entryMap = new LinkedHashMap<>();
+            for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                String nodeGroup = getCellString(row.getCell(nodeGroupCol));
+                String crGroup   = crGroupCol >= 0 ? getCellString(row.getCell(crGroupCol)) : null;
+                if (isBlank(nodeGroup)) continue;
+                String table = getCellString(row.getCell(tablesCol));
+                if (isBlank(table)) continue;
+
+                String key = nodeGroup.trim() + "|" + (crGroup == null ? "" : crGroup.trim());
+                NodeEntry entry = entryMap.computeIfAbsent(key, k -> {
+                    NodeEntry e = new NodeEntry();
+                    e.setNode(nodeGroup.trim());
+                    e.setCrGroup(crGroup != null ? crGroup.trim() : null);
+                    return e;
+                });
+                if (!entry.getTables().contains(table.trim())) {
+                    entry.getTables().add(table.trim());
+                }
+            }
+            index.setEntries(new ArrayList<>(entryMap.values()));
+            log.info("NodeGroup-mode Index: {} nodeGroup/crGroup entries, {} unique table(s)",
+                    entryMap.size(), index.getAllTables().size());
+            return index;
+        }
+
+        log.warn("Header row not found in Index sheet (no Node+CRGroup, no Group+Node, and no NodeGroup+Tables columns)");
         return index;
     }
 
