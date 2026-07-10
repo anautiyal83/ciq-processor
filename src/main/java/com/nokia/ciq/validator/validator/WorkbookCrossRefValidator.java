@@ -4,6 +4,7 @@ import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ConstantWithinRule;
+import com.nokia.ciq.validator.config.ContiguousSequenceRule;
 import com.nokia.ciq.validator.config.CountPerRule;
 import com.nokia.ciq.validator.config.SetMatchRule;
 import com.nokia.ciq.validator.config.SubsetAnyRule;
@@ -71,6 +72,10 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
 
         if (rule.getSetMatch() != null) {
             errors.addAll(checkSetMatch(rule.getSetMatch(), store));
+        }
+
+        if (rule.getContiguousSequence() != null) {
+            errors.addAll(checkContiguousSequence(rule.getContiguousSequence(), store));
         }
 
         return errors;
@@ -287,6 +292,70 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             }
         }
         return errors;
+    }
+
+    // -------------------------------------------------------------------------
+    // ContiguousSequence check — within each partition, a column's values must
+    // form contiguous blocks (a value may not reappear after a different value).
+    // Evaluated in sheet row order.
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkContiguousSequence(ContiguousSequenceRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        if (rule.getSheet() == null || rule.getColumn() == null
+                || rule.getPartitionBy() == null || rule.getPartitionBy().isEmpty()) {
+            return errors;
+        }
+
+        CiqSheet sheet = getSheet(store, rule.getSheet());
+        if (sheet == null) {
+            log.warn("contiguous_sequence: sheet '{}' not found", rule.getSheet());
+            return errors;
+        }
+
+        // Per partition: the last value seen (current run) and the set of values already closed.
+        Map<String, String> lastByPartition = new LinkedHashMap<>();
+        Map<String, Set<String>> seenByPartition = new LinkedHashMap<>();
+
+        for (CiqRow row : sheet.getRows()) {
+            StringBuilder pk = new StringBuilder();
+            for (String col : rule.getPartitionBy()) {
+                String pv = row.get(col);
+                pk.append(pv != null ? pv.trim() : "").append('|');
+            }
+            String partition = pk.toString();
+
+            String raw = row.get(rule.getColumn());
+            String val = raw != null ? raw.trim() : "";
+            if (val.isEmpty()) continue;   // blank sequence cell — ignore
+
+            String last = lastByPartition.get(partition);
+            if (val.equals(last)) continue; // still inside the same contiguous run
+
+            Set<String> seen = seenByPartition.computeIfAbsent(partition, k -> new LinkedHashSet<>());
+            if (seen.contains(val)) {
+                errors.add(new ValidationError(row.getRowNumber(), rule.getColumn(), val,
+                        rule.getColumn() + " value '" + val + "' reappears at row "
+                        + row.getRowNumber() + " within " + partitionDesc(rule.getPartitionBy(), row)
+                        + ". Once a different " + rule.getColumn() + " value appears, '"
+                        + val + "' cannot appear again."));
+            } else {
+                seen.add(val);
+            }
+            lastByPartition.put(partition, val);
+        }
+        return errors;
+    }
+
+    /** Builds a readable partition description like {@code "NodeGroup=NG1, CRGROUP=CR1"}. */
+    private String partitionDesc(List<String> cols, CiqRow row) {
+        StringBuilder sb = new StringBuilder();
+        for (String c : cols) {
+            if (sb.length() > 0) sb.append(", ");
+            String v = row.get(c);
+            sb.append(c).append('=').append(v != null ? v.trim() : "");
+        }
+        return sb.toString();
     }
 
     // -------------------------------------------------------------------------
