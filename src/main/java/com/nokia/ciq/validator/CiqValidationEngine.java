@@ -319,19 +319,28 @@ public class CiqValidationEngine {
         }
 
         // --- Workbook-level cross-sheet rules ---
-        // Skip a rule if any sheet it references is absent AND optional (not required).
+        // Skip a rule if any referenced sheet is not required. "Not required" covers:
+        //   - the sheet is absent, OR
+        //   - the sheet is present but declared optional via `required_if_listed_in`
+        //     and not listed in the referenced index column (dynamic rule → false).
+        // A plain `required: false` sheet with no dynamic rule is still validated when
+        // present, so it does not trigger the skip.
         if (rules.getWorkbookRules() != null) {
             for (WorkbookRule wbRule : rules.getWorkbookRules()) {
                 Set<String> referencedSheets = extractReferencedSheets(wbRule);
                 boolean skip = false;
                 for (String refSheet : referencedSheets) {
-                    if (store.getSheet(refSheet) == null) {
-                        SheetRules refRules = sheetRulesFor(rules, refSheet);
-                        if (!isSheetRequired(refSheet, refRules, index)) {
-                            log.info("Skipping workbook_rule referencing optional absent sheet '{}'", refSheet);
-                            skip = true;
-                            break;
-                        }
+                    SheetRules refRules = sheetRulesFor(rules, refSheet);
+                    if (isSheetRequired(refSheet, refRules, index)) continue;
+
+                    boolean absent = store.getSheet(refSheet) == null;
+                    boolean gatedByIndex = refRules != null
+                            && refRules.getRequired_if_listed_in() != null;
+                    if (absent || gatedByIndex) {
+                        log.info("Skipping workbook_rule referencing sheet '{}' (absent={}, gatedByIndex={})",
+                                refSheet, absent, gatedByIndex);
+                        skip = true;
+                        break;
                     }
                 }
                 if (skip) continue;
