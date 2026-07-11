@@ -50,6 +50,12 @@ public class WorkbookRule {
     /** A column's values must form contiguous blocks within each partition. */
     private ContiguousSequenceRule contiguousSequence;
 
+    /**
+     * Partition-scoped subset: values collected per (source) partition must appear
+     * in the (target) partition derived from the same key columns.
+     */
+    private SetRule set;
+
     public SubsetRule getSubset() { return subset; }
     public void setSubset(SubsetRule subset) { this.subset = subset; }
 
@@ -78,4 +84,7 @@ public class WorkbookRule {
     public void setContiguousSequence(ContiguousSequenceRule contiguousSequence) {
         this.contiguousSequence = contiguousSequence;
     }
+
+    public SetRule getSet() { return set; }
+    public void setSet(SetRule set) { this.set = set; }
 }

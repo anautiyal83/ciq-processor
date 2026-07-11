@@ -165,6 +165,175 @@ workbook_rules:
       where: "TABLES = IbcfIngressTrunkGroupMappingTable"
       to: IbcfIngressTrunkGroupMappingTable.CONFIG_SEQ
 
+
+  # ---------------------------------------------------------------------------
+  # Partition-scoped subset (`set`):
+  # For each (NodeGroup, CRGROUP) group in Index that targets a table, every
+  # CONFIG_SEQ step listed must appear in that table's rows for the same
+  # NodeGroup. Catches the "Index lists Step2 but the table sheet only has
+  # Step1" case that a plain superset misses.
+  # ---------------------------------------------------------------------------
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFTargetList"
+      to:
+        sheet: CRFTargetList
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PeeringSDPProfileTable"
+      to:
+        sheet: PeeringSDPProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = BorderGatewayPublishedRealmTable"
+      to:
+        sheet: BorderGatewayPublishedRealmTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfVirtualNetworkTable"
+      to:
+        sheet: IbcfVirtualNetworkTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = ServiceProfileTable"
+      to:
+        sheet: ServiceProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PFEDPortTable"
+      to:
+        sheet: PFEDPortTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PublishedRealmTable"
+      to:
+        sheet: PublishedRealmTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfSipProfileTable"
+      to:
+        sheet: IbcfSipProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfTrunkGroupTable"
+      to:
+        sheet: IbcfTrunkGroupTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFDATable"
+      to:
+        sheet: CRFDATable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFRoutePlan"
+      to:
+        sheet: CRFRoutePlan
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFRoutePriorityList"
+      to:
+        sheet: CRFRoutePriorityList
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFRouteProfile"
+      to:
+        sheet: CRFRouteProfile
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFTreatment"
+      to:
+        sheet: CRFTreatment
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFHostURITable"
+      to:
+        sheet: CRFHostURITable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfIngressTrunkGroupMappingTable"
+      to:
+        sheet: IbcfIngressTrunkGroupMappingTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+
 # -----------------------------------------------------------------------------
 # Sheet-wise validation rules
 # -----------------------------------------------------------------------------

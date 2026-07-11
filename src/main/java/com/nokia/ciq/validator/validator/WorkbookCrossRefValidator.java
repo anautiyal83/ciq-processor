@@ -7,6 +7,7 @@ import com.nokia.ciq.validator.config.ConstantWithinRule;
 import com.nokia.ciq.validator.config.ContiguousSequenceRule;
 import com.nokia.ciq.validator.config.CountPerRule;
 import com.nokia.ciq.validator.config.SetMatchRule;
+import com.nokia.ciq.validator.config.SetRule;
 import com.nokia.ciq.validator.config.SubsetAnyRule;
 import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.UniqueRule;
@@ -76,6 +77,10 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
 
         if (rule.getContiguousSequence() != null) {
             errors.addAll(checkContiguousSequence(rule.getContiguousSequence(), store));
+        }
+
+        if (rule.getSet() != null) {
+            errors.addAll(checkSet(rule.getSet(), store));
         }
 
         return errors;
@@ -354,6 +359,123 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             if (sb.length() > 0) sb.append(", ");
             String v = row.get(c);
             sb.append(c).append('=').append(v != null ? v.trim() : "");
+        }
+        return sb.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // Set (partition-scoped subset) check
+    //
+    // For each partition on the `from` side, every distinct value collected must
+    // appear in the target partition derived by keeping only the target's
+    // partitionBy columns. Reports the missing values per source partition.
+    // -------------------------------------------------------------------------
+
+    private List<ValidationError> checkSet(SetRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+        SetRule.Source src = rule.getFrom();
+        SetRule.Target tgt = rule.getTo();
+        if (src == null || tgt == null) return errors;
+        if (src.getSheet() == null || src.getColumn() == null
+                || src.getPartitionBy() == null || src.getPartitionBy().isEmpty()) return errors;
+        if (tgt.getSheet() == null || tgt.getColumn() == null
+                || tgt.getPartitionBy() == null || tgt.getPartitionBy().isEmpty()) return errors;
+
+        CiqSheet srcSheet = getSheet(store, src.getSheet());
+        CiqSheet tgtSheet = getSheet(store, tgt.getSheet());
+        if (srcSheet == null) { log.warn("set: source sheet '{}' not found", src.getSheet()); return errors; }
+        if (tgtSheet == null) { log.warn("set: target sheet '{}' not found", tgt.getSheet()); return errors; }
+
+        // Target partitionBy must be a subset (by name) of source partitionBy —
+        // otherwise we can't derive the target key from the source key.
+        List<Integer> tgtKeyIndices = new ArrayList<>();
+        for (String tCol : tgt.getPartitionBy()) {
+            int idx = src.getPartitionBy().indexOf(tCol);
+            if (idx < 0) {
+                log.warn("set: target partitionBy column '{}' is not present in source partitionBy {} — skipping rule",
+                        tCol, src.getPartitionBy());
+                return errors;
+            }
+            tgtKeyIndices.add(idx);
+        }
+
+        // Parse optional where clause
+        String whereCol = null;
+        String whereVal = null;
+        if (src.getWhere() != null) {
+            int eq = src.getWhere().indexOf('=');
+            if (eq < 0) {
+                log.warn("set: invalid where clause (no '='): {}", src.getWhere());
+            } else {
+                whereCol = src.getWhere().substring(0, eq).trim();
+                whereVal = src.getWhere().substring(eq + 1).trim();
+            }
+        }
+
+        // Build source: sourceKey (list of partition values, aligned with src.partitionBy) -> Set<value>
+        // Preserve first-seen row key strings for readable errors.
+        Map<List<String>, Set<String>> sourceGroups = new LinkedHashMap<>();
+        for (CiqRow row : srcSheet.getRows()) {
+            if (whereCol != null) {
+                String rv = row.get(whereCol);
+                if (!whereVal.equals(rv != null ? rv.trim() : null)) continue;
+            }
+            List<String> key = new ArrayList<>(src.getPartitionBy().size());
+            for (String pc : src.getPartitionBy()) {
+                String pv = row.get(pc);
+                key.add(pv != null ? pv.trim() : "");
+            }
+            String val = row.get(src.getColumn());
+            if (val == null || val.trim().isEmpty()) continue;
+            sourceGroups.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(val.trim());
+        }
+
+        // Build target: targetKey (list aligned with tgt.partitionBy) -> Set<value>
+        Map<List<String>, Set<String>> targetGroups = new LinkedHashMap<>();
+        for (CiqRow row : tgtSheet.getRows()) {
+            List<String> key = new ArrayList<>(tgt.getPartitionBy().size());
+            for (String pc : tgt.getPartitionBy()) {
+                String pv = row.get(pc);
+                key.add(pv != null ? pv.trim() : "");
+            }
+            String val = row.get(tgt.getColumn());
+            if (val == null || val.trim().isEmpty()) continue;
+            targetGroups.computeIfAbsent(key, k -> new LinkedHashSet<>()).add(val.trim());
+        }
+
+        // Compare each source partition against its projected target partition
+        for (Map.Entry<List<String>, Set<String>> e : sourceGroups.entrySet()) {
+            List<String> srcKey = e.getKey();
+            List<String> tgtKey = new ArrayList<>(tgtKeyIndices.size());
+            for (int idx : tgtKeyIndices) tgtKey.add(srcKey.get(idx));
+
+            Set<String> tgtValues = targetGroups.getOrDefault(tgtKey, java.util.Collections.emptySet());
+
+            List<String> missing = new ArrayList<>();
+            for (String v : e.getValue()) {
+                if (!tgtValues.contains(v)) missing.add(v);
+            }
+            if (missing.isEmpty()) continue;
+
+            String srcKeyDesc = describeKey(src.getPartitionBy(), srcKey);
+            String tgtKeyDesc = describeKey(tgt.getPartitionBy(), tgtKey);
+            String whereDesc = src.getWhere() != null ? " WHERE " + src.getWhere() : "";
+            errors.add(new ValidationError(0, src.getColumn(), missing.toString(),
+                    src.getSheet() + "." + src.getColumn() + whereDesc
+                    + " (" + srcKeyDesc + ") requires values " + e.getValue()
+                    + " in " + tgt.getSheet() + "." + tgt.getColumn()
+                    + " (" + tgtKeyDesc + "); missing: " + missing));
+        }
+
+        return errors;
+    }
+
+    /** Builds "col1=val1, col2=val2" for a partition key. */
+    private String describeKey(List<String> cols, List<String> vals) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < cols.size(); i++) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(cols.get(i)).append('=').append(vals.get(i));
         }
         return sb.toString();
     }

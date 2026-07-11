@@ -10,6 +10,7 @@ import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.RowCondition;
 import com.nokia.ciq.validator.config.SheetRowRule;
+import com.nokia.ciq.validator.config.SetRule;
 import com.nokia.ciq.validator.config.SheetRules;
 import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.ValidatorDefinition;
@@ -1096,6 +1097,16 @@ public class CiqValidationEngine {
         if (rule.getSetMatch() != null)
             return "set_match: " + rule.getSetMatch().getSource().getSheet()
                     + " \u2194 " + rule.getSetMatch().getTarget().getSheet();
+        if (rule.getSet() != null) {
+            SetRule r = rule.getSet();
+            String fromCol  = r.getFrom() != null ? r.getFrom().getSheet() + "." + r.getFrom().getColumn() : "?";
+            String toCol    = r.getTo()   != null ? r.getTo().getSheet()   + "." + r.getTo().getColumn()   : "?";
+            String whereDesc = (r.getFrom() != null && r.getFrom().getWhere() != null)
+                    ? " (where " + r.getFrom().getWhere() + ")" : "";
+            String partDesc = (r.getFrom() != null && r.getFrom().getPartitionBy() != null)
+                    ? " partitionBy " + r.getFrom().getPartitionBy() : "";
+            return "set: " + fromCol + whereDesc + partDesc + " \u2192 " + toCol;
+        }
         return "unknown workbook rule";
     }
 }
