@@ -33,11 +33,23 @@ public class SetRule {
     private Source from;
     private Target to;
 
+    /**
+     * When {@code true}, the check is per-partition <em>set equality</em>: in addition to the
+     * default forward direction (every {@code from} value must appear in the projected
+     * {@code to} partition), the reverse is also enforced — every {@code to} value must appear
+     * in the union of {@code from} values that project onto that target partition.  Extra values
+     * on the {@code to} side are then reported.  Defaults to {@code false} (one-way subset).
+     */
+    private boolean bidirectional;
+
     public Source getFrom() { return from; }
     public void setFrom(Source from) { this.from = from; }
 
     public Target getTo() { return to; }
     public void setTo(Target to) { this.to = to; }
+
+    public boolean isBidirectional() { return bidirectional; }
+    public void setBidirectional(boolean bidirectional) { this.bidirectional = bidirectional; }
 
     // -------------------------------------------------------------------------
 

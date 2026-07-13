@@ -467,6 +467,37 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
                     + " (" + tgtKeyDesc + "); missing: " + missing));
         }
 
+        // Reverse direction (set equality): every target value must appear in the union of
+        // source values that project onto that target partition. Flags extras on the `to` side.
+        if (rule.isBidirectional()) {
+            // Union of source values per projected target key.
+            Map<List<String>, Set<String>> srcByTargetKey = new LinkedHashMap<>();
+            for (Map.Entry<List<String>, Set<String>> e : sourceGroups.entrySet()) {
+                List<String> srcKey = e.getKey();
+                List<String> projKey = new ArrayList<>(tgtKeyIndices.size());
+                for (int idx : tgtKeyIndices) projKey.add(srcKey.get(idx));
+                srcByTargetKey.computeIfAbsent(projKey, k -> new LinkedHashSet<>()).addAll(e.getValue());
+            }
+
+            String whereDesc = src.getWhere() != null ? " WHERE " + src.getWhere() : "";
+            for (Map.Entry<List<String>, Set<String>> e : targetGroups.entrySet()) {
+                List<String> tgtKey = e.getKey();
+                Set<String> allowed = srcByTargetKey.getOrDefault(tgtKey, java.util.Collections.emptySet());
+
+                List<String> extra = new ArrayList<>();
+                for (String v : e.getValue()) {
+                    if (!allowed.contains(v)) extra.add(v);
+                }
+                if (extra.isEmpty()) continue;
+
+                String tgtKeyDesc = describeKey(tgt.getPartitionBy(), tgtKey);
+                errors.add(new ValidationError(0, tgt.getColumn(), extra.toString(),
+                        tgt.getSheet() + "." + tgt.getColumn() + " (" + tgtKeyDesc + ") has values "
+                        + e.getValue() + " not present in " + src.getSheet() + "." + src.getColumn()
+                        + whereDesc + "; extra: " + extra));
+            }
+        }
+
         return errors;
     }
 

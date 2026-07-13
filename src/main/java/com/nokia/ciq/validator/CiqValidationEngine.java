@@ -6,6 +6,7 @@ import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
+import com.nokia.ciq.validator.config.ContiguousSequenceRule;
 import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.RowCondition;
@@ -1097,6 +1098,11 @@ public class CiqValidationEngine {
         if (rule.getSetMatch() != null)
             return "set_match: " + rule.getSetMatch().getSource().getSheet()
                     + " \u2194 " + rule.getSetMatch().getTarget().getSheet();
+        if (rule.getContiguousSequence() != null) {
+            ContiguousSequenceRule r = rule.getContiguousSequence();
+            return "contiguous_sequence: " + r.getSheet() + "." + r.getColumn()
+                    + " partitionBy " + r.getPartitionBy();
+        }
         if (rule.getSet() != null) {
             SetRule r = rule.getSet();
             String fromCol  = r.getFrom() != null ? r.getFrom().getSheet() + "." + r.getFrom().getColumn() : "?";
@@ -1105,7 +1111,9 @@ public class CiqValidationEngine {
                     ? " (where " + r.getFrom().getWhere() + ")" : "";
             String partDesc = (r.getFrom() != null && r.getFrom().getPartitionBy() != null)
                     ? " partitionBy " + r.getFrom().getPartitionBy() : "";
-            return "set: " + fromCol + whereDesc + partDesc + " \u2192 " + toCol;
+            String arrow = r.isBidirectional() ? " \u2194 " : " \u2192 ";
+            return "set: " + fromCol + whereDesc + partDesc + arrow + toCol
+                    + (r.isBidirectional() ? " (bidirectional)" : "");
         }
         return "unknown workbook rule";
     }
