@@ -469,7 +469,10 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
 
         // Reverse direction (set equality): every target value must appear in the union of
         // source values that project onto that target partition. Flags extras on the `to` side.
-        if (rule.isBidirectional()) {
+        // Skipped entirely when the source is empty — i.e. the table is not declared in the
+        // Index at all (TABLES filter matched no rows). Such a sheet is out of scope for this
+        // rule, so its values are not reported as extras.
+        if (rule.isBidirectional() && !sourceGroups.isEmpty()) {
             // Union of source values per projected target key.
             Map<List<String>, Set<String>> srcByTargetKey = new LinkedHashMap<>();
             for (Map.Entry<List<String>, Set<String>> e : sourceGroups.entrySet()) {
