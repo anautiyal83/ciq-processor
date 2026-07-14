@@ -6,10 +6,12 @@ import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
+import com.nokia.ciq.validator.config.ContiguousSequenceRule;
 import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.RowCondition;
 import com.nokia.ciq.validator.config.SheetRowRule;
+import com.nokia.ciq.validator.config.SetRule;
 import com.nokia.ciq.validator.config.SheetRules;
 import com.nokia.ciq.validator.config.SubsetRule;
 import com.nokia.ciq.validator.config.ValidatorDefinition;
@@ -319,19 +321,28 @@ public class CiqValidationEngine {
         }
 
         // --- Workbook-level cross-sheet rules ---
-        // Skip a rule if any sheet it references is absent AND optional (not required).
+        // Skip a rule if any referenced sheet is not required. "Not required" covers:
+        //   - the sheet is absent, OR
+        //   - the sheet is present but declared optional via `required_if_listed_in`
+        //     and not listed in the referenced index column (dynamic rule → false).
+        // A plain `required: false` sheet with no dynamic rule is still validated when
+        // present, so it does not trigger the skip.
         if (rules.getWorkbookRules() != null) {
             for (WorkbookRule wbRule : rules.getWorkbookRules()) {
                 Set<String> referencedSheets = extractReferencedSheets(wbRule);
                 boolean skip = false;
                 for (String refSheet : referencedSheets) {
-                    if (store.getSheet(refSheet) == null) {
-                        SheetRules refRules = sheetRulesFor(rules, refSheet);
-                        if (!isSheetRequired(refSheet, refRules, index)) {
-                            log.info("Skipping workbook_rule referencing optional absent sheet '{}'", refSheet);
-                            skip = true;
-                            break;
-                        }
+                    SheetRules refRules = sheetRulesFor(rules, refSheet);
+                    if (isSheetRequired(refSheet, refRules, index)) continue;
+
+                    boolean absent = store.getSheet(refSheet) == null;
+                    boolean gatedByIndex = refRules != null
+                            && refRules.getRequired_if_listed_in() != null;
+                    if (absent || gatedByIndex) {
+                        log.info("Skipping workbook_rule referencing sheet '{}' (absent={}, gatedByIndex={})",
+                                refSheet, absent, gatedByIndex);
+                        skip = true;
+                        break;
                     }
                 }
                 if (skip) continue;
@@ -1087,6 +1098,23 @@ public class CiqValidationEngine {
         if (rule.getSetMatch() != null)
             return "set_match: " + rule.getSetMatch().getSource().getSheet()
                     + " \u2194 " + rule.getSetMatch().getTarget().getSheet();
+        if (rule.getContiguousSequence() != null) {
+            ContiguousSequenceRule r = rule.getContiguousSequence();
+            return "contiguous_sequence: " + r.getSheet() + "." + r.getColumn()
+                    + " partitionBy " + r.getPartitionBy();
+        }
+        if (rule.getSet() != null) {
+            SetRule r = rule.getSet();
+            String fromCol  = r.getFrom() != null ? r.getFrom().getSheet() + "." + r.getFrom().getColumn() : "?";
+            String toCol    = r.getTo()   != null ? r.getTo().getSheet()   + "." + r.getTo().getColumn()   : "?";
+            String whereDesc = (r.getFrom() != null && r.getFrom().getWhere() != null)
+                    ? " (where " + r.getFrom().getWhere() + ")" : "";
+            String partDesc = (r.getFrom() != null && r.getFrom().getPartitionBy() != null)
+                    ? " partitionBy " + r.getFrom().getPartitionBy() : "";
+            String arrow = r.isBidirectional() ? " \u2194 " : " \u2192 ";
+            return "set: " + fromCol + whereDesc + partDesc + arrow + toCol
+                    + (r.isBidirectional() ? " (bidirectional)" : "");
+        }
         return "unknown workbook rule";
     }
 }
