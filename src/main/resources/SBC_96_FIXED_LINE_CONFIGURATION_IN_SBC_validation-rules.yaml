@@ -25,6 +25,11 @@ settings:
 # -----------------------------------------------------------------------------
 workbook_rules:
 
+  - contiguous_sequence:
+      sheet: Index
+      partitionBy: [NodeGroup, CRGROUP]
+      column: CONFIG_SEQ
+
   # Index.NODE must exist in IP.NODE
   - subset:
       from: Index.NodeGroup
@@ -100,80 +105,8 @@ workbook_rules:
 
 
 
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFTargetList"
-      to: CRFTargetList.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = PeeringSDPProfileTable"
-      to: PeeringSDPProfileTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = BorderGatewayPublishedRealmTable"
-      to: BorderGatewayPublishedRealmTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = IbcfVirtualNetworkTable"
-      to: IbcfVirtualNetworkTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = ServiceProfileTable"
-      to: ServiceProfileTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = PFEDPortTable"
-      to: PFEDPortTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = PublishedRealmTable"
-      to: PublishedRealmTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = IbcfSipProfileTable"
-      to: IbcfSipProfileTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = IbcfTrunkGroupTable"
-      to: IbcfTrunkGroupTable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFDATable"
-      to: CRFDATable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFRoutePlan"
-      to: CRFRoutePlan.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFRoutePriorityList"
-      to: CRFRoutePriorityList.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFRouteProfile"
-      to: CRFRouteProfile.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFTreatment"
-      to: CRFTreatment.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = CRFHostURITable"
-      to: CRFHostURITable.CONFIG_SEQ
-  - superset:
-      from: Index.CONFIG_SEQ
-      where: "TABLES = IbcfIngressTrunkGroupMappingTable"
-      to: IbcfIngressTrunkGroupMappingTable.CONFIG_SEQ
-
-
-  # ---------------------------------------------------------------------------
-  # Partition-scoped subset (`set`):
-  # For each (NodeGroup, CRGROUP) group in Index that targets a table, every
-  # CONFIG_SEQ step listed must appear in that table's rows for the same
-  # NodeGroup. Catches the "Index lists Step2 but the table sheet only has
-  # Step1" case that a plain superset misses.
-  # ---------------------------------------------------------------------------
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -184,6 +117,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -194,6 +128,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -204,6 +139,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -214,6 +150,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -224,6 +161,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -234,6 +172,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -244,6 +183,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -254,6 +194,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -264,6 +205,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -274,6 +216,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -284,6 +227,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -294,6 +238,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -304,6 +249,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -314,6 +260,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -324,6 +271,7 @@ workbook_rules:
         column: CONFIG_SEQ
         partitionBy: [NodeGroup]
   - set:
+      bidirectional: true
       from:
         sheet: Index
         column: CONFIG_SEQ
@@ -356,9 +304,11 @@ sheets:
         type: string
         pattern: "^CR[0-9]+$"
 
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       TABLES:
         required: true
@@ -380,6 +330,10 @@ sheets:
         consolidate_separator: ";"
         minOnePerGroup:
             groupByColumn: CRGroup
+            
+    rules:
+      
+      - unique_key: [NodeGroup, CRGROUP, CONFIG_SEQ, TABLES]
 
 
   # ---------------------------------------------------------------------------
@@ -396,13 +350,15 @@ sheets:
       NIAM NAME:
         required: true
         type: string
-        unique: false
+        unique: true
         description: "NIAM ID for the hostname - must be unique to each node"
       
       NodeGroup:
-        required: false
+        required: true
         type: string
-
+        
+    rules:
+      - unique_key: [NODE, NodeGroup]
   # ---------------------------------------------------------------------------
   # Sheet: CRFTargetList
   # ---------------------------------------------------------------------------
@@ -415,9 +371,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
         
       Action:
         required: true
@@ -429,7 +387,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Operation level"
 
@@ -448,21 +411,17 @@ sheets:
         description: "ID of the table"
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
         description: "Logical name of the table"
 
       Record.TARGET_LIST_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 100000
-        uniqueWhen:
-          column: SubAction
-          operator: equals
-          value: RECORD
         description: "The CRF Target List Record ID; must be unique across rows where SubAction = RECORD"
 
       Record.DESCRIPTION:
@@ -505,13 +464,6 @@ sheets:
           allowedValues: [0]
         description: "Required when Action is CREATE; range 1..1024, 5001..7048, or 0"
 
-      Record.CRFTargetListEntry.TRANSPORT_TYPE:
-        required: false
-        type: string
-        allowedValues: [UDP, TCP, SCTP, TLS, ANY]
-        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
-        description: "Required when Action is CREATE"
-
       Record.CRFTargetListEntry.VN_ID:
         required: false
         type: integer
@@ -519,8 +471,12 @@ sheets:
         maxValue: 4096
         allowedValuesWhen:
         - column: Record.TARGET_TYPE
-          operator: "notEquals"
-          value: "IBCF Trunk Group"
+          operator: equals
+          value: "Type 1"
+          allowedValues: [0]
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 2"
           allowedValues: [0]
         description: "Virtual Network ID; must be 0 when TARGET_TYPE is not IBCF Trunk Group"
 
@@ -531,8 +487,12 @@ sheets:
         maxValue: 32
         allowedValuesWhen:
         - column: Record.TARGET_TYPE
-          operator: "notEquals"
-          value: "IBCF Trunk Group"
+          operator: equals
+          value: "Type 1"
+          allowedValues: [0]
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 2"
           allowedValues: [0]
         description: "Trunk Group ID; must be 0 when TARGET_TYPE is not IBCF Trunk Group"
 
@@ -572,64 +532,138 @@ sheets:
 
     rules:
       
-      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID, Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
-      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.TARGET_LIST_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID, Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
       - require: '"Record.CRFTargetListEntry.TARGET_ID"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - require: '"Record.CRFTargetListEntry.TRANSPORT_TYPE"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
       - require: '"Record.CRFTargetListEntry.VN_ID"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.CRFTargetListEntry.TG_ID"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.CRFTargetListEntry.ORDER"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.CRFTargetListEntry.PRIORITY"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.CRFTargetListEntry.WEIGHT"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
-      - forbid: '"Record.LOCATION"'
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+              
+      - forbid: ActionKey
         when:
-          column: Action
-          operator: equals
-          value: MODIFY
-      - forbid: '"Record.TARGET_TYPE"'
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.TARGET_LIST_ID"'
         when:
-          column: Action
-          operator: equals
-          value: MODIFY
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
       
 
   # ---------------------------------------------------------------------------
@@ -643,10 +677,11 @@ sheets:
       NodeGroup:
         required: true
         type: string
-
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -657,13 +692,18 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
         type: string
-        allowedValues: [Record.CodecBandwidth, Record.MsrpBandwidth]
+        allowedValues: [Record.CodecBandwidth, Record.MsrpBandwidth, Record.GoldenCodecSet, Record.AuxiliaryCodecSet, Record.PreferredAMRNBModeSet, Record.PreferredAMRWBModeSet]
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ID:
@@ -673,13 +713,13 @@ sheets:
         maxValue: 1630
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PROFILEID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 2048
@@ -904,6 +944,12 @@ sheets:
         maxValue: 20480
         description: "Required when Action is CREATE"
 
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
       Record.MODE_CHANGE_PERIOD:
         required: false
         type: string
@@ -1093,28 +1139,185 @@ sheets:
         description: "Required when Action is CREATE; applicable when SDP validation is enabled"
 
     rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, ActionKey, Record.PROFILEID, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, ActionKey, Record.PROFILEID, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       
-      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
-      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PROFILEID]
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+          
+      - require: '"Record.GoldenCodecSet.GOLDEN_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.GoldenCodecSet
+
+      - require: '"Record.GoldenCodecSet.GOLDEN_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.GoldenCodecSet
+
+      - require: '"Record.AuxiliaryCodecSet.AUXILIARY_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.AuxiliaryCodecSet
+
+      - require: '"Record.AuxiliaryCodecSet.AUXILIARY_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.AuxiliaryCodecSet
+
+      - require: '"Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRNBModeSet
+      
+      - require: '"Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRWBModeSet
+
+      - require: '"Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRNBModeSet
+      
+      - require: '"Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRWBModeSet 
 
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
       - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.MsrpBandwidth
+
+      - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.MsrpBandwidth
+
       - require: '"Record.CodecBandwidth.CODEC"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.CodecBandwidth
+
+      - require: '"Record.CodecBandwidth.CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.CodecBandwidth
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PROFILEID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
       
 
-  # ---------------------------------------------------------------------------
+  # --------------------------------------------------------------------------- 
   # Sheet: BorderGatewayPublishedRealmTable (Excel sheet name is truncated to 31 chars)
   # ---------------------------------------------------------------------------
   BorderGatewayPublishedRealmTable:
@@ -1127,10 +1330,11 @@ sheets:
       NodeGroup:
         required: true
         type: string
-        
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -1141,7 +1345,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -1158,13 +1367,13 @@ sheets:
         description: "ID of the table"
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.BORDER_GATEWAY:
-        required: true
+        required: false
         type: integer
         minValue: 1024
         maxValue: 1346
@@ -1184,11 +1393,22 @@ sheets:
           column: SubAction
           operator: equals
           value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
       - require: '"Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID"'
         when:
           column: SubAction
@@ -1196,7 +1416,59 @@ sheets:
           value: SUBRECORD
       
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.BORDER_GATEWAY, Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
       - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.BORDER_GATEWAY]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.BORDER_GATEWAY]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.BORDER_GATEWAY"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
 
   # ---------------------------------------------------------------------------
@@ -1209,11 +1481,12 @@ sheets:
 
       NodeGroup:
         required: true
-        type: string
-        
+        type: string        
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -1224,7 +1497,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -1238,13 +1516,13 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.VN_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 4096
@@ -1416,6 +1694,24 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -1423,26 +1719,36 @@ sheets:
           operator: equals
           value: SUBRECORD
 
-      - forbid: '"Record.IPSEC_SA_PROFILE_ID"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
-      - forbid: '"Record.REMOTE_IPSEC_TUNNEL_GW_ADDR"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
-      - forbid: '"Record.IKE_REMOTE_SERVER_PORT"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.VN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
           
   # ---------------------------------------------------------------------------
   # Sheet: ServiceProfileTable
@@ -1455,10 +1761,11 @@ sheets:
       NodeGroup:
         required: true
         type: string
-        
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -1469,7 +1776,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -1483,12 +1795,12 @@ sheets:
         maxValue: 2051
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
 
       Record.POLICY_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 2048
@@ -1701,6 +2013,24 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -1711,8 +2041,33 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.POLICY_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: PFEDPortTable
@@ -1724,11 +2079,12 @@ sheets:
 
       NodeGroup:
         required: true
-        type: string
-        
+        type: string       
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -1739,7 +2095,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -1753,18 +2114,18 @@ sheets:
         maxValue: 99
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PFED_ID:
-        required: true
+        required: false
         type: string
         description: "Must match /PFEDServiceTable/Record/PFED_ID"
 
       Record.PORT_NAME:
-        required: true
+        required: false
         type: string
         maxLength: 4
         pattern: "[a-z0-9]{4}"
@@ -1816,7 +2177,7 @@ sheets:
       Record.TLS_SERVER_PORT:
         required: false
         type: integer
-        allowedValues: [0, 80, 443]
+        pattern: '^(0|80|443|102[4-9]|10[3-9][0-9]|1[1-9][0-9]{2}|[2-9][0-9]{3}|[12][0-9]{4}|3[01][0-9]{3}|32[0-6][0-9]{2}|327[0-5][0-9]|3276[0-7])$'
         description: "Required when Action is CREATE"
         aliases:
           - TLS_SERVER_PORT
@@ -1906,22 +2267,63 @@ sheets:
         description: "0 = SIP message screening not configured; 1..600 = Filter Set ID from SIP Filter Set table"
 
     rules:
-
-      - require: ActionKey
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PFED_ID, Record.PORT_NAME]
         when:
-          column: SubAction
-          operator: equals
-          value: SUBRECORD
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.PFED_ID, Record.PORT_NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
 
       - compare: '"Record.TLS_SERVER_PORT" notEquals "Record.EXTERNAL_PORT_NUMBER"'
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PFED_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.PORT_NAME"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
   # ---------------------------------------------------------------------------
   # Sheet: PublishedRealmTable
   # ---------------------------------------------------------------------------
@@ -1933,10 +2335,11 @@ sheets:
       NodeGroup:
         required: true
         type: string
-        
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -1947,7 +2350,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -1961,13 +2369,13 @@ sheets:
         maxValue: 999
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PUBLISHED_REALM_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 2048
@@ -2059,22 +2467,67 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_NAME]
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+          
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - require: '"Record.PUBLISHED_REALM_NAME"'
-        when:
-          column: Action
-          operator: equals
-          value: CREATE
+
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PUBLISHED_REALM_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfSipProfileTable
@@ -2088,9 +2541,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -2101,7 +2556,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -2115,13 +2575,13 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PROFILE_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 2048
@@ -2263,13 +2723,6 @@ sheets:
         type: string
         maxLength: 64
         pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
-        description: "Required when Action is CREATE"
-
-      Record.REMOVE_HEADERS:
-        required: false
-        type: string
-        allowedValues: ["",P-Access-Network-Info, P-Preferred-Service, P-Asserted-Service, P-Charging-Function-Addresses, P-Served-User, P-DCS-Billing-Info, P-Early-Media, P-Private-Network-Indication, P-Profile-Key, Feature-Caps, Priority, Restoration-Info, Relayed-Charge, Service-Interact-Info, Cellular-Network-Info, Resource-Priority, Diversion, Remote-Party-ID, P-Called-Party-ID, P-Charge-Info, Alert-Info, Accept-Contact, User-to-User, Reason]
-        dropdownDisabled: true
         description: "Required when Action is CREATE"
 
       Record.SIP_ERROR_TREATMENT_TABLE_ID:
@@ -2432,6 +2885,24 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -2442,8 +2913,33 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PROFILE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfTrunkGroupTable
@@ -2457,9 +2953,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -2470,12 +2968,19 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
         required: false
         type: string
+        allowedValues: [Record.REMOTEIPADDRESSList]
+        dropdownDisabled: true   
 
       ID:
         required: true
@@ -2484,18 +2989,18 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.VN_ID:
-        required: true
+        required: false
         type: integer
         description: "Must equal IbcfVirtualNetworkTable.VN_ID"
 
       Record.TG_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 32
@@ -2721,7 +3226,11 @@ sheets:
         allowedRanges:
           - { min: 0, max: 0 }
           - { min: 1, max: 50 }
-        description: "Required when Action is CREATE; 0 = not configured"
+        allowedValuesWhen:
+        - column: Record.SIPI_PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [0]
 
       Record.IPSEC_REMOTE_SERVER_PORT:
         required: false
@@ -2762,6 +3271,26 @@ sheets:
         description: "Required when Action is CREATE"
 
     rules:
+      - require: '"Record.REMOTEIPADDRESSList.REMOTEIPADDRESS"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.REMOTEIPADDRESSList
+
+      - require: '"Record.REMOTEIPADDRESSList.REMOTEIPADDRESS"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.REMOTEIPADDRESSList
+
       - require: ActionKey
         when:
           column: SubAction
@@ -2771,10 +3300,38 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
-      
-      - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID, Record.TG_ID]
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.VN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.TG_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFDATable
@@ -2788,9 +3345,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -2801,7 +3360,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -2815,13 +3379,13 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.DIGIT_STRING:
-        required: true
+        required: false
         type: string
         maxLength: 20
         pattern: '^\+?[0-9A-Fa-f*#x]*&?$'
@@ -2863,6 +3427,24 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.DIGIT_STRING]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.DIGIT_STRING]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -2873,8 +3455,33 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.DIGIT_STRING"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRoutePlan
@@ -2888,9 +3495,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -2901,7 +3510,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -2915,13 +3529,13 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.RT_PLAN_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 1024
@@ -2960,6 +3574,24 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.RT_PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.RT_PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -2970,8 +3602,33 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.RT_PLAN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRoutePriorityList
@@ -2985,9 +3642,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -2998,7 +3657,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD, SUBRECORD]
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -3014,13 +3678,13 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.PRIORITY_LIST_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 4096
@@ -3060,8 +3724,45 @@ sheets:
 
     rules:
       
-      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PRIORITY_LIST_ID, Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PRIORITY_LIST_ID, Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
       - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PRIORITY_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PRIORITY_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
 
       - require: ActionKey
         when:
@@ -3070,19 +3771,62 @@ sheets:
           value: SUBRECORD
       - require: '"Record.CRFRoutePriorityListEntry.PLAN_TYPE"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.CRFRoutePriorityListEntry.PLAN_ID"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
       - require: '"Record.CRFRoutePriorityListEntry.PLAN_ID"'
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
+      - require: '"Record.CRFRoutePriorityListEntry.PLAN_TYPE"'
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PRIORITY_LIST_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFRouteProfile
@@ -3096,9 +3840,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -3109,7 +3855,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -3123,15 +3874,14 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.ROUTE_PROFILE_ID:
-        required: true
+        required: false
         type: integer
-        unique: true
         minValue: 1
         maxValue: 2048
 
@@ -3209,6 +3959,24 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.ROUTE_PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.ROUTE_PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -3219,8 +3987,33 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.ROUTE_PROFILE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFTreatment
@@ -3237,6 +4030,7 @@ sheets:
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -3247,7 +4041,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -3261,13 +4060,13 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.TREATMENT_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 100000
@@ -3290,10 +4089,37 @@ sheets:
         required: false
         type: string
         pattern: '^(100000|[1-9][0-9]{0,4}|None|403 Forbidden|404 Not Found|480 Temporarily Not Available|486 Busy Here|500 Internal Error|503 Service Unavailable|CM-Call-Disposition)$'
+        allowedValuesWhen:
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "SIP Error Response"
+          allowedValues: ["403 Forbidden", "404 Not Found", "480 Temporarily Not Available", "486 Busy Here", "500 Internal Error"]
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "Continue With"
+          allowedValues: [CM-Call-Disposition]
         description: "Required when Action is CREATE; value depends on TREATMENT_TYPE"
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.TREATMENT_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TREATMENT_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
@@ -3303,15 +4129,44 @@ sheets:
 
       - require: '"Record.TREATMENT_TYPE"'
         when:
-          column: Action
-          operator: equals
-          value: CREATE
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.TREATMENT_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: CRFHostURITable
@@ -3324,10 +4179,11 @@ sheets:
       NodeGroup:
         required: true
         type: string
-        
+             
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -3338,7 +4194,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -3352,7 +4213,7 @@ sheets:
         maxValue: 6000
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
@@ -3395,10 +4256,70 @@ sheets:
       - forbid: ActionKey
         when:
           column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - require: '"Record.NETMASK"'
+        when:
+          column: Record.HOST_URI_TYPE
           operator: equals
-          value: Record
+          value: IPv4
+
+      - require: '"Record.NETMASK"'
+        when:
+          column: Record.HOST_URI_TYPE
+          operator: equals
+          value: IPv6
 
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.HOST_URI, Record.HOST_URI_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.HOST_URI, Record.HOST_URI_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.HOST_URI"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.HOST_URI_TYPE"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 
   # ---------------------------------------------------------------------------
   # Sheet: IbcfIngressTrunkGroupMappingTable (Excel sheet name is truncated to 31 chars)
@@ -3414,9 +4335,11 @@ sheets:
         required: true
         type: string
         
+      
       CONFIG_SEQ:
         required: true
         type: string
+        pattern: '^Step\d+$'
 
       Action:
         required: true
@@ -3427,7 +4350,12 @@ sheets:
       SubAction:
         required: true
         type: string
-        allowedValues: [RECORD]
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
 
       ActionKey:
@@ -3441,13 +4369,13 @@ sheets:
         maxValue: 1628
 
       NAME:
-        required: false
+        required: true
         type: string
         maxLength: 19
         pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
 
       Record.POLICY_ID:
-        required: true
+        required: false
         type: integer
         minValue: 1
         maxValue: 10000
@@ -3455,6 +4383,7 @@ sheets:
       Record.IBCF_VN_ID:
         required: false
         type: integer
+        minValue: -32768
         maxValue: 32767
         description: "Required when Action is CREATE; must match IbcfVirtualNetworkTable.VN_ID"
 
@@ -3474,7 +4403,7 @@ sheets:
       Record.PORT:
         required: false
         type: string
-        pattern: "^(NOTPRESENT|DEFAULT|[1-9][0-9]{0,4})$"
+        pattern: '^(NOTPRESENT|DEFAULT|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$'
         allowedValuesWhen:
         - column: Record.ADDRESS
           operator: equals
@@ -3486,7 +4415,7 @@ sheets:
         required: false
         type: string
         maxLength: 64
-        allowedValues: [NOTPRESENT]
+        pattern: '^(NOTPRESENT|[a-zA-Z0-9\*#\.,\-+''~`!@$%^:;=(){}\[\]?"''&<>/_|\\ ]*)$'
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         description: "Required when Action is CREATE; TGRP or NOTPRESENT"
 
@@ -3494,11 +4423,15 @@ sheets:
         required: false
         type: string
         maxLength: 64
-        allowedValues: [NOTPRESENT]
+        pattern: '^(NOTPRESENT|[a-zA-Z0-9\*#\.,\-+''~`!@$%^:;=(){}\[\]?"''&<>/_|\\ ]*)$'
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.CFED_PORT
           operator: notEquals
+          value: "NOTPRESENT"
+          allowedValues: [NOTPRESENT]
+        - column: Record.RFC4904_TGRP
+          operator: equals
           value: "NOTPRESENT"
           allowedValues: [NOTPRESENT]
         description: "Required when Action is CREATE; Trunk-Context or NOTPRESENT"
@@ -3506,7 +4439,7 @@ sheets:
       Record.CFED_PORT:
         required: false
         type: string
-        allowedValues: [NOTPRESENT]
+        pattern: '^(NOTPRESENT|.{4})$'
         dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
         allowedValuesWhen:
         - column: Record.RFC4904_TGRP
@@ -3517,38 +4450,61 @@ sheets:
 
     rules:
       - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
 
       - require: ActionKey
         when:
           column: SubAction
           operator: equals
           value: SUBRECORD
-      - forbid: '"Record.ADDRESS"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
-      - forbid: '"Record.PORT"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
-      - forbid: '"Record.RFC4904_TGRP"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
-      - forbid: '"Record.RFC4904_TRUNK_CONTEXT"'
-        when:
-          column: Action
-          operator: equals
-          value: MODIFY
 
       - forbid: ActionKey
         when:
           column: SubAction
-          operator: equals
-          value: Record
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.POLICY_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
 outputs:
   # Distinct CR group identifiers from the Index sheet
   CR_LIST:
