@@ -559,15 +559,23 @@ public class CiqValidationEngine {
         Set<String> presentNorm = new java.util.HashSet<>();
         for (String c : presentColumns) presentNorm.add(c.replace("_", "").toLowerCase());
 
-        for (String configuredCol : sheetRules.getColumns().keySet()) {
+        for (Map.Entry<String, ColumnRule> entry : sheetRules.getColumns().entrySet()) {
+            String configuredCol = entry.getKey();
+            ColumnRule colRule   = entry.getValue();
             if (!presentNorm.contains(configuredCol.replace("_", "").toLowerCase())) {
                 missing.add(configuredCol);
-                result.setStatus("FAILED");
-                result.addError(new ValidationError(0, configuredCol, null,
-                        "Column '" + configuredCol + "' is not present in sheet '"
-                        + sheet.getSheetName() + "'"));
-                log.warn("Sheet '{}': configured column '{}' not found in header",
-                        sheet.getSheetName(), configuredCol);
+                boolean columnRequired = colRule.isRequired() || colRule.getRequiredWhen() != null;
+                if (columnRequired) {
+                    result.setStatus("FAILED");
+                    result.addError(new ValidationError(0, configuredCol, null,
+                            "Column '" + configuredCol + "' is not present in sheet '"
+                            + sheet.getSheetName() + "'"));
+                    log.warn("Sheet '{}': required column '{}' not found in header",
+                            sheet.getSheetName(), configuredCol);
+                } else {
+                    log.info("Sheet '{}': optional column '{}' not found in header — skipping",
+                            sheet.getSheetName(), configuredCol);
+                }
             }
         }
         return missing;
