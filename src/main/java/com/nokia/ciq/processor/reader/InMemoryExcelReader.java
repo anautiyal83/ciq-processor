@@ -765,10 +765,19 @@ public class InMemoryExcelReader {
             }
         }
 
+        // Excel truncates sheet names to 31 chars. A prefix relationship is only a genuine
+        // truncation when the shorter (candidate-truncated) name is at that 31-char limit —
+        // otherwise a short present sheet like "SipFilter" would wrongly match an absent
+        // longer table such as "SipFilterBodyRule", binding it to the wrong sheet's data.
+        final int EXCEL_SHEET_NAME_LIMIT = 31;
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
             String sheetName = wb.getSheetName(i);
-            if (tableName.startsWith(sheetName) || sheetName.startsWith(tableName)) {
-                log.debug("Matched table '{}' to sheet '{}' (truncation)", tableName, sheetName);
+            boolean sheetIsTruncatedTable = tableName.startsWith(sheetName)
+                    && sheetName.length() >= EXCEL_SHEET_NAME_LIMIT;
+            boolean tableIsTruncatedSheet = sheetName.startsWith(tableName)
+                    && tableName.length() >= EXCEL_SHEET_NAME_LIMIT;
+            if (sheetIsTruncatedTable || tableIsTruncatedSheet) {
+                log.debug("Matched table '{}' to sheet '{}' (31-char truncation)", tableName, sheetName);
                 return wb.getSheetAt(i);
             }
         }
