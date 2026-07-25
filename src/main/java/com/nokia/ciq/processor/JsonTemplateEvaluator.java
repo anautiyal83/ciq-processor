@@ -120,7 +120,7 @@ public class JsonTemplateEvaluator {
             // always the first non-blank across all scoped rows.
             if (ctx.currentRow != null) {
                 String fromRow = ctx.currentRow.get(colName);
-                if (fromRow != null && !fromRow.trim().isEmpty()) return fromRow.trim();
+                if (fromRow != null && !fromRow.trim().isEmpty()) return fromRow;
             }
             return firstNonBlank(sheetName, colName, ctx);
         }
@@ -144,7 +144,7 @@ public class JsonTemplateEvaluator {
         for (CiqRow row : resolveRows(sheet, ctx)) {
             if (matchesAllConditions(condExpr, row, ctx)) {
                 String v = row.get(targetCol);
-                if (v != null && !v.trim().isEmpty()) return v.trim();
+                if (v != null && !v.trim().isEmpty()) return v;
             }
         }
         return null;
@@ -246,7 +246,7 @@ public class JsonTemplateEvaluator {
             if (!excluded.contains(normalizeColName(e.getKey()))) {
                 String val = e.getValue();
                 if (val != null && !val.trim().isEmpty())
-                    result.put(e.getKey(), val.trim());
+                    result.put(e.getKey(), val);
             }
         }
         return result;
@@ -277,7 +277,7 @@ public class JsonTemplateEvaluator {
             for (CiqRow row : resolveRows(sheet, ctx)) {
                 if (matchesAllConditions(condExpr, row, ctx)) {
                     String v = row.get(targetCol);
-                    if (v != null && !v.trim().isEmpty()) results.add(v.trim());
+                    if (v != null && !v.trim().isEmpty()) results.add(v);
                 }
             }
         } else if (expr.contains(".")) {
@@ -286,7 +286,7 @@ public class JsonTemplateEvaluator {
             String col   = stripQuotes(expr.substring(dot + 1).trim());
             for (CiqRow row : resolveRows(sheet, ctx)) {
                 String v = row.get(col);
-                if (v != null && !v.trim().isEmpty()) results.add(v.trim());
+                if (v != null && !v.trim().isEmpty()) results.add(v);
             }
         }
         return results;
@@ -392,8 +392,8 @@ public class JsonTemplateEvaluator {
         for (CiqRow row : resolveRows(srcSheet, ctx)) {
             if (whereClause != null && !matchesAllConditions(whereClause, row, ctx)) continue;
             String v = row.get(srcCol);
-            if (v != null && !v.trim().isEmpty() && !values.contains(v.trim()))
-                values.add(v.trim());
+            if (v != null && !v.trim().isEmpty() && !values.contains(v))
+                values.add(v);
         }
 
         List<Object> result = new ArrayList<>();
@@ -470,7 +470,7 @@ public class JsonTemplateEvaluator {
         String normalizedCol = stripQuotes(col);
         for (CiqRow row : resolveRows(sheetName, ctx)) {
             String v = row.get(normalizedCol);
-            if (v != null && !v.trim().isEmpty()) return v.trim();
+            if (v != null && !v.trim().isEmpty()) return v;
         }
         return null;
     }

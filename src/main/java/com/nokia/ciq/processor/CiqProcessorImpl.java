@@ -492,8 +492,8 @@ public class CiqProcessorImpl implements CiqProcessor {
         List<String> values = new ArrayList<>();
         for (CiqRow row : sheet.getRows()) {
             String v = row.get(actualCol);
-            if (v != null && !v.trim().isEmpty() && !values.contains(v.trim()))
-                values.add(v.trim());
+            if (v != null && !v.trim().isEmpty() && !values.contains(v))
+                values.add(v);
         }
         return values;
     }
