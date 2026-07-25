@@ -240,14 +240,15 @@ public class JsonTemplateEvaluator {
                 excluded.add(normalizeColName(String.valueOf(col).trim()));
         }
 
-        // Build result map from current row's data, skipping excluded columns
+        // Build result map from current row's data, skipping excluded columns.
+        // Every remaining key is emitted - a null or blank value becomes an empty string ""
+        // so that columns declared in the validation rules but missing/blank in the sheet still
+        // appear in the JSON (the reader backfills declared-but-absent columns as keys).
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : ctx.currentRow.getData().entrySet()) {
-            if (!excluded.contains(normalizeColName(e.getKey()))) {
-                String val = e.getValue();
-                if (val != null && !val.trim().isEmpty())
-                    result.put(e.getKey(), val.trim());
-            }
+            if (excluded.contains(normalizeColName(e.getKey()))) continue;
+            String val = e.getValue();
+            result.put(e.getKey(), (val == null || val.trim().isEmpty()) ? "" : val.trim());
         }
         return result;
     }

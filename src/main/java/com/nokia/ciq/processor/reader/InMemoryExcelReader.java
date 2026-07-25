@@ -158,7 +158,10 @@ public class InMemoryExcelReader {
                 }
                 Set<String> cols = configuredColumns(rules, tableName);
                 WorkbookSettings sheetSettings = effectiveSettings(rules, tableName);
-                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings);
+                // emitAllColumns = true: this table is emitted to JSON, so the output carries every
+                // column physically present in the sheet (declared or not). Columns declared in the
+                // rules but absent from the sheet are NOT emitted.
+                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings, false, true);
                 sheets.put(tableName, ciqSheet);
                 log.info("Loaded table '{}': {} rows", tableName, ciqSheet.getRows().size());
             }
@@ -523,7 +526,7 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings) {
-        return readSheet(sheet, tableName, columnsToRead, settings, false);
+        return readSheet(sheet, tableName, columnsToRead, settings, false, false);
     }
 
     /**
@@ -537,6 +540,22 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings, boolean stripTrailingBlanks) {
+        return readSheet(sheet, tableName, columnsToRead, settings, stripTrailingBlanks, false);
+    }
+
+    /**
+     * @param emitAllColumns when {@code true}, each row's data map is populated with every column
+     *                       physically present in the sheet header - whether or not it has a
+     *                       validation-rules entry - so the generated JSON reflects the full CIQ
+     *                       sheet. Columns declared in the rules but ABSENT from the sheet are NOT
+     *                       emitted. Blank cells of present columns are stored as {@code null} and
+     *                       surface in the JSON as empty strings (see
+     *                       JsonTemplateEvaluator#buildRowMap). Undeclared columns carry no rules,
+     *                       so the validation engine has nothing to check for them.
+     */
+    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
+                               WorkbookSettings settings, boolean stripTrailingBlanks,
+                               boolean emitAllColumns) {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
@@ -569,15 +588,43 @@ public class InMemoryExcelReader {
         List<String> colNames = new ArrayList<>();
 
         if (columnsToRead != null && !columnsToRead.isEmpty()) {
-            // Only read the configured columns; use YAML names as keys
+            Set<Integer> usedIdx  = new HashSet<>();
+            Set<String>  usedNorm = new HashSet<>();
+            // 1) Declared columns first; use YAML (canonical) names as keys so validation and
+            //    JSON-template references resolve regardless of minor header spelling differences.
             for (String colName : columnsToRead) {
                 int idx = findColumnIndex(headerRow, colName);
                 if (idx >= 0) {
                     colMap.add(new int[]{idx});
                     colNames.add(colName);
+                    usedIdx.add(idx);
+                    usedNorm.add(normalize(colName));
                 } else {
+                    // Declared in the rules but absent from the CIQ sheet: do NOT emit it.
+                    // Only columns physically present in the sheet are written to the JSON.
                     log.warn("Configured column '{}' not found in sheet '{}'", colName, tableName);
                 }
+            }
+            // 2) When full output is requested, also every OTHER non-blank header column present
+            //    in the sheet - whether or not it has a validation-rules entry - so the generated
+            //    JSON reflects the full CIQ sheet. Undeclared columns carry no rules, so the
+            //    validation engine simply has nothing to check for them.
+            if (emitAllColumns) {
+                int extra = 0;
+                for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
+                    String name = getCellString(headerRow.getCell(c));
+                    if (isBlank(name)) continue;
+                    if (usedIdx.contains(c)) continue;
+                    String norm = normalize(name);
+                    if (usedNorm.contains(norm)) continue;   // already added as a declared column
+                    colMap.add(new int[]{c});
+                    colNames.add(name);
+                    usedIdx.add(c);
+                    usedNorm.add(norm);
+                    extra++;
+                }
+                if (extra > 0)
+                    log.info("Sheet '{}': included {} undeclared column(s) in output", tableName, extra);
             }
         } else {
             for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
@@ -588,6 +635,8 @@ public class InMemoryExcelReader {
                 }
             }
         }
+        // colNames holds only columns physically present in the sheet (declared or not), so
+        // checkMissingColumns() still fails required columns that are absent from the sheet.
         ciqSheet.setColumns(colNames);
 
         boolean ignoreBlank = (settings == null) || settings.isIgnoreBlankRows();
