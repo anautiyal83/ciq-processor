@@ -240,9 +240,11 @@ public class JsonTemplateEvaluator {
                 excluded.add(normalizeColName(String.valueOf(col).trim()));
         }
 
-        // Build result map from current row's data, skipping excluded columns
+        // Build result map from current row's data, skipping excluded columns.
+        // getOutputData() returns the untrimmed values when the sheet was read with
+        // settings.trimCellValues: false, so the JSON mirrors the CIQ exactly.
         Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<String, String> e : ctx.currentRow.getData().entrySet()) {
+        for (Map.Entry<String, String> e : ctx.currentRow.getOutputData().entrySet()) {
             if (!excluded.contains(normalizeColName(e.getKey()))) {
                 String val = e.getValue();
                 if (val != null && !val.trim().isEmpty())

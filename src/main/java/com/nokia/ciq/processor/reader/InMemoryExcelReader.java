@@ -640,9 +640,11 @@ public class InMemoryExcelReader {
         ciqSheet.setColumns(colNames);
 
         boolean ignoreBlank = (settings == null) || settings.isIgnoreBlankRows();
-        // settings.trimCellValues: false keeps data-cell whitespace exactly as typed.
-        // Header names are always trimmed - padding there is never meaningful.
-        boolean trimValues = (settings == null) || settings.isTrimEnabled();
+        // settings.trimCellValues: false keeps data-cell whitespace exactly as typed in the
+        // GENERATED JSON, while validation still runs on the trimmed value - otherwise padding
+        // would start breaking pattern/maxLength/allowedValues/unique checks.
+        // Header names are always trimmed; padding there is never meaningful.
+        boolean keepRaw = (settings != null) && !settings.isTrimEnabled();
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) {
@@ -650,14 +652,18 @@ public class InMemoryExcelReader {
                 continue;
             }
             Map<String, String> data = new LinkedHashMap<>();
+            Map<String, String> raw  = keepRaw ? new LinkedHashMap<>() : null;
             boolean hasAnyValue = false;
             for (int i = 0; i < colMap.size(); i++) {
-                String value = getCellString(row.getCell(colMap.get(i)[0]), trimValues);
+                Cell cell = row.getCell(colMap.get(i)[0]);
+                String value = getCellString(cell);                 // trimmed - drives validation
                 data.put(colNames.get(i), value);
+                if (keepRaw) raw.put(colNames.get(i), getCellString(cell, false));
                 if (value != null) hasAnyValue = true;
             }
             if (!hasAnyValue && ignoreBlank) continue;
-            ciqSheet.getRows().add(new CiqRow(r + 1, data));
+            ciqSheet.getRows().add(keepRaw ? new CiqRow(r + 1, data, raw)
+                                           : new CiqRow(r + 1, data));
         }
 
         // Strip trailing all-null rows for structural/metadata sheets (Index, Node_ID) that are
