@@ -107,10 +107,38 @@ public class ValidationRulesConfig {
      */
     private ReportOutputConfig reportOutput;
 
+    /**
+     * Global sentinel values that switch validation OFF for a single cell.
+     *
+     * <p>When a column is declared {@code required: false} and its cell value equals one of
+     * these tokens (trimmed, case-insensitive), every rule written for that column is skipped:
+     * the whole cell-validator chain (type, pattern, allowedValues, min/max, allowedRanges,
+     * crossRef, allowedValuesWhen, custom validators), the {@code unique}/{@code uniqueWhen}
+     * check, {@code minOnePerGroup}, any sheet row rule that references the column, and the
+     * column's contribution to a composite {@code unique_key}.
+     *
+     * <p>Columns declared {@code required: true} are never bypassed - a sentinel placed in a
+     * mandatory column is still validated (and will normally fail), which keeps the marker from
+     * being used to silence genuinely required data.
+     *
+     * <p>YAML key: {@code skipValidationValues}
+     * <pre>
+     * skipValidationValues: [MANO_EMPTY]
+     * </pre>
+     * Omitted or empty (the default) disables the feature entirely, so existing rule files
+     * behave exactly as before.
+     */
+    private List<String> skipValidationValues;
+
     // Getters and setters
 
     public Map<String, SheetRules> getSheets() { return sheets; }
     public void setSheets(Map<String, SheetRules> sheets) { this.sheets = sheets; }
+
+    public List<String> getSkipValidationValues() { return skipValidationValues; }
+    public void setSkipValidationValues(List<String> skipValidationValues) {
+        this.skipValidationValues = skipValidationValues;
+    }
 
     // Schema.yaml extension getters/setters
 
