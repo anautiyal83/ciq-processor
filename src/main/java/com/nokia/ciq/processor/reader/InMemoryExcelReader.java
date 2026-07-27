@@ -640,6 +640,9 @@ public class InMemoryExcelReader {
         ciqSheet.setColumns(colNames);
 
         boolean ignoreBlank = (settings == null) || settings.isIgnoreBlankRows();
+        // settings.trimCellValues: false keeps data-cell whitespace exactly as typed.
+        // Header names are always trimmed - padding there is never meaningful.
+        boolean trimValues = (settings == null) || settings.isTrimEnabled();
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) {
@@ -649,7 +652,7 @@ public class InMemoryExcelReader {
             Map<String, String> data = new LinkedHashMap<>();
             boolean hasAnyValue = false;
             for (int i = 0; i < colMap.size(); i++) {
-                String value = getCellString(row.getCell(colMap.get(i)[0]));
+                String value = getCellString(row.getCell(colMap.get(i)[0]), trimValues);
                 data.put(colNames.get(i), value);
                 if (value != null) hasAnyValue = true;
             }
@@ -989,11 +992,22 @@ public class InMemoryExcelReader {
     // -------------------------------------------------------------------------
 
     private String getCellString(Cell cell) {
+        return getCellString(cell, true);
+    }
+
+    /**
+     * @param trim when {@code false} the raw cell text is returned with leading/trailing
+     *             whitespace intact (driven by {@code settings.trimCellValues: false}).
+     *             Whitespace-only cells still resolve to {@code null} either way, so blank
+     *             detection and required-checks are unaffected.
+     */
+    private String getCellString(Cell cell, boolean trim) {
         if (cell == null) return null;
         switch (cell.getCellType()) {
             case STRING:
-                String s = cell.getStringCellValue().trim();
-                return s.isEmpty() ? null : s;
+                String raw = cell.getStringCellValue();
+                if (raw.trim().isEmpty()) return null;
+                return trim ? raw.trim() : raw;
             case NUMERIC:
                 double d = cell.getNumericCellValue();
                 if (d == Math.floor(d) && !Double.isInfinite(d) && Math.abs(d) < 1e15) {
@@ -1006,8 +1020,9 @@ public class InMemoryExcelReader {
                 try {
                     CellType resultType = cell.getCachedFormulaResultType();
                     if (resultType == CellType.STRING) {
-                        String fs = cell.getStringCellValue().trim();
-                        return fs.isEmpty() ? null : fs;
+                        String fs = cell.getStringCellValue();
+                        if (fs.trim().isEmpty()) return null;
+                        return trim ? fs.trim() : fs;
                     }
                     if (resultType == CellType.NUMERIC) {
                         double fd = cell.getNumericCellValue();
@@ -1084,7 +1099,10 @@ public class InMemoryExcelReader {
                         ? override.getHeaderRow() : global.getHeaderRow());
                 merged.setDataStartRow(override.getDataStartRow() > 0
                         ? override.getDataStartRow() : global.getDataStartRow());
-                merged.setTrimCellValues(override.isTrimCellValues() || global.isTrimCellValues());
+                // Opt-out flag: a per-sheet declaration wins outright (OR would make it
+                // impossible for a sheet to switch trimming off when the global value is true).
+                merged.setTrimCellValues(override.getTrimCellValues() != null
+                        ? override.getTrimCellValues() : global.getTrimCellValues());
                 merged.setIgnoreBlankRows(override.isIgnoreBlankRows());
                 merged.setCaseSensitiveHeaders(
                         override.isCaseSensitiveHeaders() || global.isCaseSensitiveHeaders());
