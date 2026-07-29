@@ -88,22 +88,22 @@ data:
             - RFC4904_TRUNK_CONTEXT
 
  nodeGroups:
-   _each: "DISTINCT INDEX.CRGROUP AS $crg"
-   nodeGroup: "INDEX.NODEGROUP WHERE INDEX.CRGROUP = $crg"
-   crGroup:   $crg
-   email:     "INDEX.EMAIL WHERE INDEX.CRGROUP = $crg"
+   _each: "DISTINCT INDEX.NODEGROUP AS $ng"
+   nodeGroup: $ng
+   crGroup:   "INDEX.CRGROUP WHERE INDEX.NODEGROUP = $ng"
+   email:     "INDEX.EMAIL WHERE INDEX.NODEGROUP = $ng"
    nodes:
-     _each: "IP WHERE IP.NODEGROUP = INDEX.NODEGROUP"
+     _each: "IP WHERE IP.NODEGROUP = $ng"
      node:   IP.NODE
      niamID: "IP.'NIAM NAME'"
    configSequences:
-     _each: "DISTINCT INDEX.CONFIG_SEQ WHERE INDEX.CRGROUP = $crg AS $seq"
+     _each: "DISTINCT INDEX.CONFIG_SEQ WHERE INDEX.NODEGROUP = $ng AS $seq"
      configSeq: $seq
      tables:
-       _each: "DISTINCT INDEX.TABLES WHERE INDEX.CRGROUP = $crg AND INDEX.CONFIG_SEQ = $seq AS $table"
+       _each: "DISTINCT INDEX.TABLES WHERE INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq AS $table"
        table:    $table
-       category: "INDEX.CATEGORY WHERE INDEX.CRGROUP = $crg AND INDEX.CONFIG_SEQ = $seq AND INDEX.TABLES = $table"
+       category: "INDEX.CATEGORY WHERE INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq AND INDEX.TABLES = $table"
        records:
-         _each: "$table WHERE NODEGROUP = INDEX.NODEGROUP AND CONFIG_SEQ = $seq"
+         _each: "$table WHERE NODEGROUP = $ng AND CONFIG_SEQ = $seq"
          data:
            _row: "*"
