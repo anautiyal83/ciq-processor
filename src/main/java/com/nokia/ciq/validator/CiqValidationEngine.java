@@ -241,6 +241,8 @@ public class CiqValidationEngine {
                             }
                             String val = row.get(colName);
                             if (val == null || val.trim().isEmpty()) continue;
+                            // skipValidationValues: sentinel cells take no part in uniqueness
+                            if (isBypassed(cr, val)) continue;
                             if (seen.containsKey(val)) {
                                 result.addError(new ValidationError(row.getRowNumber(), colName, val,
                                         "Duplicate value '" + val + "' in column '" + colName
@@ -284,12 +286,20 @@ public class CiqValidationEngine {
                 }
                 for (CiqRow row : sheet.getRows()) {
                     for (SheetRowRule rowRule : sheetRules.getRules()) {
+                        // skipValidationValues: skip a row rule whose subject column carries
+                        // the sentinel, so no rule "written for that column" fires.
+                        if (isRowRuleBypassed(sheetRules, rowRule, row)) {
+                            log.info("[Skipped] sheet='{}' row={}: row rule '{}' bypassed "
+                                     + "- a referenced column matches skipValidationValues",
+                                    tableName, row.getRowNumber(), rowRuleSummary(rowRule));
+                            continue;
+                        }
                         List<ValidationError> errors = applyRowRule(row, rowRule);
                         for (ValidationError e : errors) result.addError(e);
                     }
                 }
                 // Composite key uniqueness — requires all rows; handled as a separate pass
-                checkCompositeKeys(sheet, sheetRules.getRules(), result);
+                checkCompositeKeys(sheet, sheetRules, sheetRules.getRules(), result);
             }
 
             // Post-row aggregate checks: minOnePerGroup
@@ -439,11 +449,12 @@ public class CiqValidationEngine {
             }
             for (CiqRow row : sheet.getRows()) {
                 for (SheetRowRule rowRule : sheetRules.getRules()) {
+                    if (isRowRuleBypassed(sheetRules, rowRule, row)) continue;
                     List<ValidationError> errors = applyRowRule(row, rowRule);
                     for (ValidationError e : errors) result.addError(e);
                 }
             }
-            checkCompositeKeys(sheet, sheetRules.getRules(), result);
+            checkCompositeKeys(sheet, sheetRules, sheetRules.getRules(), result);
         }
 
         // Post-row aggregate checks: minOnePerGroup
@@ -471,7 +482,8 @@ public class CiqValidationEngine {
      * joined by {@code "\u0000"} (null byte) to avoid false collisions.
      * Rows where ALL key columns are blank are skipped.
      */
-    private void checkCompositeKeys(CiqSheet sheet, List<SheetRowRule> rowRules,
+    private void checkCompositeKeys(CiqSheet sheet, SheetRules sheetRules,
+                                    List<SheetRowRule> rowRules,
                                     SheetValidationResult result) {
         for (SheetRowRule rule : rowRules) {
             List<String> keyCols = rule.getUnique_key();
@@ -484,6 +496,14 @@ public class CiqValidationEngine {
                         && !conditionalRowRuleValidator.evaluateCondition(when, row)) {
                     continue;
                 }
+                // skipValidationValues: a sentinel in any key column takes the row out of the
+                // composite uniqueness check - it is declaring "no value" for part of the key.
+                boolean bypass = false;
+                for (String col : keyCols) {
+                    if (isBypassed(sheetRules, col, row)) { bypass = true; break; }
+                }
+                if (bypass) continue;
+
                 boolean allBlank = true;
                 StringBuilder key = new StringBuilder();
                 for (String col : keyCols) {
@@ -522,7 +542,10 @@ public class CiqValidationEngine {
                 if (groupVal == null || groupVal.trim().isEmpty()) continue;
                 groupFirstRow.putIfAbsent(groupVal, row.getRowNumber());
                 String cellVal = row.get(colName);
-                boolean hasValue = cellVal != null && !cellVal.trim().isEmpty();
+                // skipValidationValues: a sentinel is an explicit "no value", so it does not
+                // satisfy minOnePerGroup - the cell counts as blank here.
+                boolean hasValue = cellVal != null && !cellVal.trim().isEmpty()
+                        && !isBypassed(entry.getValue(), cellVal);
                 groupSatisfied.merge(groupVal, hasValue, Boolean::logicalOr);
             }
             for (Map.Entry<String, Boolean> g : groupSatisfied.entrySet()) {
@@ -669,10 +692,97 @@ public class CiqValidationEngine {
     // Per-cell validation - delegates to the ordered validator chain
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // skipValidationValues - per-cell validation bypass
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns {@code true} when this cell carries one of the globally configured
+     * {@code skipValidationValues} sentinels (e.g. {@code MANO_EMPTY}) AND the column is
+     * declared {@code required: false}.  Such a cell is treated as "explicitly not supplied":
+     * every rule written for the column is skipped for that row.
+     *
+     * <p>Required columns are deliberately never bypassed, so the sentinel cannot be used to
+     * silence a mandatory field.
+     */
+    private boolean isBypassed(ColumnRule rule, String value) {
+        List<String> sentinels = rules.getSkipValidationValues();
+        if (sentinels == null || sentinels.isEmpty()) return false;
+        if (rule == null || rule.isRequired()) return false;
+        if (value == null) return false;
+        String v = value.trim();
+        if (v.isEmpty()) return false;
+        for (String s : sentinels) {
+            if (s != null && v.equalsIgnoreCase(s.trim())) return true;
+        }
+        return false;
+    }
+
+    /** Convenience overload: resolves the column rule from the sheet rules first. */
+    private boolean isBypassed(SheetRules sheetRules, String colName, CiqRow row) {
+        if (sheetRules == null || sheetRules.getColumns() == null) return false;
+        ColumnRule cr = sheetRules.getColumns().get(stripQuotes(colName));
+        if (cr == null) return false;
+        return isBypassed(cr, row.get(stripQuotes(colName)));
+    }
+
+    /** Row rules may quote column names (e.g. '"Record.X"') - strip the wrapping quotes. */
+    private static String stripQuotes(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        if (t.length() >= 2 && t.charAt(0) == '"' && t.charAt(t.length() - 1) == '"')
+            return t.substring(1, t.length() - 1);
+        return t;
+    }
+
+    /** All column names a row rule reads, so the rule can be skipped when any is bypassed. */
+    private static List<String> rowRuleColumns(SheetRowRule r) {
+        List<String> cols = new ArrayList<>();
+        if (r.getRequire() != null) cols.add(stripQuotes(r.getRequire()));
+        if (r.getForbid()  != null) cols.add(stripQuotes(r.getForbid()));
+        if (r.getOne_of()      != null) for (String c : r.getOne_of())      cols.add(stripQuotes(c));
+        if (r.getOnly_one()    != null) for (String c : r.getOnly_one())    cols.add(stripQuotes(c));
+        if (r.getAll_or_none() != null) for (String c : r.getAll_or_none()) cols.add(stripQuotes(c));
+        if (r.getSum()         != null) for (String c : r.getSum())         cols.add(stripQuotes(c));
+        if (r.getEquals()  != null) cols.add(stripQuotes(r.getEquals()));
+        if (r.getCompare() != null) {
+            // "ColA <op> ColB" - take the first and last whitespace-separated tokens
+            String[] parts = r.getCompare().trim().split("\\s+");
+            if (parts.length >= 1) cols.add(stripQuotes(parts[0]));
+            if (parts.length >= 3) cols.add(stripQuotes(parts[parts.length - 1]));
+        }
+        return cols;
+    }
+
+    /**
+     * Returns {@code true} when a row rule should be skipped for this row because one of the
+     * columns it reads carries a {@code skipValidationValues} sentinel.  {@code unique_key}
+     * rules are excluded here - they are handled inside {@link #checkCompositeKeys}.
+     */
+    private boolean isRowRuleBypassed(SheetRules sheetRules, SheetRowRule rule, CiqRow row) {
+        if (rules.getSkipValidationValues() == null
+                || rules.getSkipValidationValues().isEmpty()) return false;
+        if (rule.getUnique_key() != null && !rule.getUnique_key().isEmpty()) return false;
+        for (String col : rowRuleColumns(rule)) {
+            if (col != null && isBypassed(sheetRules, col, row)) return true;
+        }
+        return false;
+    }
+
     private void validateCell(CiqRow row, String colName, ColumnRule rule,
                                CiqIndex index, SheetValidationResult result) {
         String value = row.get(colName);
         String sheet = result.getSheetName();
+
+        // skipValidationValues: an optional column explicitly marked as "no value supplied"
+        // bypasses the entire validator chain for this row.
+        if (isBypassed(rule, value)) {
+            log.info("[Skipped] sheet='{}' row={} col='{}' value='{}': "
+                     + "matches skipValidationValues - all rules bypassed for this cell",
+                    sheet, row.getRowNumber(), colName, value);
+            return;
+        }
+
         log.debug("[Check] sheet='{}' row={} col='{}' value='{}'",
                 sheet, row.getRowNumber(), colName, value);
 

@@ -158,7 +158,10 @@ public class InMemoryExcelReader {
                 }
                 Set<String> cols = configuredColumns(rules, tableName);
                 WorkbookSettings sheetSettings = effectiveSettings(rules, tableName);
-                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings);
+                // emitAllColumns = true: this table is emitted to JSON, so the output carries every
+                // column physically present in the sheet (declared or not). Columns declared in the
+                // rules but absent from the sheet are NOT emitted.
+                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings, false, true);
                 sheets.put(tableName, ciqSheet);
                 log.info("Loaded table '{}': {} rows", tableName, ciqSheet.getRows().size());
             }
@@ -523,7 +526,7 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings) {
-        return readSheet(sheet, tableName, columnsToRead, settings, false);
+        return readSheet(sheet, tableName, columnsToRead, settings, false, false);
     }
 
     /**
@@ -537,6 +540,22 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings, boolean stripTrailingBlanks) {
+        return readSheet(sheet, tableName, columnsToRead, settings, stripTrailingBlanks, false);
+    }
+
+    /**
+     * @param emitAllColumns when {@code true}, each row's data map is populated with every column
+     *                       physically present in the sheet header - whether or not it has a
+     *                       validation-rules entry - so the generated JSON reflects the full CIQ
+     *                       sheet. Columns declared in the rules but ABSENT from the sheet are NOT
+     *                       emitted. Blank cells of present columns are stored as {@code null} and
+     *                       surface in the JSON as empty strings (see
+     *                       JsonTemplateEvaluator#buildRowMap). Undeclared columns carry no rules,
+     *                       so the validation engine has nothing to check for them.
+     */
+    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
+                               WorkbookSettings settings, boolean stripTrailingBlanks,
+                               boolean emitAllColumns) {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
@@ -569,15 +588,43 @@ public class InMemoryExcelReader {
         List<String> colNames = new ArrayList<>();
 
         if (columnsToRead != null && !columnsToRead.isEmpty()) {
-            // Only read the configured columns; use YAML names as keys
+            Set<Integer> usedIdx  = new HashSet<>();
+            Set<String>  usedNorm = new HashSet<>();
+            // 1) Declared columns first; use YAML (canonical) names as keys so validation and
+            //    JSON-template references resolve regardless of minor header spelling differences.
             for (String colName : columnsToRead) {
                 int idx = findColumnIndex(headerRow, colName);
                 if (idx >= 0) {
                     colMap.add(new int[]{idx});
                     colNames.add(colName);
+                    usedIdx.add(idx);
+                    usedNorm.add(normalize(colName));
                 } else {
+                    // Declared in the rules but absent from the CIQ sheet: do NOT emit it.
+                    // Only columns physically present in the sheet are written to the JSON.
                     log.warn("Configured column '{}' not found in sheet '{}'", colName, tableName);
                 }
+            }
+            // 2) When full output is requested, also every OTHER non-blank header column present
+            //    in the sheet - whether or not it has a validation-rules entry - so the generated
+            //    JSON reflects the full CIQ sheet. Undeclared columns carry no rules, so the
+            //    validation engine simply has nothing to check for them.
+            if (emitAllColumns) {
+                int extra = 0;
+                for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
+                    String name = getCellString(headerRow.getCell(c));
+                    if (isBlank(name)) continue;
+                    if (usedIdx.contains(c)) continue;
+                    String norm = normalize(name);
+                    if (usedNorm.contains(norm)) continue;   // already added as a declared column
+                    colMap.add(new int[]{c});
+                    colNames.add(name);
+                    usedIdx.add(c);
+                    usedNorm.add(norm);
+                    extra++;
+                }
+                if (extra > 0)
+                    log.info("Sheet '{}': included {} undeclared column(s) in output", tableName, extra);
             }
         } else {
             for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
@@ -588,9 +635,16 @@ public class InMemoryExcelReader {
                 }
             }
         }
+        // colNames holds only columns physically present in the sheet (declared or not), so
+        // checkMissingColumns() still fails required columns that are absent from the sheet.
         ciqSheet.setColumns(colNames);
 
         boolean ignoreBlank = (settings == null) || settings.isIgnoreBlankRows();
+        // settings.trimCellValues: false keeps data-cell whitespace exactly as typed in the
+        // GENERATED JSON, while validation still runs on the trimmed value - otherwise padding
+        // would start breaking pattern/maxLength/allowedValues/unique checks.
+        // Header names are always trimmed; padding there is never meaningful.
+        boolean keepRaw = (settings != null) && !settings.isTrimEnabled();
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) {
@@ -598,14 +652,18 @@ public class InMemoryExcelReader {
                 continue;
             }
             Map<String, String> data = new LinkedHashMap<>();
+            Map<String, String> raw  = keepRaw ? new LinkedHashMap<>() : null;
             boolean hasAnyValue = false;
             for (int i = 0; i < colMap.size(); i++) {
-                String value = getCellString(row.getCell(colMap.get(i)[0]));
+                Cell cell = row.getCell(colMap.get(i)[0]);
+                String value = getCellString(cell);                 // trimmed - drives validation
                 data.put(colNames.get(i), value);
+                if (keepRaw) raw.put(colNames.get(i), getCellString(cell, false));
                 if (value != null) hasAnyValue = true;
             }
             if (!hasAnyValue && ignoreBlank) continue;
-            ciqSheet.getRows().add(new CiqRow(r + 1, data));
+            ciqSheet.getRows().add(keepRaw ? new CiqRow(r + 1, data, raw)
+                                           : new CiqRow(r + 1, data));
         }
 
         // Strip trailing all-null rows for structural/metadata sheets (Index, Node_ID) that are
@@ -940,11 +998,22 @@ public class InMemoryExcelReader {
     // -------------------------------------------------------------------------
 
     private String getCellString(Cell cell) {
+        return getCellString(cell, true);
+    }
+
+    /**
+     * @param trim when {@code false} the raw cell text is returned with leading/trailing
+     *             whitespace intact (driven by {@code settings.trimCellValues: false}).
+     *             Whitespace-only cells still resolve to {@code null} either way, so blank
+     *             detection and required-checks are unaffected.
+     */
+    private String getCellString(Cell cell, boolean trim) {
         if (cell == null) return null;
         switch (cell.getCellType()) {
             case STRING:
-                String s = cell.getStringCellValue().trim();
-                return s.isEmpty() ? null : s;
+                String raw = cell.getStringCellValue();
+                if (raw.trim().isEmpty()) return null;
+                return trim ? raw.trim() : raw;
             case NUMERIC:
                 double d = cell.getNumericCellValue();
                 if (d == Math.floor(d) && !Double.isInfinite(d) && Math.abs(d) < 1e15) {
@@ -957,8 +1026,9 @@ public class InMemoryExcelReader {
                 try {
                     CellType resultType = cell.getCachedFormulaResultType();
                     if (resultType == CellType.STRING) {
-                        String fs = cell.getStringCellValue().trim();
-                        return fs.isEmpty() ? null : fs;
+                        String fs = cell.getStringCellValue();
+                        if (fs.trim().isEmpty()) return null;
+                        return trim ? fs.trim() : fs;
                     }
                     if (resultType == CellType.NUMERIC) {
                         double fd = cell.getNumericCellValue();
@@ -1035,7 +1105,10 @@ public class InMemoryExcelReader {
                         ? override.getHeaderRow() : global.getHeaderRow());
                 merged.setDataStartRow(override.getDataStartRow() > 0
                         ? override.getDataStartRow() : global.getDataStartRow());
-                merged.setTrimCellValues(override.isTrimCellValues() || global.isTrimCellValues());
+                // Opt-out flag: a per-sheet declaration wins outright (OR would make it
+                // impossible for a sheet to switch trimming off when the global value is true).
+                merged.setTrimCellValues(override.getTrimCellValues() != null
+                        ? override.getTrimCellValues() : global.getTrimCellValues());
                 merged.setIgnoreBlankRows(override.isIgnoreBlankRows());
                 merged.setCaseSensitiveHeaders(
                         override.isCaseSensitiveHeaders() || global.isCaseSensitiveHeaders());
