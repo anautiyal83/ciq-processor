@@ -1,0 +1,2336 @@
+# =============================================================================
+# Validation Rules: ISBC - SDP_PROFILE_MODIFICATION / TG_MODIFICATION
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+#   Validate ISBC SDP Profile / Trunk-Group modification CIQ sheets.
+#   Covers 6 sheets: Index, IP, and 4 record-based configuration tables.
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: true
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# -----------------------------------------------------------------------------
+# Workbook-level cross-sheet rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  - contiguous_sequence:
+      sheet: Index
+      partitionBy: [NodeGroup, CRGROUP]
+      column: CONFIG_SEQ
+
+  # Index.NodeGroup must exist in IP.NodeGroup
+  - subset:
+      from: Index.NodeGroup
+      to: IP.NodeGroup
+
+  # GROUP validation scoped by TABLES column.
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = PeeringSDPProfileTable"
+      to: PeeringSDPProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = IbcfTrunkGroupTable"
+      to: IbcfTrunkGroupTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = IMSACRChargingProfileTable"
+      to: IMSACRChargingProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CdrServiceProfileTable"
+      to: CdrServiceProfileTable.NodeGroup
+
+
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PeeringSDPProfileTable"
+      to:
+        sheet: PeeringSDPProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfTrunkGroupTable"
+      to:
+        sheet: IbcfTrunkGroupTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IMSACRChargingProfileTable"
+      to:
+        sheet: IMSACRChargingProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CdrServiceProfileTable"
+      to:
+        sheet: CdrServiceProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Index
+  # ---------------------------------------------------------------------------
+  Index:
+    required: true
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CRGROUP:
+        required: true
+        description: "CR Number"
+        type: string
+        pattern: "^CR[0-9]+$"
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      TABLES:
+        required: true
+        type: string
+        description: "Table Name of Configuration"
+
+      CATEGORY:
+        required: true
+        type: string
+        allowedValues: [RecordBased, Global]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Category - RecordBased or Global level configuration"
+
+      EMAIL:
+        type: email
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        consolidate_separator: ";"
+        minOnePerGroup:
+            groupByColumn: CRGroup
+
+    rules:
+      - unique_key: [NodeGroup, CRGROUP, CONFIG_SEQ, TABLES]
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IP
+  # ---------------------------------------------------------------------------
+  IP:
+    required: true
+    columns:
+
+      NODE:
+        required: true
+        type: string
+
+      NIAM NAME:
+        required: true
+        type: string
+        description: "NIAM ID for the hostname - must be unique to each node"
+
+      NodeGroup:
+        required: true
+        type: string
+
+    rules:
+      - unique_key: [NODE, NIAM NAME, NodeGroup]
+  # ---------------------------------------------------------------------------
+  # Sheet: PeeringSDPProfileTable
+  # ---------------------------------------------------------------------------
+  PeeringSDPProfileTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.CodecBandwidth, Record.MsrpBandwidth, Record.GoldenCodecSet, Record.AuxiliaryCodecSet, Record.PreferredAMRNBModeSet, Record.PreferredAMRWBModeSet]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1630
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PROFILEID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 128
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-'!$()&><%/=;\\\\ ]*"
+
+      Record.SDP_OFFER_FROM_PEERING_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDP_ANSWER_FROM_PEERING_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDP_OFFER_FROM_CORE_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDP_ANSWER_FROM_CORE_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.GoldenCodecSet.GOLDEN_CODEC:
+        required: false
+        type: string
+        allowedValues: [PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, G726-16, G726-24, G726-32, G726-40, G728, AMR-WB, GSM, GSM-EFR, GSM-HR, G722, OPUS, EVS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.CodecBandwidth.CODEC:
+        required: false
+        type: string
+        allowedValues: [H263-2000, H264, MP4V-ES, PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, G726-16, G726-24, G726-32, G726-40, G728, AMR-WB, GSM, GSM-EFR, GSM-HR, G722, OPUS, EVS, SILK-NB, SILK-MB, SILK-WB, SILK-SWB, iSAC-16, iSAC-32, VP8, t140]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.CodecBandwidth.BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+
+      Record.CodecBandwidth.CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.CodecBandwidth.CODEC_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.DEFAULTAUDIOBANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 510
+
+      Record.DEFAULT_AUDIO_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.DEFAULT_AUDIO_CODEC_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.DEFAULTVIDEOBANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+
+      Record.DEFAULT_VIDEO_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.DEFAULT_VIDEO_CODEC_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.MAXIMUMPACKETTIME:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 255
+
+      Record.AuxiliaryCodecSet.AUXILIARY_CODEC:
+        required: false
+        type: string
+        allowedValues: [CN, DTMF]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDES_SRTP_SUPPORTED:
+        required: false
+        type: string
+        allowedValues: [No, "Non-3GPP SDES-SRTP", "3GPP SDES-SRTP"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.LATCH_4_MEDIA_CONNECTIONS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.RTCP_MUX_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.ICE_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [No, "ICE Lite Support Peering"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SIGNAL_ICE_LITE_IN_SDP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.ICE_SUPPORT
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "If Record.ICE_SUPPORT is 'No', then Record.SIGNAL_ICE_LITE_IN_SDP must be 'No'"
+
+      Record.RINGBACK_TONE_FOR_CALLING_PARTY:
+        required: false
+        type: string
+        allowedValues: [Off, "MS Teams Support", "Carrier Support"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SEND_RBT_SDP_ANSWER_TO_CALLING_PARTY:
+        required: false
+        type: string
+        allowedValues: [On, Off]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.DEFAULT_TEXT_CODEC_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 256
+        description: "Required when Action is CREATE; applicable on a per media type basis"
+
+      Record.DEFAULT_TEXT_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_TEXT_CODEC_MAXBURSTSIZE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE:
+        required: false
+        type: string
+        allowedValues: [text, image, audio, video, application, multipart, message]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
+      Record.MODE_CHANGE_PERIOD:
+        required: false
+        type: string
+        allowedValues: ["NULL", "1", "2"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_AMR_NB_CODEC_WITH_MODE_SET:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET:
+        required: false
+        type: string
+        allowedValues: ["4.75", "5.15", "5.9", "6.7", "7.4", "7.95", "10.2", "12.2"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET:
+        required: false
+        type: string
+        allowedValues: ["6.6", "8.85", "12.65", "14.25", "15.85", "18.25", "19.85", "23.05", "23.85"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REUSE_SDP_PAYLOAD_NUMBER_IF_NO_MODE_SET_IN_SDP_OFFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.AMR_PREFERRED_MODESET_PRIORITY:
+        required: false
+        type: string
+        allowedValues: [Before, After]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Default peak bandwidth allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Default max burst size allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= line media type of 'image'"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default allowable Peak bandwidth settings for image media type"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default allowable Max Burst Size settings for image media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= lines of unknown media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default peak bandwidth allowed for m= lines of unknown media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default max burst size allowed for m= lines of unknown media type"
+
+      Record.VIDEO_FRAME_RATE_4_IPV4_IPV6_BANDWIDTH_INTERWORKING:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 250
+        description: "Required when Action is CREATE"
+
+      Record.INTELLIGENT_TRANSCODING_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS
+          operator: equals
+          value: "Yes"
+          allowedValues: [Yes]
+        description: "Must be 'Yes' when STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS is 'Yes'"
+
+      Record.SUPPORT_EVS_AMR_WB_IO_MODE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MIN_ALLOWED_EVS_BR:
+        required: false
+        type: string
+        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.MIN_ALLOWED_EVS_BW:
+        required: false
+        type: string
+        allowedValues: [none, nb, wb, swb, fb]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.MAX_ALLOWED_EVS_BW:
+        required: false
+        type: string
+        allowedValues: [none, nb, wb, swb, fb]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Enable strict matching of clock-rate of selected GCL codecs to OCL codecs"
+
+      Record.PRESCRIBED_DTMF_PT_FOR_EGRESS_SDP_OFFER:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 96, max: 127 }
+        description: "Required when Action is CREATE; 0 or range 96..127"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_AMR_WB_CODEC_WITH_MODE_SET:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_ALLOWED_EVS_BR:
+        required: false
+        type: string
+        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, ActionKey, Record.PROFILEID, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, ActionKey, Record.PROFILEID, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+          
+      - require: '"Record.GoldenCodecSet.GOLDEN_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.GoldenCodecSet
+
+      - require: '"Record.GoldenCodecSet.GOLDEN_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.GoldenCodecSet
+
+      - require: '"Record.AuxiliaryCodecSet.AUXILIARY_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.AuxiliaryCodecSet
+
+      - require: '"Record.AuxiliaryCodecSet.AUXILIARY_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.AuxiliaryCodecSet
+
+      - require: '"Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRNBModeSet
+      
+      - require: '"Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRWBModeSet
+
+      - require: '"Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRNBModeSet
+      
+      - require: '"Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRWBModeSet 
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.MsrpBandwidth
+
+      - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.MsrpBandwidth
+
+      - require: '"Record.CodecBandwidth.CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.CodecBandwidth
+
+      - require: '"Record.CodecBandwidth.CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.CodecBandwidth
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PROFILEID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IbcfTrunkGroupTable
+  # ---------------------------------------------------------------------------
+  IbcfTrunkGroupTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.REMOTEIPADDRESSList]
+        dropdownDisabled: true   
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1628
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.VN_ID:
+        required: false
+        type: integer
+        description: "Must equal IbcfVirtualNetworkTable.VN_ID"
+
+      Record.TG_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 32
+        description: "Max 32 TGs per VN"
+
+      Record.TG_NAME:
+        required: false
+        type: string
+        maxLength: 32
+        pattern:  "^[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*$"
+        description: "Required when Action is CREATE"
+
+      Record.REMOTE_DEST_ADDR_TYPE:
+        required: false
+        type: string
+        allowedValues: [FQDN, IPv4, IPv6]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REMOTE_DEST_IP_FQDN:
+        required: false
+        type: string
+        maxLength: 128
+        description: "Required when Action is CREATE"
+
+      Record.REMOTE_DEST_PORT:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 65535
+        description: "Required when Action is CREATE"
+
+      Record.CRF_ROUTINE_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to CRFRouteProfile.ROUTE_PROFILE_ID"
+
+      Record.EGRESS_CRF_TASK_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to CRFRouteProfile.ROUTE_PROFILE_ID"
+
+      Record.SERVICE_LEVEL_POLICY_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to ServiceProfileTable.POLICY_ID"
+
+      Record.IBCF_SIP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to IbcfSipProfileTable.PROFILE_ID"
+
+      Record.IBCF_SDP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to PeeringSDPProfileTable.PROFILEID"
+
+      Record.IBCF_SBLP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.TRANSPORT_TYPE:
+        required: false
+        type: string
+        allowedValues: [UDP, TCP, SCTP, TLS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIP_HEARTBEAT_OPTIONS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MEDIA_IP_VERSION:
+        required: false
+        type: string
+        allowedValues: [IPv4, IPv6]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ADMINISTRATIVE_STATE:
+        required: false
+        type: string
+        allowedValues: [Unlocked, Locked]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIPI_VARIANT:
+        required: false
+        type: string
+        allowedValues: [NONE, FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
+        allowedValuesWhen:
+        - column: Record.SIPI_PROFILE_ID
+          operator: notEquals
+          value: "0"
+          allowedValues: [FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REMOTEIPADDRESSList.REMOTEIPADDRESS:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE"
+
+      Record.MEDIA_DSCP_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 64 }
+        description: "0 = not configured; 1..64 = DSCP profile ID"
+
+      Record.SECOND_STAGE_INGRESS_TG_SELECTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
+      Record.SCTP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 31
+        description: "0 = no SCTP profile"
+
+      Record.SCTP_SECONDARY_REMOTE_DEST_IP:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE; secondary remote destination IP"
+
+      Record.CRF_ROUTINE_PROFILE_ID_REGISTER:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.INSERT_SERVICE_ROUTE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_PATH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_SERVICE_ROUTE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_REGISTER_CONTACT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.BYPASS_IBCF_DEFAULT_ENUM:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIPI_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = not configured; 1..2048 = SIPI profile ID"
+
+      Record.POST_3XX_CRF_ROUTE_PROFILE_ID:
+        required: false
+        type: string
+        pattern: "^(None|([1-9][0-9]{0,2}|1[0-9]{3}|20[0-3][0-9]|204[0-8]))$"
+        description: "None = not configured; or 1..2048 route profile ID"
+
+      Record.DD_OPTIONS:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 50 }
+        allowedValuesWhen:
+        - column: Record.SIPI_PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [0]
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.IPSEC_REMOTE_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1024, max: 65535 }
+        description: "Required when Action is CREATE; 0 or 1024..65535"
+
+      Record.TLS_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 64 }
+        description: "0 = no TLS profile; 1..64 = TLS profile ID"
+
+      Record.CA_LIST_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = not configured; 1..2048 = CA list ID"
+
+      Record.DETECT_FAREND_NAPT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_TLS_SYMMETRIC:
+        required: false
+        type: string
+        allowedValues: [No, Always, NAT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+    rules:
+      - require: '"Record.REMOTEIPADDRESSList.REMOTEIPADDRESS"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.REMOTEIPADDRESSList
+
+      - require: '"Record.REMOTEIPADDRESSList.REMOTEIPADDRESS"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.REMOTEIPADDRESSList
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, ActionKey, Record.VN_ID, Record.TG_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, ActionKey, Record.VN_ID, Record.TG_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.VN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.TG_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IMSACRChargingProfileTable
+  # ---------------------------------------------------------------------------
+  IMSACRChargingProfileTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+        
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true
+        
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true
+       
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.DetailedACRMsgGenerationOption , Record.DetailedACRMsgAVPPopulationOption]
+        dropdownDisabled: true
+      
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 1500
+
+      NAME:
+        required: true
+        type: string
+        minLength: 1
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 256
+
+      Record.TRAFFIC_MONITOR:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.VERSION_CONTROL_SELECTION:
+        required: false
+        type: string
+        allowedValues: ["3GPP 32.225 Rel 5.7.0", "3GPP 32.260 Rel 7.4.0", "3GPP 32.260 Rel 8.6.0", "3GPP 32.260 Flexible"]
+        dropdownDisabled: true
+        
+      Record.RELEASE_NUMBER:
+        required: false
+        type: integer
+        minValue: 9
+        maxValue: 9999
+        allowedValuesWhen:
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: notEquals
+          value: "3GPP 32.260 Flexible"
+          allowedValues: [9]
+        
+      Record.EXTENSION_NUMBER:
+        required: false
+        type: string
+        minLength: 0
+        maxLength: 10
+        pattern: '[^.@ ]*'
+        allowedValuesWhen:
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: notEquals
+          value: "3GPP 32.260 Flexible"
+          allowedValues: [""]
+        
+      Record.VERSION_CONTROL_MNC:
+        required: false
+        type: string
+        minLength: 0
+        maxLength: 3
+        pattern: '[a-zA-Z0-9]*'
+
+      Record.VERSION_CONTROL_MCC:
+        required: false
+        type: string
+        minLength: 0
+        maxLength: 3
+        pattern: '[a-zA-Z0-9]*'
+  
+      Record.DetailedACRMsgGenerationOption.INVITE_DLG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.REFER_DLG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.SUBSCRIBE_DLG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.REGISTER_TRANSACTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.NOTIFY_TRANSACTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.PUBLISH_TRANSACTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.MESSAGE_TRANSACTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        
+      Record.DetailedACRMsgGenerationOption.INITIAL_INVITE_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.REFER_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.SUBSCRIBE_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.NOTIFY_TRANSACTION_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.PUBLISH_TRANSACTION_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.MESSAGE_TRANSACTION_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        
+      Record.DetailedACRMsgGenerationOption.REGISTER_TRANSACTION_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+       
+      Record.DetailedACRMsgGenerationOption.SUBSCRIBE_DLG_FOR_REG_EVENT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+       
+      Record.DetailedACRMsgGenerationOption.NOTIFY_TRANSACTION_FOR_REG_EVENT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        
+      Record.DetailedACRMsgGenerationOption.REINVITE_WITHOUT_SDP_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        allowedValuesWhen:
+        - column: Record.SDP_INFORMATION_FOR_ACR
+          operator: equals
+          value: "SDP offer & answer"
+          allowedValues: [No]
+        - column: Record.SDP_INFORMATION_FOR_ACR
+          operator: equals
+          value: "SDP answer only"
+          allowedValues: [No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.UPDATE_WITHOUT_SDP_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.UE_ORIGINATED_REQUESTS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.UE_TERMINATED_REQUESTS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.ELAPSED_TIME_TO_TRIGGER_ALARM:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 24
+
+      Record.DetailedACRMsgGenerationOption.TIME_INTERVAL_TO_TRIGGER_ADD_ALARM:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 24
+
+      Record.DetailedACRMsgGenerationOption.INVITE_DLG_FOR_EMERGENCY_CALLS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.ROAMING_CALLS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgGenerationOption.ACR_START_UPON_ACK_WITH_SDP_ANSWER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: equals
+          value: "3GPP 32.225 Rel 5.7.0"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+        - when: "INVITE_DLG == 'No' && ROAMING_CALLS == 'No' && INVITE_DLG_FOR_EMERGENCY_CALLS == 'No'"
+          allowedValues: ["No"]
+
+      Record.DetailedACRMsgGenerationOption.OPTIONS_TRANSACTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+        
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgGenerationOption.OPTIONS_TRANSACTION_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.SDP_IN_SIP_INVITE_DLG:
+        required: false
+        type: string
+        allowedValues: [Yes, MediaLineOnly, No]
+        dropdownDisabled: true
+
+      Record.SDP_INFORMATION_FOR_ACR:
+        required: false
+        type: string
+        allowedValues: ["SDP offer & answer", "SDP answer only", "Last Available SDP Information"]
+        dropdownDisabled: true
+
+      Record.INHIBIT_EARLY_MEDIA_AVPS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No] 
+
+        - column: Record.SDP_IN_SIP_INVITE_DLG 
+          operator: equals 
+          value: "No" 
+          allowedValues: [No]
+
+      Record.SEND_ACR_WHEN_SDP_UPDATED:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.INCLUDE_SDP_ON_ERROR_CASES:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.SDP_IN_SIP_INVITE_DLG 
+          operator: equals 
+          value: "No" 
+          allowedValues: [No] 
+
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.OFFLINE_CHARGING_TIME_STAMP_FRACTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.SIP_RINGING_TIME_STAMP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.GEN_PROPRIETARY_AVP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.CALL_ID:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: equals
+          value: "3GPP 32.225 Rel 5.7.0"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CALL_REALM:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: equals
+          value: "3GPP 32.225 Rel 5.7.0"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.P_CHARGING_FUNCTION_ADDRESS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: equals
+          value: "3GPP 32.225 Rel 5.7.0"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.QOS_STATISTICS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: equals
+          value: "3GPP 32.225 Rel 5.7.0"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CALL_RELEASE_INDICATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.SPECIAL_AVP_ACCESS_NETWORK_ID:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.CALLED_ASSERTED_IDENTITY:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+        
+      Record.DetailedACRMsgAVPPopulationOption.IMS_EMERGENCY_INDICATOR:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: notEquals
+          value: "3GPP 32.260 Flexible"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.NNI_INFORMATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+        
+
+      Record.DetailedACRMsgAVPPopulationOption.SIP_ROUTE_HEADER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+     
+      Record.DetailedACRMsgAVPPopulationOption.PCRF_ADDRESS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CALL_DURATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.REQUEST_RECIPIENT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CUSTOMER_SPECIFIC_HEADER_INFO_AVP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.TRANSCODER_INSERTED_INDICATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.USER_LOCATION_INFO_3GPP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.MS_TIMEZONE_3GPP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.EITHER_OR_POPULATION_RULE_OF_ACCESS_NETWORK_INFORMATION_FOR_3GPP_ACCESS:
+        required: false
+        type: string
+        allowedValues: [NPLI, UPLI]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.DetailedACRMsgAVPPopulationOption.USER_LOCATION_INFO_3GPP 
+          operator: equals 
+          value: "Yes" 
+          allowedValues: [NPLI]
+
+      Record.DetailedACRMsgAVPPopulationOption.REASON_HEADER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CUSTOMER_SPECIFIC_ACCESS_NETWORK_INFO_POPULATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.MULTIPLE_CALLING_PARTY_ADDRESS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.SUBSCRIPTION_ID:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.ROLE_OF_NODE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CAUSE_CODE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.GW_INFO:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.IMS_COMMUNICATION_SERVICE_ID:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.SESSION_PRIORITY:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.TRANSIT_IOI_LIST:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.TRUNK_GROUP_ID_INCOMING_OR_OUTGOING:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+       
+      Record.DetailedACRMsgAVPPopulationOption.USER_NAME:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.USER_EQUIPMENT_INFO:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.TYPE_1_INTER_OPERATOR_IDENTIFIER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: equals
+          value: "3GPP 32.225 Rel 5.7.0"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.IMS_VISITED_NETWORK_IDENTIFIER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: notEquals
+          value: "3GPP 32.260 Flexible"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.RTCPXR_STATISTICS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CARRIER_ID_CODE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.JURISDICTION_INFO_PARAMETER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CHARGE_NUMBER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.TRUNK_GROUP_NAME:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+
+        - column: Record.VERSION_CONTROL_SELECTION
+          operator: notEquals
+          value: "3GPP 32.260 Flexible"
+          allowedValues: [No]
+
+        - column: Record.PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.ADVANCED_QOS_ON_SRVCC_SDP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.DetailedACRMsgAVPPopulationOption.NUPM_STATISTICS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.CUSTOMIZED_NODE_FUNC:
+        required: false
+        type: string 
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.DetailedACRMsgAVPPopulationOption.FROM_ADDRESS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: notEquals 
+          value: "3GPP 32.260 Flexible" 
+          allowedValues: [No]
+
+      Record.USE_HSS_PROVIDED_CCF_ADDRESS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.CT_PRIVATE_AVP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.SUPPORT_ACR_CONSOLIDATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.CT_SPECIFIC_FOR_CALL_DIVERSION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.ACR_ALLOW_ABF:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.SERVED_PARTY_IP_ADDRESS_AVP_WITH_NAT_ADDRESS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+      Record.SUPP_ACR_OF_REREG_WITH_SAME_IP_ADDR_AND_REG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen:
+        - when: "REGISTER_TRANSACTION == 'No' && REGISTER_TRANSACTION_ERROR_CASES == 'No'"
+          allowedValues: ["No"]
+
+      Record.ACR_GENER_FOR_NET_INIT_DEREG_OR_REG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+
+      Record.SPARE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+        dropdownDisabled: true
+
+      Record.BILLING_PER_SOURCE_DEST:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+        allowedValuesWhen: 
+        - column: Record.VERSION_CONTROL_SELECTION 
+          operator: equals 
+          value: "3GPP 32.225 Rel 5.7.0" 
+          allowedValues: [No]
+    
+    rules:
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, ActionKey, Record.PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, ActionKey, Record.PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PROFILE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CdrServiceProfileTable
+  # ---------------------------------------------------------------------------
+  CdrServiceProfileTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+        
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true
+        
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
+        dropdownDisabled: true
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 999
+
+      NAME:
+        required: true
+        type: string
+        minLength: 1
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+        
+
+      Record.CDR_POOL_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 255
+
+      Record.ACTIVATE_LOCAL_CCF:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true
+
+    rules:
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CDR_POOL_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.CDR_POOL_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.CDR_POOL_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+
+  # Count of unique CRGroup values
+  CR_COUNT:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct_count

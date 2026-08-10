@@ -19,12 +19,12 @@ import java.util.*;
 
 /**
  * Reads a Nokia CIQ Excel workbook entirely into memory and returns an
- * {@link InMemoryCiqDataStore} — no JSON files are written to disk.
+ * {@link InMemoryCiqDataStore} - no JSON files are written to disk.
  *
  * <p>Parsing logic mirrors {@link com.nokia.ciq.reader.ExcelCiqReader}:
  * <ol>
- *   <li>Read <em>Node_ID</em> sheet → NIAM mapping (node → login ID)</li>
- *   <li>Read <em>Index</em> sheet  → node / CRGroup / table list</li>
+ *   <li>Read <em>Node_ID</em> sheet -> NIAM mapping (node -> login ID)</li>
+ *   <li>Read <em>Index</em> sheet  -> node / CRGroup / table list</li>
  *   <li>For each table listed in the Index, read the corresponding data sheet</li>
  * </ol>
  *
@@ -52,13 +52,13 @@ public class InMemoryExcelReader {
 
     /**
      * Populated by {@link #readGroupIndex} when the INDEX sheet also has a
-     * {@code CRGROUP} column.  Structure: CRGROUP → (GROUP → ordered node list).
+     * {@code CRGROUP} column.  Structure: CRGROUP -> (GROUP -> ordered node list).
      * Non-empty only when both GROUP and CRGROUP columns are present.
      */
     private final Map<String, Map<String, List<String>>> crGroupToGroupNodes = new LinkedHashMap<>();
 
     /**
-     * Returns the GROUP→Nodes map built from the INDEX sheet during {@link #read}.
+     * Returns the GROUP->Nodes map built from the INDEX sheet during {@link #read}.
      * Non-empty only for GROUP-mode CIQ files.
      */
     public Map<String, List<String>> getGroupToNodes() {
@@ -66,7 +66,7 @@ public class InMemoryExcelReader {
     }
 
     /**
-     * Returns the CRGROUP → (GROUP → nodes) map built when the INDEX sheet has
+     * Returns the CRGROUP -> (GROUP -> nodes) map built when the INDEX sheet has
      * {@code GROUP | CRGROUP | NODE} columns.  Empty when CRGROUP column is absent.
      */
     public Map<String, Map<String, List<String>>> getCrGroupToGroupNodes() {
@@ -133,7 +133,7 @@ public class InMemoryExcelReader {
             log.info("Index: {} node entries, {} unique tables",
                     index.getEntries().size(), tables.size());
 
-            // No proper Index (no Tables column found) — read all non-special sheets as data sheets.
+            // No proper Index (no Tables column found) - read all non-special sheets as data sheets.
             // In GROUP / CRGROUP mode the Index sheet is grouping metadata only, not a data sheet.
             if (tables.isEmpty()) {
                 boolean groupMode = !groupToNodes.isEmpty() || !crGroupToGroupNodes.isEmpty();
@@ -145,34 +145,37 @@ public class InMemoryExcelReader {
                     tables.add(sName);
                 }
                 if (!tables.isEmpty()) {
-                    log.debug("No Tables-based Index — reading {} sheet(s) directly: {}", tables.size(), tables);
+                    log.debug("No Tables-based Index - reading {} sheet(s) directly: {}", tables.size(), tables);
                 }
             }
 
             Map<String, CiqSheet> sheets = new LinkedHashMap<>();
             for (String tableName : tables) {
-                Sheet sheet = findSheet(wb, tableName);
+                Sheet sheet = findSheet(wb, tableName, rules);
                 if (sheet == null) {
-                    log.warn("Sheet not found for table '{}' — skipping", tableName);
+                    log.warn("Sheet not found for table '{}' - skipping", tableName);
                     continue;
                 }
                 Set<String> cols = configuredColumns(rules, tableName);
                 WorkbookSettings sheetSettings = effectiveSettings(rules, tableName);
-                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings);
+                // emitAllColumns = true: this table is emitted to JSON, so the output carries every
+                // column physically present in the sheet (declared or not). Columns declared in the
+                // rules but absent from the sheet are NOT emitted.
+                CiqSheet ciqSheet = readSheet(sheet, tableName, cols, sheetSettings, false, true);
                 sheets.put(tableName, ciqSheet);
                 log.info("Loaded table '{}': {} rows", tableName, ciqSheet.getRows().size());
             }
 
             // Load YAML-configured sheets that are NOT listed in the Index Tables column
             // (e.g. Node_Details, USER_ID). These are auxiliary sheets that must be validated
-            // but are not referenced in the Index — include them in the store so the validation
+            // but are not referenced in the Index - include them in the store so the validation
             // engine and workbook_rules validators can access them.
             if (rules != null && rules.getSheets() != null) {
                 Set<String> alwaysSpecial = new java.util.HashSet<>(
                         java.util.Arrays.asList("Index", "Node_ID"));
                 for (String sheetName : rules.getSheets().keySet()) {
                     if (!alwaysSpecial.contains(sheetName) && !sheets.containsKey(sheetName)) {
-                        Sheet auxSheet = findSheet(wb, sheetName);
+                        Sheet auxSheet = findSheet(wb, sheetName, rules);
                         if (auxSheet != null) {
                             Set<String> cols = configuredColumns(rules, sheetName);
                             WorkbookSettings sheetSettings = effectiveSettings(rules, sheetName);
@@ -189,8 +192,8 @@ public class InMemoryExcelReader {
             InMemoryCiqDataStore store = new InMemoryCiqDataStore(index, sheets);
 
             // Capture all workbook sheet names for sheetRef validation.
-            // This must reflect every sheet in the Excel file — not just the ones loaded as
-            // data tables — so that sheetRef: true can correctly validate Index.Tables values
+            // This must reflect every sheet in the Excel file - not just the ones loaded as
+            // data tables - so that sheetRef: true can correctly validate Index.Tables values
             // against the full workbook contents.
             List<String> allSheetNames = new ArrayList<>();
             for (int i = 0; i < wb.getNumberOfSheets(); i++) {
@@ -203,11 +206,14 @@ public class InMemoryExcelReader {
             // and special data extraction (NIAM mapping, CR-email mapping).
             // Stored outside the main sheets map so they don't appear in getAvailableSheets()
             // and cannot interfere with the validateIndexSheets cross-check.
-            Sheet rawIndex = findSheet(wb, SHEET_INDEX);
+            Sheet rawIndex = findSheet(wb, SHEET_INDEX, rules);
             if (rawIndex != null) {
-                // Read ALL columns (null) so extra columns like GROUP are preserved for the
-                // template engine even if they are not listed in the validation-rules YAML.
-                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, null,
+                // Use columns declared in the validation-rules YAML to locate the header row
+                // generically (avoids hardcoding column names as heuristics).
+                // When no Index columns are configured (other activities), falls back to null
+                // which retains the legacy Node/Group heuristics in readSheet.
+                Set<String> indexCols = configuredColumns(rules, SHEET_INDEX);
+                store.setRawIndexSheet(readSheet(rawIndex, SHEET_INDEX, indexCols,
                         effectiveSettings(rules, SHEET_INDEX), true /* stripTrailingBlanks */));
                 log.debug("Captured raw Index sheet ({} rows)",
                         store.getRawIndexSheet().getRows().size());
@@ -217,7 +223,7 @@ public class InMemoryExcelReader {
                 // the original per-row values. Call consolidateIndexColumns(rawIndexSheet, rules)
                 // from CiqProcessorImpl after the validation step.
             }
-            Sheet rawNodeId = findSheet(wb, niamSheet);
+            Sheet rawNodeId = findSheet(wb, niamSheet, rules);
             if (rawNodeId != null) {
                 store.setRawNodeIdSheet(
                         readNodeIdSheet(rawNodeId, niamSheet, niamNodeCol, niamNiamCol));
@@ -242,7 +248,7 @@ public class InMemoryExcelReader {
 
         Sheet sheet = wb.getSheet(SHEET_INDEX);
         if (sheet == null) {
-            log.warn("'{}' sheet not found — index will be empty", SHEET_INDEX);
+            log.warn("'{}' sheet not found - index will be empty", SHEET_INDEX);
             return index;
         }
 
@@ -253,7 +259,7 @@ public class InMemoryExcelReader {
             int nodeCol    = findColumnIndex(headerRow, "Node");
             int crGroupCol = findColumnIndex(headerRow, "CRGroup");
             int groupCol   = findColumnIndex(headerRow, "Group");
-            // Use only the FIRST "Tables" column — the user-selection column.
+            // Use only the FIRST "Tables" column - the user-selection column.
             // A second "Tables" column (separated by blank columns) is a dropdown
             // catalog/reference and must not be read as a selection.
             int tablesCol  = findColumnIndex(headerRow, "Tables");
@@ -292,30 +298,65 @@ public class InMemoryExcelReader {
                 // so that CRGROUP-mode segregation in CiqProcessorImpl has the grouping data.
                 if (groupCol >= 0) {
                     readGroupIndex(sheet, headerRowIdx);
-                    log.info("Group column detected in TABLE-based INDEX — {} group(s) across {} CRGROUP(s)",
+                    log.info("Group column detected in TABLE-based INDEX - {} group(s) across {} CRGROUP(s)",
                             groupToNodes.size(), crGroupToGroupNodes.size());
                 }
 
                 return index;
             } else if (groupCol < 0) {
-                // No Tables column and no Group column — unrecognised format
+                // No Tables column and no Group column - unrecognised format
                 log.warn("Required columns (Node, CRGroup, Tables) not found in Index sheet");
                 return index;
             }
-            // else: GROUP | CRGROUP | NODE layout — fall through to GROUP mode detection
-            log.debug("Index sheet has GROUP+CRGROUP+NODE but no Tables — treating as GROUP/CRGROUP mode");
+            // else: GROUP | CRGROUP | NODE layout - fall through to GROUP mode detection
+            log.debug("Index sheet has GROUP+CRGROUP+NODE but no Tables - treating as GROUP/CRGROUP mode");
         }
 
         // --- Attempt 2: GROUP mode (GROUP + NODE columns, no CRGroup/Tables) ---
         headerRowIdx = findHeaderRow(sheet, "Group", "Node");
         if (headerRowIdx >= 0) {
             readGroupIndex(sheet, headerRowIdx);
-            log.debug("GROUP/CRGROUP layout detected in Index sheet — {} group(s): {}",
+            log.debug("GROUP/CRGROUP layout detected in Index sheet - {} group(s): {}",
                     groupToNodes.size(), groupToNodes.keySet());
-            return index;   // CiqIndex intentionally empty — sheets loaded directly
+            return index;   // CiqIndex intentionally empty - sheets loaded directly
         }
 
-        log.warn("Header row not found in Index sheet (no Node+CRGroup and no Group+Node columns)");
+        // --- Attempt 3: NodeGroup mode (NodeGroup + Tables columns, no Node) ---
+        headerRowIdx = findHeaderRow(sheet, "NodeGroup", "Tables");
+        if (headerRowIdx >= 0) {
+            Row headerRow     = sheet.getRow(headerRowIdx);
+            int nodeGroupCol  = findColumnIndex(headerRow, "NodeGroup");
+            int crGroupCol    = findColumnIndex(headerRow, "CRGroup");
+            int tablesCol     = findColumnIndex(headerRow, "Tables");
+
+            Map<String, NodeEntry> entryMap = new LinkedHashMap<>();
+            for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                String nodeGroup = getCellString(row.getCell(nodeGroupCol));
+                String crGroup   = crGroupCol >= 0 ? getCellString(row.getCell(crGroupCol)) : null;
+                if (isBlank(nodeGroup)) continue;
+                String table = getCellString(row.getCell(tablesCol));
+                if (isBlank(table)) continue;
+
+                String key = nodeGroup.trim() + "|" + (crGroup == null ? "" : crGroup.trim());
+                NodeEntry entry = entryMap.computeIfAbsent(key, k -> {
+                    NodeEntry e = new NodeEntry();
+                    e.setNode(nodeGroup.trim());
+                    e.setCrGroup(crGroup != null ? crGroup.trim() : null);
+                    return e;
+                });
+                if (!entry.getTables().contains(table.trim())) {
+                    entry.getTables().add(table.trim());
+                }
+            }
+            index.setEntries(new ArrayList<>(entryMap.values()));
+            log.info("NodeGroup-mode Index: {} nodeGroup/crGroup entries, {} unique table(s)",
+                    entryMap.size(), index.getAllTables().size());
+            return index;
+        }
+
+        log.warn("Header row not found in Index sheet (no Node+CRGroup, no Group+Node, and no NodeGroup+Tables columns)");
         return index;
     }
 
@@ -325,8 +366,8 @@ public class InMemoryExcelReader {
      *
      * <p>Supported column combinations:
      * <ul>
-     *   <li>{@code GROUP | CRGROUP | NODE} — full CRGROUP mode (new MRF design)</li>
-     *   <li>{@code GROUP | NODE}           — plain GROUP mode (legacy; no CRGROUP)</li>
+     *   <li>{@code GROUP | CRGROUP | NODE} - full CRGROUP mode (new MRF design)</li>
+     *   <li>{@code GROUP | NODE}           - plain GROUP mode (legacy; no CRGROUP)</li>
      * </ul>
      */
     private void readGroupIndex(Sheet sheet, int headerRowIdx) {
@@ -338,7 +379,7 @@ public class InMemoryExcelReader {
 
         boolean hasCrGroup = crGroupCol >= 0;
         if (hasCrGroup) {
-            log.debug("CRGROUP column found in INDEX sheet — CRGROUP mode enabled");
+            log.debug("CRGROUP column found in INDEX sheet - CRGROUP mode enabled");
         }
 
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
@@ -372,7 +413,7 @@ public class InMemoryExcelReader {
 
         Sheet sheet = wb.getSheet(sheetName);
         if (sheet == null) {
-            log.warn("'{}' sheet not found — NIAM mapping will be empty", sheetName);
+            log.warn("'{}' sheet not found - NIAM mapping will be empty", sheetName);
             return map;
         }
 
@@ -421,7 +462,7 @@ public class InMemoryExcelReader {
             headerRowIdx = findHeaderRowAnyPrimary(sheet, nodeColumn, niamColumn);
         if (headerRowIdx < 0) {
             log.warn("Header row not found in '{}' sheet (expected columns '{}' and '{}') " +
-                    "— sheet will have no rows", sheetName, nodeColumn, niamColumn);
+                    "- sheet will have no rows", sheetName, nodeColumn, niamColumn);
             return ciqSheet;
         }
 
@@ -474,8 +515,8 @@ public class InMemoryExcelReader {
      *
      * <p>Header row location strategy when {@code columnsToRead} is non-empty:
      * <ol>
-     *   <li>Try strict match — a row containing <em>all</em> configured columns.</li>
-     *   <li>Fall back to lenient match — the first row containing <em>any</em> configured
+     *   <li>Try strict match - a row containing <em>all</em> configured columns.</li>
+     *   <li>Fall back to lenient match - the first row containing <em>any</em> configured
      *       column.  This handles the case where some configured columns are absent from the
      *       sheet; the missing ones are not added to {@code CiqSheet.columns} and will be
      *       reported as absent by {@code CiqValidationEngine.checkMissingColumns()}.</li>
@@ -485,7 +526,7 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings) {
-        return readSheet(sheet, tableName, columnsToRead, settings, false);
+        return readSheet(sheet, tableName, columnsToRead, settings, false, false);
     }
 
     /**
@@ -499,6 +540,22 @@ public class InMemoryExcelReader {
      */
     private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
                                WorkbookSettings settings, boolean stripTrailingBlanks) {
+        return readSheet(sheet, tableName, columnsToRead, settings, stripTrailingBlanks, false);
+    }
+
+    /**
+     * @param emitAllColumns when {@code true}, each row's data map is populated with every column
+     *                       physically present in the sheet header - whether or not it has a
+     *                       validation-rules entry - so the generated JSON reflects the full CIQ
+     *                       sheet. Columns declared in the rules but ABSENT from the sheet are NOT
+     *                       emitted. Blank cells of present columns are stored as {@code null} and
+     *                       surface in the JSON as empty strings (see
+     *                       JsonTemplateEvaluator#buildRowMap). Undeclared columns carry no rules,
+     *                       so the validation engine has nothing to check for them.
+     */
+    private CiqSheet readSheet(Sheet sheet, String tableName, Set<String> columnsToRead,
+                               WorkbookSettings settings, boolean stripTrailingBlanks,
+                               boolean emitAllColumns) {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
@@ -506,7 +563,7 @@ public class InMemoryExcelReader {
         if (columnsToRead != null && !columnsToRead.isEmpty()) {
             // Strict: all configured columns present in the same header row
             headerRowIdx = findHeaderRow(sheet, columnsToRead.toArray(new String[0]));
-            // Lenient fallback: at least one configured column present — lets us read
+            // Lenient fallback: at least one configured column present - lets us read
             // whatever IS there and report missing columns properly during validation
             if (headerRowIdx < 0) {
                 headerRowIdx = findHeaderRowAny(sheet, columnsToRead.toArray(new String[0]));
@@ -520,7 +577,7 @@ public class InMemoryExcelReader {
         }
 
         if (headerRowIdx < 0) {
-            log.warn("Header row not found in sheet '{}' — sheet will have no rows",
+            log.warn("Header row not found in sheet '{}' - sheet will have no rows",
                     sheet.getSheetName());
             return ciqSheet;
         }
@@ -531,15 +588,43 @@ public class InMemoryExcelReader {
         List<String> colNames = new ArrayList<>();
 
         if (columnsToRead != null && !columnsToRead.isEmpty()) {
-            // Only read the configured columns; use YAML names as keys
+            Set<Integer> usedIdx  = new HashSet<>();
+            Set<String>  usedNorm = new HashSet<>();
+            // 1) Declared columns first; use YAML (canonical) names as keys so validation and
+            //    JSON-template references resolve regardless of minor header spelling differences.
             for (String colName : columnsToRead) {
                 int idx = findColumnIndex(headerRow, colName);
                 if (idx >= 0) {
                     colMap.add(new int[]{idx});
                     colNames.add(colName);
+                    usedIdx.add(idx);
+                    usedNorm.add(normalize(colName));
                 } else {
+                    // Declared in the rules but absent from the CIQ sheet: do NOT emit it.
+                    // Only columns physically present in the sheet are written to the JSON.
                     log.warn("Configured column '{}' not found in sheet '{}'", colName, tableName);
                 }
+            }
+            // 2) When full output is requested, also every OTHER non-blank header column present
+            //    in the sheet - whether or not it has a validation-rules entry - so the generated
+            //    JSON reflects the full CIQ sheet. Undeclared columns carry no rules, so the
+            //    validation engine simply has nothing to check for them.
+            if (emitAllColumns) {
+                int extra = 0;
+                for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
+                    String name = getCellString(headerRow.getCell(c));
+                    if (isBlank(name)) continue;
+                    if (usedIdx.contains(c)) continue;
+                    String norm = normalize(name);
+                    if (usedNorm.contains(norm)) continue;   // already added as a declared column
+                    colMap.add(new int[]{c});
+                    colNames.add(name);
+                    usedIdx.add(c);
+                    usedNorm.add(norm);
+                    extra++;
+                }
+                if (extra > 0)
+                    log.info("Sheet '{}': included {} undeclared column(s) in output", tableName, extra);
             }
         } else {
             for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
@@ -550,9 +635,16 @@ public class InMemoryExcelReader {
                 }
             }
         }
+        // colNames holds only columns physically present in the sheet (declared or not), so
+        // checkMissingColumns() still fails required columns that are absent from the sheet.
         ciqSheet.setColumns(colNames);
 
         boolean ignoreBlank = (settings == null) || settings.isIgnoreBlankRows();
+        // settings.trimCellValues: false keeps data-cell whitespace exactly as typed in the
+        // GENERATED JSON, while validation still runs on the trimmed value - otherwise padding
+        // would start breaking pattern/maxLength/allowedValues/unique checks.
+        // Header names are always trimmed; padding there is never meaningful.
+        boolean keepRaw = (settings != null) && !settings.isTrimEnabled();
         for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) {
@@ -560,14 +652,18 @@ public class InMemoryExcelReader {
                 continue;
             }
             Map<String, String> data = new LinkedHashMap<>();
+            Map<String, String> raw  = keepRaw ? new LinkedHashMap<>() : null;
             boolean hasAnyValue = false;
             for (int i = 0; i < colMap.size(); i++) {
-                String value = getCellString(row.getCell(colMap.get(i)[0]));
+                Cell cell = row.getCell(colMap.get(i)[0]);
+                String value = getCellString(cell);                 // trimmed - drives validation
                 data.put(colNames.get(i), value);
+                if (keepRaw) raw.put(colNames.get(i), getCellString(cell, false));
                 if (value != null) hasAnyValue = true;
             }
             if (!hasAnyValue && ignoreBlank) continue;
-            ciqSheet.getRows().add(new CiqRow(r + 1, data));
+            ciqSheet.getRows().add(keepRaw ? new CiqRow(r + 1, data, raw)
+                                           : new CiqRow(r + 1, data));
         }
 
         // Strip trailing all-null rows for structural/metadata sheets (Index, Node_ID) that are
@@ -619,7 +715,7 @@ public class InMemoryExcelReader {
         com.nokia.ciq.validator.config.SheetRules indexRules = rules.getSheets().get(SHEET_INDEX);
         if (indexRules == null || indexRules.getColumns() == null) return;
 
-        // Collect columns that need consolidation: colKey → effective separator
+        // Collect columns that need consolidation: colKey -> effective separator
         Map<String, String> consolidateCols = new LinkedHashMap<>();
         for (Map.Entry<String, com.nokia.ciq.validator.config.ColumnRule> e
                 : indexRules.getColumns().entrySet()) {
@@ -632,12 +728,12 @@ public class InMemoryExcelReader {
         // Find the actual CRGroup column name in the sheet (normalised match)
         String crGroupActual = findActualCol(indexSheet.getColumns(), "CRGroup");
         if (crGroupActual == null) {
-            log.warn("consolidateIndexColumns: CRGroup column not found in Index sheet — skipping");
+            log.warn("consolidateIndexColumns: CRGroup column not found in Index sheet - skipping");
             return;
         }
 
         // Pass 1: accumulate tokens per CRGroup per column
-        // crGroup → colName → ordered set of tokens
+        // crGroup -> colName -> ordered set of tokens
         Map<String, Map<String, LinkedHashSet<String>>> acc = new LinkedHashMap<>();
         for (com.nokia.ciq.reader.model.CiqRow row : indexSheet.getRows()) {
             String crGroup = row.get(crGroupActual);
@@ -700,14 +796,46 @@ public class InMemoryExcelReader {
     // Sheet lookup (handles Excel 31-char name truncation)
     // -------------------------------------------------------------------------
 
-    private Sheet findSheet(Workbook wb, String tableName) {
+    private Sheet findSheet(Workbook wb, String tableName, ValidationRulesConfig rules) {
         Sheet sheet = wb.getSheet(tableName);
         if (sheet != null) return sheet;
 
+        // Alias lookup: YAML may declare the actual (truncated) sheet name explicitly.
+        // Needed because Excel disambiguates truncated names with a suffix (e.g. '...T01'),
+        // which breaks prefix matching below.
+        if (rules != null && rules.getSheets() != null) {
+            SheetRules sr = rules.getSheets().get(tableName);
+            if (sr != null && sr.getAliases() != null) {
+                for (String alias : sr.getAliases()) {
+                    Sheet aliased = wb.getSheet(alias);
+                    if (aliased != null) {
+                        log.debug("Matched table '{}' to sheet '{}' (alias)", tableName, alias);
+                        return aliased;
+                    }
+                    for (int i = 0; i < wb.getNumberOfSheets(); i++) {
+                        if (wb.getSheetName(i).equalsIgnoreCase(alias)) {
+                            log.debug("Matched table '{}' to sheet '{}' (alias, case-insensitive)",
+                                    tableName, wb.getSheetName(i));
+                            return wb.getSheetAt(i);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Excel truncates sheet names to 31 chars. A prefix relationship is only a genuine
+        // truncation when the shorter (candidate-truncated) name is at that 31-char limit —
+        // otherwise a short present sheet like "SipFilter" would wrongly match an absent
+        // longer table such as "SipFilterBodyRule", binding it to the wrong sheet's data.
+        final int EXCEL_SHEET_NAME_LIMIT = 31;
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
             String sheetName = wb.getSheetName(i);
-            if (tableName.startsWith(sheetName) || sheetName.startsWith(tableName)) {
-                log.debug("Matched table '{}' to sheet '{}' (truncation)", tableName, sheetName);
+            boolean sheetIsTruncatedTable = tableName.startsWith(sheetName)
+                    && sheetName.length() >= EXCEL_SHEET_NAME_LIMIT;
+            boolean tableIsTruncatedSheet = sheetName.startsWith(tableName)
+                    && tableName.length() >= EXCEL_SHEET_NAME_LIMIT;
+            if (sheetIsTruncatedTable || tableIsTruncatedSheet) {
+                log.debug("Matched table '{}' to sheet '{}' (31-char truncation)", tableName, sheetName);
                 return wb.getSheetAt(i);
             }
         }
@@ -740,7 +868,7 @@ public class InMemoryExcelReader {
     /**
      * Lenient header row search: returns the index of the first row (within the first 10 rows)
      * that contains <em>at least one</em> of {@code candidateHeaders}.
-     * Used as a fallback when {@link #findHeaderRow} (strict — all required) returns -1,
+     * Used as a fallback when {@link #findHeaderRow} (strict - all required) returns -1,
      * so that sheets with some missing columns can still be read partially and the missing
      * columns can be reported precisely by the validation engine.
      */
@@ -786,7 +914,7 @@ public class InMemoryExcelReader {
     // The three methods below limit their scan to the "primary area": the
     // contiguous block of columns at the left of the header row whose names are
     // all unique.  The scan stops as soon as a column name is seen for the
-    // second time — that signals the start of a reference/lookup section.
+    // second time - that signals the start of a reference/lookup section.
     // -------------------------------------------------------------------------
 
     /**
@@ -805,7 +933,7 @@ public class InMemoryExcelReader {
                 String v = getCellString(cell);
                 if (v == null) continue;
                 String norm = normalize(v);
-                if (seen.contains(norm)) break;   // repeated → end of primary area
+                if (seen.contains(norm)) break;   // repeated -> end of primary area
                 seen.add(norm);
                 primary.add(norm);
             }
@@ -833,7 +961,7 @@ public class InMemoryExcelReader {
                 String v = getCellString(cell);
                 if (v == null) continue;
                 String norm = normalize(v);
-                if (seen.contains(norm)) break;   // repeated → end of primary area
+                if (seen.contains(norm)) break;   // repeated -> end of primary area
                 seen.add(norm);
                 for (String h : candidateHeaders) {
                     if (norm.equals(normalize(h))) return r;
@@ -854,7 +982,7 @@ public class InMemoryExcelReader {
             String v = getCellString(cell);
             if (v == null) continue;
             String norm = normalize(v);
-            if (seen.contains(norm)) break;   // repeated → end of primary area
+            if (seen.contains(norm)) break;   // repeated -> end of primary area
             seen.add(norm);
             if (norm.equals(target)) return cell.getColumnIndex();
         }
@@ -870,11 +998,22 @@ public class InMemoryExcelReader {
     // -------------------------------------------------------------------------
 
     private String getCellString(Cell cell) {
+        return getCellString(cell, true);
+    }
+
+    /**
+     * @param trim when {@code false} the raw cell text is returned with leading/trailing
+     *             whitespace intact (driven by {@code settings.trimCellValues: false}).
+     *             Whitespace-only cells still resolve to {@code null} either way, so blank
+     *             detection and required-checks are unaffected.
+     */
+    private String getCellString(Cell cell, boolean trim) {
         if (cell == null) return null;
         switch (cell.getCellType()) {
             case STRING:
-                String s = cell.getStringCellValue().trim();
-                return s.isEmpty() ? null : s;
+                String raw = cell.getStringCellValue();
+                if (raw.trim().isEmpty()) return null;
+                return trim ? raw.trim() : raw;
             case NUMERIC:
                 double d = cell.getNumericCellValue();
                 if (d == Math.floor(d) && !Double.isInfinite(d) && Math.abs(d) < 1e15) {
@@ -887,8 +1026,9 @@ public class InMemoryExcelReader {
                 try {
                     CellType resultType = cell.getCachedFormulaResultType();
                     if (resultType == CellType.STRING) {
-                        String fs = cell.getStringCellValue().trim();
-                        return fs.isEmpty() ? null : fs;
+                        String fs = cell.getStringCellValue();
+                        if (fs.trim().isEmpty()) return null;
+                        return trim ? fs.trim() : fs;
                     }
                     if (resultType == CellType.NUMERIC) {
                         double fd = cell.getNumericCellValue();
@@ -965,7 +1105,10 @@ public class InMemoryExcelReader {
                         ? override.getHeaderRow() : global.getHeaderRow());
                 merged.setDataStartRow(override.getDataStartRow() > 0
                         ? override.getDataStartRow() : global.getDataStartRow());
-                merged.setTrimCellValues(override.isTrimCellValues() || global.isTrimCellValues());
+                // Opt-out flag: a per-sheet declaration wins outright (OR would make it
+                // impossible for a sheet to switch trimming off when the global value is true).
+                merged.setTrimCellValues(override.getTrimCellValues() != null
+                        ? override.getTrimCellValues() : global.getTrimCellValues());
                 merged.setIgnoreBlankRows(override.isIgnoreBlankRows());
                 merged.setCaseSensitiveHeaders(
                         override.isCaseSensitiveHeaders() || global.isCaseSensitiveHeaders());

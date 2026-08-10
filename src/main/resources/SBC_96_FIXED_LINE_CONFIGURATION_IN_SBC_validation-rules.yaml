@@ -1,0 +1,4520 @@
+# =============================================================================
+# Validation Rules: SBC - FIXED_LINE_CONFIGURATION
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+#   Validate SBC Fixed Line Configuration CIQ sheets.
+#   Covers 18 sheets: Index, IP, and 16 record-based configuration tables.
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: true
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# -----------------------------------------------------------------------------
+# Workbook-level cross-sheet rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  - contiguous_sequence:
+      sheet: Index
+      partitionBy: [NodeGroup, CRGROUP]
+      column: CONFIG_SEQ
+
+  # Index.NODE must exist in IP.NODE
+  - subset:
+      from: Index.NodeGroup
+      to: IP.NodeGroup
+
+  # GROUP validation scoped by TABLES column.
+  # Each match only checks Index.NodeGroup values where Index.TABLES = the target sheet.
+  # This prevents false failures when different tables use different group names.
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFTargetList"
+      to: CRFTargetList.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = PeeringSDPProfileTable"
+      to: PeeringSDPProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = BorderGatewayPublishedRealmTable"
+      to: BorderGatewayPublishedRealmTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = IbcfVirtualNetworkTable"
+      to: IbcfVirtualNetworkTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = ServiceProfileTable"
+      to: ServiceProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = PFEDPortTable"
+      to: PFEDPortTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = PublishedRealmTable"
+      to: PublishedRealmTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = IbcfSipProfileTable"
+      to: IbcfSipProfileTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = IbcfTrunkGroupTable"
+      to: IbcfTrunkGroupTable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFDATable"
+      to: CRFDATable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFRoutePlan"
+      to: CRFRoutePlan.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFRoutePriorityList"
+      to: CRFRoutePriorityList.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFRouteProfile"
+      to: CRFRouteProfile.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFTreatment"
+      to: CRFTreatment.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = CRFHostURITable"
+      to: CRFHostURITable.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = IbcfIngressTrunkGroupMappingTable"
+      to: IbcfIngressTrunkGroupMappingTable.NodeGroup
+
+
+
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFTargetList"
+      to:
+        sheet: CRFTargetList
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PeeringSDPProfileTable"
+      to:
+        sheet: PeeringSDPProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = BorderGatewayPublishedRealmTable"
+      to:
+        sheet: BorderGatewayPublishedRealmTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfVirtualNetworkTable"
+      to:
+        sheet: IbcfVirtualNetworkTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = ServiceProfileTable"
+      to:
+        sheet: ServiceProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PFEDPortTable"
+      to:
+        sheet: PFEDPortTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = PublishedRealmTable"
+      to:
+        sheet: PublishedRealmTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfSipProfileTable"
+      to:
+        sheet: IbcfSipProfileTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfTrunkGroupTable"
+      to:
+        sheet: IbcfTrunkGroupTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFDATable"
+      to:
+        sheet: CRFDATable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFRoutePlan"
+      to:
+        sheet: CRFRoutePlan
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFRoutePriorityList"
+      to:
+        sheet: CRFRoutePriorityList
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFRouteProfile"
+      to:
+        sheet: CRFRouteProfile
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFTreatment"
+      to:
+        sheet: CRFTreatment
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = CRFHostURITable"
+      to:
+        sheet: CRFHostURITable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = IbcfIngressTrunkGroupMappingTable"
+      to:
+        sheet: IbcfIngressTrunkGroupMappingTable
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Index
+  # ---------------------------------------------------------------------------
+  Index:
+    required: true
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CRGROUP:
+        required: true
+        description: "CR Number"
+        type: string
+        pattern: "^CR[0-9]+$"
+
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      TABLES:
+        required: true
+        type: string
+        description: "Table Name of Configuration"
+
+      CATEGORY:
+        required: true
+        type: string
+        allowedValues: [RecordBased, Global]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Category - RecordBased or Global level configuration"
+
+      EMAIL:    
+        type: email
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        consolidate_separator: ";"
+        minOnePerGroup:
+            groupByColumn: CRGroup
+            
+    rules:
+      
+      - unique_key: [NodeGroup, CRGROUP, CONFIG_SEQ, TABLES]
+
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IP
+  # ---------------------------------------------------------------------------
+  IP:
+    required: true
+    columns:
+
+      NODE:
+        required: true
+        type: string
+
+      NIAM NAME:
+        required: true
+        type: string
+        unique: true
+        description: "NIAM ID for the hostname - must be unique to each node"
+      
+      NodeGroup:
+        required: true
+        type: string
+        
+    rules:
+      - unique_key: [NODE, NodeGroup]
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFTargetList
+  # ---------------------------------------------------------------------------
+  CRFTargetList:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+        
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Action to be performed"
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Operation level"
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.CRFTargetListEntry]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when SubAction is SUBRECORD"
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+        description: "ID of the table"
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+        description: "Logical name of the table"
+
+      Record.TARGET_LIST_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 100000
+        description: "The CRF Target List Record ID; must be unique across rows where SubAction = RECORD"
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.LOCATION:
+        required: false
+        type: string
+        allowedValues: [Access, Core]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 2"
+          allowedValues: [Core]
+        description: "Required when Action is CREATE"
+
+      Record.TARGET_TYPE:
+        required: false
+        type: string
+        allowedValues: ["Type 1", "Type 2", "IBCF Trunk Group"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CRFTargetListEntry.TARGET_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 1, max: 1024 }
+          - { min: 5001, max: 7048 }
+          - { min: 0, max: 0 }
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "IBCF Trunk Group"
+          allowedValues: [0]
+        description: "Required when Action is CREATE; range 1..1024, 5001..7048, or 0"
+
+      Record.CRFTargetListEntry.VN_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 4096
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 1"
+          allowedValues: [0]
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 2"
+          allowedValues: [0]
+        description: "Virtual Network ID; must be 0 when TARGET_TYPE is not IBCF Trunk Group"
+
+      Record.CRFTargetListEntry.TG_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 32
+        allowedValuesWhen:
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 1"
+          allowedValues: [0]
+        - column: Record.TARGET_TYPE
+          operator: equals
+          value: "Type 2"
+          allowedValues: [0]
+        description: "Trunk Group ID; must be 0 when TARGET_TYPE is not IBCF Trunk Group"
+
+      Record.CRFTargetListEntry.ORDER:
+        required: false
+        type: string
+        allowedValues: ["10", "20"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "10=preferred, 20=alternate"
+
+      Record.CRFTargetListEntry.PRIORITY:
+        required: false
+        type: string
+        allowedValues: ["10", "20", "30"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "10=preferred, 20=second choice, 30=tertiary"
+
+      Record.CRFTargetListEntry.WEIGHT:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 100
+        description: "Relative weight for equal Order and Priority"
+
+      Record.CRFTargetListEntry.COST_TBL_INDEX:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2500
+        description: "Time of Day Cost Table Index"
+
+      Record.TARGET_LIST_SELECTION_OPTION:
+        required: false
+        type: string
+        allowedValues: ["Order/Priority/Weight", "TOD Cost Index"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+    rules:
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID, Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TARGET_LIST_ID, Record.CRFTargetListEntry.TARGET_ID, Record.CRFTargetListEntry.VN_ID, Record.CRFTargetListEntry.TG_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - require: '"Record.CRFTargetListEntry.TARGET_ID"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: '"Record.CRFTargetListEntry.VN_ID"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.CRFTargetListEntry.TG_ID"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.CRFTargetListEntry.ORDER"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.CRFTargetListEntry.PRIORITY"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.CRFTargetListEntry.WEIGHT"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+              
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.TARGET_LIST_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      
+
+  # ---------------------------------------------------------------------------
+  # Sheet: PeeringSDPProfileTable
+  # ---------------------------------------------------------------------------
+  PeeringSDPProfileTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.CodecBandwidth, Record.MsrpBandwidth, Record.GoldenCodecSet, Record.AuxiliaryCodecSet, Record.PreferredAMRNBModeSet, Record.PreferredAMRWBModeSet]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1630
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PROFILEID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 128
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-'!$()&><%/=;\\\\ ]*"
+
+      Record.SDP_OFFER_FROM_PEERING_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDP_ANSWER_FROM_PEERING_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDP_OFFER_FROM_CORE_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDP_ANSWER_FROM_CORE_SIDE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.GoldenCodecSet.GOLDEN_CODEC:
+        required: false
+        type: string
+        allowedValues: [PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, G726-16, G726-24, G726-32, G726-40, G728, AMR-WB, GSM, GSM-EFR, GSM-HR, G722, OPUS, EVS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.CodecBandwidth.CODEC:
+        required: false
+        type: string
+        allowedValues: [H263-2000, H264, MP4V-ES, PCMU, PCMA, G723, G729, AMR, EVRC0, EVRCB0, G726-16, G726-24, G726-32, G726-40, G728, AMR-WB, GSM, GSM-EFR, GSM-HR, G722, OPUS, EVS, SILK-NB, SILK-MB, SILK-WB, SILK-SWB, iSAC-16, iSAC-32, VP8, t140]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.CodecBandwidth.BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+
+      Record.CodecBandwidth.CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.CodecBandwidth.CODEC_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.DEFAULTAUDIOBANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 510
+
+      Record.DEFAULT_AUDIO_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.DEFAULT_AUDIO_CODEC_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.DEFAULTVIDEOBANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+
+      Record.DEFAULT_VIDEO_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.DEFAULT_VIDEO_CODEC_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+
+      Record.MAXIMUMPACKETTIME:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 255
+
+      Record.AuxiliaryCodecSet.AUXILIARY_CODEC:
+        required: false
+        type: string
+        allowedValues: [CN, DTMF]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SDES_SRTP_SUPPORTED:
+        required: false
+        type: string
+        allowedValues: [No, "Non-3GPP SDES-SRTP", "3GPP SDES-SRTP"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.LATCH_4_MEDIA_CONNECTIONS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.RTCP_MUX_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.ICE_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [No, "ICE Lite Support Peering"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SIGNAL_ICE_LITE_IN_SDP:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.ICE_SUPPORT
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "If Record.ICE_SUPPORT is 'No', then Record.SIGNAL_ICE_LITE_IN_SDP must be 'No'"
+
+      Record.RINGBACK_TONE_FOR_CALLING_PARTY:
+        required: false
+        type: string
+        allowedValues: [Off, "MS Teams Support", "Carrier Support"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SEND_RBT_SDP_ANSWER_TO_CALLING_PARTY:
+        required: false
+        type: string
+        allowedValues: [On, Off]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.DEFAULT_TEXT_CODEC_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 256
+        description: "Required when Action is CREATE; applicable on a per media type basis"
+
+      Record.DEFAULT_TEXT_CODEC_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_TEXT_CODEC_MAXBURSTSIZE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE:
+        required: false
+        type: string
+        allowedValues: [text, image, audio, video, application, multipart, message]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.MsrpBandwidth.MSRP_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Required when Action is CREATE"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
+      Record.MODE_CHANGE_PERIOD:
+        required: false
+        type: string
+        allowedValues: ["NULL", "1", "2"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_AMR_NB_CODEC_WITH_MODE_SET:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET:
+        required: false
+        type: string
+        allowedValues: ["4.75", "5.15", "5.9", "6.7", "7.4", "7.95", "10.2", "12.2"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET:
+        required: false
+        type: string
+        allowedValues: ["6.6", "8.85", "12.65", "14.25", "15.85", "18.25", "19.85", "23.05", "23.85"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REUSE_SDP_PAYLOAD_NUMBER_IF_NO_MODE_SET_IN_SDP_OFFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.AMR_PREFERRED_MODESET_PRIORITY:
+        required: false
+        type: string
+        allowedValues: [Before, After]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Default peak bandwidth allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_APPLICATION_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "Default max burst size allowed for m= line media type of 'application'"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= line media type of 'image'"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default allowable Peak bandwidth settings for image media type"
+
+      Record.DEFAULT_IMAGE_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default allowable Max Burst Size settings for image media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Default bandwidth allowed for m= lines of unknown media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_PEAK_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default peak bandwidth allowed for m= lines of unknown media type"
+
+      Record.DEFAULT_OTHER_MEDIA_TYPE_MAX_BURST_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 20480
+        description: "Default max burst size allowed for m= lines of unknown media type"
+
+      Record.VIDEO_FRAME_RATE_4_IPV4_IPV6_BANDWIDTH_INTERWORKING:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 250
+        description: "Required when Action is CREATE"
+
+      Record.INTELLIGENT_TRANSCODING_SUPPORT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS
+          operator: equals
+          value: "Yes"
+          allowedValues: [Yes]
+        description: "Must be 'Yes' when STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS is 'Yes'"
+
+      Record.SUPPORT_EVS_AMR_WB_IO_MODE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MIN_ALLOWED_EVS_BR:
+        required: false
+        type: string
+        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.MIN_ALLOWED_EVS_BW:
+        required: false
+        type: string
+        allowedValues: [none, nb, wb, swb, fb]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.MAX_ALLOWED_EVS_BW:
+        required: false
+        type: string
+        allowedValues: [none, nb, wb, swb, fb]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+      Record.STRICT_CLOCK_RATE_MATCHING_GCL_AUDIO_CODECS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Enable strict matching of clock-rate of selected GCL codecs to OCL codecs"
+
+      Record.PRESCRIBED_DTMF_PT_FOR_EGRESS_SDP_OFFER:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 96, max: 127 }
+        description: "Required when Action is CREATE; 0 or range 96..127"
+
+      Record.DEFAULT_MSRP_MEDIA_TYPE_MAX_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10240
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_AMR_WB_CODEC_WITH_MODE_SET:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_ALLOWED_EVS_BR:
+        required: false
+        type: string
+        allowedValues: ["0", "5.9", "7.2", "8", "9.6", "13.2", "16.4", "24.4", "32", "48", "64", "96", "128"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; applicable when SDP validation is enabled"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, ActionKey, Record.PROFILEID, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, ActionKey, Record.PROFILEID, Record.CodecBandwidth.CODEC, Record.MsrpBandwidth.MSRP_MEDIA_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+          
+      - require: '"Record.GoldenCodecSet.GOLDEN_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.GoldenCodecSet
+
+      - require: '"Record.GoldenCodecSet.GOLDEN_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.GoldenCodecSet
+
+      - require: '"Record.AuxiliaryCodecSet.AUXILIARY_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.AuxiliaryCodecSet
+
+      - require: '"Record.AuxiliaryCodecSet.AUXILIARY_CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.AuxiliaryCodecSet
+
+      - require: '"Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRNBModeSet
+      
+      - require: '"Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRWBModeSet
+
+      - require: '"Record.PreferredAMRNBModeSet.PREFERRED_AMR_NB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRNBModeSet
+      
+      - require: '"Record.PreferredAMRWBModeSet.PREFERRED_AMR_WB_MODE_SET"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.PreferredAMRWBModeSet 
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.MsrpBandwidth
+
+      - require: '"Record.MsrpBandwidth.MSRP_MEDIA_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.MsrpBandwidth
+
+      - require: '"Record.CodecBandwidth.CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.CodecBandwidth
+
+      - require: '"Record.CodecBandwidth.CODEC"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.CodecBandwidth
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PROFILEID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      
+
+  # --------------------------------------------------------------------------- 
+  # Sheet: BorderGatewayPublishedRealmTable (Excel sheet name is truncated to 31 chars)
+  # ---------------------------------------------------------------------------
+  BorderGatewayPublishedRealmTable:
+    aliases:
+      - BorderGatewayPublishedRealmTa01
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.PUBLISHED_REALM_ENTRY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 999
+        description: "ID of the table"
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.BORDER_GATEWAY:
+        required: false
+        type: integer
+        minValue: 1024
+        maxValue: 1346
+        description: "Required when Action is CREATE; must equal COMPONENTNUMBER of Border GW component"
+
+      Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 1024
+        description: "Required when Action is CREATE; must be previously created in PublishedRealmTable"
+
+    rules:
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - require: '"Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID"'
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.BORDER_GATEWAY, Record.PUBLISHED_REALM_ENTRY.PUBLISHED_REALM_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.BORDER_GATEWAY]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.BORDER_GATEWAY]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.BORDER_GATEWAY"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IbcfVirtualNetworkTable
+  # ---------------------------------------------------------------------------
+  IbcfVirtualNetworkTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1628
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.VN_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 4096
+        description: "Virtual Network ID"
+
+      Record.VN_NAME:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.VN_TYPE:
+        required: false
+        type: string
+        allowedValues: [Core, Peer]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; cannot be changed for existing VN"
+
+      Record.SERVICE_LEVEL_POLICY_ID:
+        required: false
+        type: integer
+        minValue: 0
+        description: "0 or equal to ServiceProfileTable.POLICY_ID"
+
+      Record.SIP_ERROR_RESP_CODE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 699
+        description: "Required when Action is CREATE; error response sent when request rejected due to CAC"
+
+      Record.PEERING_ISGW_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.MEDIA_REALM:
+        required: false
+        type: integer
+        maxValue: 32767
+        description: "Required when Action is CREATE"
+
+      Record.TRUNK_CONTEXT:
+        required: false
+        type: string
+        maxLength: 128
+        pattern: '^[a-zA-Z0-9\*#\.,\-''!$()&><%/=;\\ ]{0,128}$'
+        description: "Required when Action is CREATE"
+
+      Record.CFED_PORT:
+        required: false
+        type: string
+        pattern: '^([a-zA-Z0-9\*#\.,\-+''~`!@$%^:]{4})?$'
+        description: "Required when Action is CREATE; empty when VN_TYPE=Peer"
+
+      Record.PFED_PORT:
+        required: false
+        type: string
+        pattern: "^([a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:]{4})?$"
+        allowedValuesWhen:
+        - column: Record.VN_TYPE
+          operator: equals
+          value: "Core"
+          allowedValues: [""]
+        description: "Required when Action is CREATE; empty when VN_TYPE=Core"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
+      Record.MEASUREMENT_TG_TRAFFIC:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MEASUREMENT_ISGW_POLICY:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MEASUREMENT_CAC:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ENABLE_STIR_SHAKEN:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.VERIFICATION_FAILURE_ACTION:
+        required: false
+        type: string
+        allowedValues: ["Verification Server Action", Continue]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; must be 0 if ENABLE_STIR_SHAKEN is No"
+
+      Record.IPSEC_SA_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = no IPsec SA profile; 1..2048 = profile ID"
+
+      Record.REMOTE_IPSEC_TUNNEL_GW_ADDR:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE; IPv4/IPv6 remote IPsec tunnel gateway address"
+
+      Record.IKE_REMOTE_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 500, max: 500 }
+          - { min: 1024, max: 65535 }
+        description: "Required when Action is CREATE; 0, 500, or 1024..65535"
+
+      Record.IC_INTERFACE_ALLOWED_SIP_HEADERS_LIST:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 100 }
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.ENABLE_DIV_SIGNING_VERIFICATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.HONOR_RECEIVED_IDENTITY_HEADERS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.HONOR_RECEIVED_VERSTAT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_DIV_SIGNING_DEPTH:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 127
+        description: "Required when Action is CREATE"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.VN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.VN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+          
+  # ---------------------------------------------------------------------------
+  # Sheet: ServiceProfileTable
+  # ---------------------------------------------------------------------------
+  ServiceProfileTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 2049
+        maxValue: 2051
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+
+      Record.POLICY_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2048
+
+      Record.SERVICE_DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 19
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\";&<>/_\\s|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_ALL_IN_SESSION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_INCOMING_SESSION:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 100000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_IN_SESSION
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when ALLOW_ALL_IN_SESSION is Yes"
+
+      Record.ALLOW_ALL_OUT_SESSION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_OUTGOING_SESSION:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 100000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_OUT_SESSION
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when ALLOW_ALL_OUT_SESSION is Yes"
+
+      Record.ALLOW_ALL_IN_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_INCOMING_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 30000000
+        description: "Must be 0 when ALLOW_ALL_IN_BANDWIDTH is Yes"
+
+      Record.ALLOW_ALL_OUT_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_OUTGOING_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 30000000
+        description: "Must be 0 when ALLOW_ALL_OUT_BANDWIDTH is Yes"
+
+      Record.ALLOW_ALL_TOTAL_SESSION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_SESSION:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 100000
+        description: "Must be 0 when ALLOW_ALL_TOTAL_SESSION is Yes"
+
+      Record.ALLOW_ALL_TOTAL_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 60000000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_BANDWIDTH
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when ALLOW_ALL_TOTAL_BANDWIDTH is Yes"
+
+      Record.ALLOW_ALL_TOTAL_CPS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_CPS:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 64000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_CPS
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when ALLOW_ALL_TOTAL_CPS is Yes"
+
+      Record.ALLOW_ALL_IN_CPS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.MAX_INCOMING_CPS:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 32000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_IN_CPS
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when Record.ALLOW_ALL_IN_CPS is 'Yes'"
+
+      Record.ALLOW_ALL_OUT_CPS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.MAX_OUTGOING_CPS:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 32000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_OUT_CPS
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when Record.ALLOW_ALL_OUT_CPS is 'Yes'"
+
+      Record.PER_USER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_ALL_TOTAL_AUDIO_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_AUDIO_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_AUDIO_BANDWIDTH
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MAX_TOTAL_VIDEO_BANDWIDTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 50000000
+        allowedValuesWhen:
+        - column: Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH
+          operator: equals
+          value: "Yes"
+          allowedValues: [0]
+        description: "Must be 0 when Record.ALLOW_ALL_TOTAL_VIDEO_BANDWIDTH is 'Yes'"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.POLICY_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: PFEDPortTable
+  # ---------------------------------------------------------------------------
+  PFEDPortTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string       
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 99
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PFED_ID:
+        required: false
+        type: string
+        description: "Must match /PFEDServiceTable/Record/PFED_ID"
+
+      Record.PORT_NAME:
+        required: false
+        type: string
+        maxLength: 4
+        pattern: "[a-z0-9]{4}"
+        description: "Required when Action is CREATE; exactly 4 lowercase alphanumeric chars"
+
+      Record.EXTERNAL_HOST_NAME:
+        required: false
+        type: string
+        maxLength: 256
+        description: "Required when Action is CREATE"
+
+      Record.EXTERNAL_PORT_NUMBER:
+        required: false
+        type: integer
+        minValue: 1024
+        maxValue: 32767
+        description: "Required when Action is CREATE"
+        aliases:
+          - EXTERNAL_PORT_NUMBER
+
+      Record.ADMINISTRATIVE_STATE:
+        required: false
+        type: string
+        allowedValues: [Unlocked, Locked]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.OVERLOAD_SPECIAL_TREATMENT:
+        required: false
+        type: string
+        allowedValues: ["Reject with 500", "Pass Through"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.INCLUDE_SERVER_PORT_IN_EXT_PFED_URI:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.TLS_PROFILE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 64
+        description: "Required when Action is CREATE; 0 means no TLS profile"
+
+      Record.TLS_SERVER_PORT:
+        required: false
+        type: integer
+        pattern: '^(0|80|443|102[4-9]|10[3-9][0-9]|1[1-9][0-9]{2}|[2-9][0-9]{3}|[12][0-9]{4}|3[01][0-9]{3}|32[0-6][0-9]{2}|327[0-5][0-9]|3276[0-7])$'
+        description: "Required when Action is CREATE"
+        aliases:
+          - TLS_SERVER_PORT
+
+      Record.PUBLISHED_V4_EXTERNAL_FLOATING_IP_ADDRESS:
+        required: false
+        type: string
+        pattern: 'No v4|(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])'
+        description: "Required when Action is CREATE; IPv4 address or 'No v4'"
+
+      Record.PUBLISHED_V6_EXTERNAL_FLOATING_IP_ADDRESS:
+        required: false
+        type: string
+        pattern: 'No v6|(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])|::(?:ffff(?::0{1,4})?:)?(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9]))(?:%[\p{N}\p{L}]+)?'
+        description: "Required when Action is CREATE; IPv6 address or 'No v6'"
+
+      Record.IPV4_VLAN_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 4094
+        description: "0 means no VLAN tagging"
+
+      Record.IPV6_VLAN_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 4094
+        description: "0 means no VLAN tagging"
+
+      Record.EIPM_MONITOR_MODE:
+        required: false
+        type: string
+        allowedValues: [Disabled, Heartbeat-only, Monitor]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.IPSEC_ALLOWED:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SECONDARY_PUBLISHED_V4_EXTERNAL_FLOATING_IP_ADDRESS:
+        required: false
+        type: string
+        pattern: 'No v4|(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])'
+        description: "Required when Action is CREATE; secondary IPv4 address or 'No v4' or empty"
+
+      Record.SECONDARY_PUBLISHED_V6_EXTERNAL_FLOATING_IP_ADDRESS:
+        required: false
+        type: string
+        pattern: 'No v6|(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|(?:[0-9a-fA-F]{1,4}:){1,4}:(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])|::(?:ffff(?::0{1,4})?:)?(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9]))(?:%[\p{N}\p{L}]+)?'
+        description: "Required when Action is CREATE; secondary IPv6 address or 'No v6' or empty"
+
+      Record.IPSEC_LOCAL_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1024, max: 32767 }
+        description: "Required when Action is CREATE; 0 or 1024..32767; provisioned only when IPSEC_ALLOWED is Yes"
+
+      Record.IKE_LOCAL_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 500, max: 500 }
+          - { min: 1024, max: 32767 }
+        description: "Required when Action is CREATE; 0, 500, or 1024..32767; provisioned only when IPSEC_ALLOWED is Yes"
+
+      Record.SIP_DSCP:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 63
+        description: "Required when Action is CREATE; 0..63 or empty; when empty uses SIP DSCP from PFED Service Data"
+
+      Record.SIP_FILTER_SET_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 600 }
+        description: "0 = SIP message screening not configured; 1..600 = Filter Set ID from SIP Filter Set table"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PFED_ID, Record.PORT_NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PFED_ID, Record.PORT_NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - compare: '"Record.TLS_SERVER_PORT" notEquals "Record.EXTERNAL_PORT_NUMBER"'
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PFED_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.PORT_NAME"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+  # ---------------------------------------------------------------------------
+  # Sheet: PublishedRealmTable
+  # ---------------------------------------------------------------------------
+  PublishedRealmTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 999
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PUBLISHED_REALM_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2048
+
+      Record.PUBLISHED_REALM_NAME:
+        required: false
+        type: string
+        minLength: 1
+        maxLength: 128
+        description: "Required when Action is CREATE; must be unique across all records"
+
+      Record.IP_VERSION:
+        required: false
+        type: string
+        allowedValues: [v4, v6, "v4/v6"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIGNALING_V4_VLAN:
+        required: false
+        type: string
+        pattern: '^(409[0-4]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|untagged)?$'
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v6"
+          allowedValues: [""]
+        description: "Required when Action is CREATE; blank when IP_VERSION=v6"
+
+      Record.SIGNALING_V6_VLAN:
+        required: false
+        type: string
+        pattern: '^(409[0-4]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|untagged)?$'
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v4"
+          allowedValues: [""]
+        description: "Required when Action is CREATE; blank when IP_VERSION=v4"
+
+      Record.CORE_PRIMARY_BEARER_REALM_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to CoreBearerRealmTable.CORE_BEARER_REALM_ID"
+
+      Record.CORE_ALTERNATE_BEARER_REALM_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to CoreBearerRealmTable.CORE_BEARER_REALM_ID"
+
+      Record.BYPASS_IPV4_DOMAIN_SUFFIX:
+        required: false
+        type: string
+        maxLength: 128
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v6"
+          allowedValues: [""]
+        description: "Required when Action is CREATE; blank when IP_VERSION=v6"
+
+      Record.BYPASS_IPV6_DOMAIN_SUFFIX:
+        required: false
+        type: string
+        maxLength: 128
+        allowedValuesWhen:
+        - column: Record.IP_VERSION
+          operator: equals
+          value: "v4"
+          allowedValues: [""]
+        description: "Required when Action is CREATE; blank when IP_VERSION=v4"
+
+      Record.SPARE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 255
+
+      Record.EIPM_INTER_MONITOR_MODE:
+        required: false
+        type: string
+        allowedValues: [Disabled, Heartbeat-only, Monitor]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_NAME]
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+          
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PUBLISHED_REALM_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PUBLISHED_REALM_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IbcfSipProfileTable
+  # ---------------------------------------------------------------------------
+  IbcfSipProfileTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1628
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2048
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 128
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-'!$()&><%/=;\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.SIP_FILTER_SET_INDEX:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 600
+        description: "Required when Action is CREATE; 0 or equal to SipFilterSet.FILTER_SET_ID"
+
+      Record.URI_TYPE:
+        required: false
+        type: string
+        allowedValues: [SIP, TEL, SIPS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.RURI_POPULATION:
+        required: false
+        type: string
+        allowedValues: ["Egress TG destination", "Pass through", "Pass through w/o inserting Route"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.INVITE_PRELOADED_ROUTE_HEADER_PASS_THRU:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.P_CHARGING_VECTOR_HANDLING:
+        required: false
+        type: string
+        allowedValues: ["Not handle", "Pass through", "Generate Transit IOI", "Generate Transit IOI and Void Received", "Generate Orig IOI", "Generate Term IOI"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CONTACT_HEADER_RFC4904_TGRP_OR_TRUNK_CONTEXT_POPULATION:
+        required: false
+        type: string
+        allowedValues: ["Not Populate", "Local TG", "Pass through"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.RURI_HEADER_RFC4904_TGRP_OR_TRUNK_CONTEXT_POPULATION:
+        required: false
+        type: string
+        allowedValues: ["Not Populate", "Local TG", "Pass through"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CALLING_PARTY_IDENTITY_HEADER:
+        required: false
+        type: string
+        allowedValues: ["P-Asserted-ID header only", "P-Asserted-ID then From header", "From header only"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PAID_PRECEDENCE:
+        required: false
+        type: string
+        allowedValues: [SIPUSERPHONE-TEL, SIP-TEL, TEL-SIP, TEL-SIPUSERPHONE, TOP, SIPUSERPHONE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PAID_POPULATION:
+        required: false
+        type: string
+        allowedValues: ["Pass through", Remove, "Remove PAID with Privacy", "Pass through entire header"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.HANDLING_3XX:
+        required: false
+        type: string
+        allowedValues: ["Release Call", "Pass through", "Evaluate Route", "Route Direct"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
+      Record.PASS_THROUGH_BOTH_HISTORY_INFO_AND_DIVERSION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.HISTORY_INFO_HANDLING:
+        required: false
+        type: string
+        allowedValues: ["Pass through", Remove, "Remove only entries with privacy", "Mapping History-Info to Diversion"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.DIVERSION_HANDLING:
+        required: false
+        type: string
+        allowedValues: ["Pass through", Remove, "Remove only Diversion with privacy", "Mapping Diversion to History-Info"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REFER_TO_INVITE_CALL_TRANSFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MS_TEAMS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PRECONDITION_HANDLING:
+        required: false
+        type: string
+        allowedValues: ["Pass Through", Disabled, Enabled]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.IOI:
+        required: false
+        type: string
+        maxLength: 64
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.SIP_ERROR_TREATMENT_TABLE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 1630 }
+        description: "0 = not configured; 1..1630 = SIP Error Treatment Table ID"
+
+      Record.MAX_3XX_REDIRECT_ALLOWED:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 12
+        description: "Required when Action is CREATE"
+
+      Record.REFER_TO_REINVITE_CALL_TRANSFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.REFER_TO_INVITE_CALL_TRANSFER
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "Required when Action is CREATE; must be 'No' when Record.REFER_TO_INVITE_CALL_TRANSFER is 'No'"
+
+      Record.REFER_TO_BYE_CALL_TRANSFER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PRESERVE_DIALOG_ID_BY_B2BUA:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SEND_SDPLESS_REINVITE_TO_TRANSFEREE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SEND_NOTIFY_FOR_PROVISIONAL_RESPONSE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CALL_TRANSFER_NO_ANSWER_TIMER:
+        required: false
+        type: integer
+        minValue: 15
+        maxValue: 360
+        description: "Required when Action is CREATE"
+
+      Record.TIMER_TO_WAITE_FOR_REINVITE_FROM_B:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 180
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_INCOMING_REQ_ON_PFED_OUTBOUND_CONN:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.HEADER_FOR_CALL_DIVERSION:
+        required: false
+        type: string
+        allowedValues: [DIVHDR, HISTINFOHDR]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ALLOW_SDP_IN_200OK_AFTER_REL_18X:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ADD_SDP_WITH_CODECS_FOR_INITIAL_INVITE:
+        required: false
+        type: string
+        allowedValues: ["From GCS", No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_100REL_INTERWORKING:
+        required: false
+        type: string
+        allowedValues: [Disabled, Enabled]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_TRANSPORT_TLS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.INSERT_REFERRED_BY_HEADER_INTO_INVITE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.REFER_TO_INVITE_CALL_TRANSFER
+          operator: equals
+          value: "No"
+          allowedValues: [No]
+        description: "Required when Action is CREATE"
+
+      Record.STRENGTH_TAG:
+        required: false
+        type: string
+        allowedValues: [Optional, Mandatory]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.KEEP_SDP_UNRELIABLE_TO_RELIABLE_RESPONSE:
+        required: false
+        type: string
+        allowedValues: [Disabled, Enabled]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ROUTE_OPTION_FOR_REFER_TO_INVITE:
+        required: false
+        type: string
+        allowedValues: [Transferee, Transferor]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SDES_SRTP_MINIMUM_SUPPORTED_CRYPTO_SUITE:
+        required: false
+        type: string
+        allowedValues: [AES_CM_128_HMAC_SHA1_80, AES_CM_128_HMAC_SHA1_32]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PASS_THROUGH_INVITE_FROM:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PROFILE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IbcfTrunkGroupTable
+  # ---------------------------------------------------------------------------
+  IbcfTrunkGroupTable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.REMOTEIPADDRESSList]
+        dropdownDisabled: true   
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1628
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.VN_ID:
+        required: false
+        type: integer
+        description: "Must equal IbcfVirtualNetworkTable.VN_ID"
+
+      Record.TG_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 32
+        description: "Max 32 TGs per VN"
+
+      Record.TG_NAME:
+        required: false
+        type: string
+        maxLength: 32
+        pattern:  "^[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*$"
+        description: "Required when Action is CREATE"
+
+      Record.REMOTE_DEST_ADDR_TYPE:
+        required: false
+        type: string
+        allowedValues: [FQDN, IPv4, IPv6]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REMOTE_DEST_IP_FQDN:
+        required: false
+        type: string
+        maxLength: 128
+        description: "Required when Action is CREATE"
+
+      Record.REMOTE_DEST_PORT:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 65535
+        description: "Required when Action is CREATE"
+
+      Record.CRF_ROUTINE_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to CRFRouteProfile.ROUTE_PROFILE_ID"
+
+      Record.EGRESS_CRF_TASK_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to CRFRouteProfile.ROUTE_PROFILE_ID"
+
+      Record.SERVICE_LEVEL_POLICY_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to ServiceProfileTable.POLICY_ID"
+
+      Record.IBCF_SIP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to IbcfSipProfileTable.PROFILE_ID"
+
+      Record.IBCF_SDP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+        description: "0 or equal to PeeringSDPProfileTable.PROFILEID"
+
+      Record.IBCF_SBLP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 2048
+
+      Record.TRANSPORT_TYPE:
+        required: false
+        type: string
+        allowedValues: [UDP, TCP, SCTP, TLS]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIP_HEARTBEAT_OPTIONS:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.MEDIA_IP_VERSION:
+        required: false
+        type: string
+        allowedValues: [IPv4, IPv6]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.ADMINISTRATIVE_STATE:
+        required: false
+        type: string
+        allowedValues: [Unlocked, Locked]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIPI_VARIANT:
+        required: false
+        type: string
+        allowedValues: [NONE, FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
+        allowedValuesWhen:
+        - column: Record.SIPI_PROFILE_ID
+          operator: notEquals
+          value: "0"
+          allowedValues: [FR, UK, RU, ETSIV1, ETSIV2, ETSIV3, "ITU-92", "ITU-99", ANSI, Q.767, IT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.REMOTEIPADDRESSList.REMOTEIPADDRESS:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE"
+
+      Record.MEDIA_DSCP_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 64 }
+        description: "0 = not configured; 1..64 = DSCP profile ID"
+
+      Record.SECOND_STAGE_INGRESS_TG_SELECTION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SPARE_TABLE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+
+      Record.SCTP_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 31
+        description: "0 = no SCTP profile"
+
+      Record.SCTP_SECONDARY_REMOTE_DEST_IP:
+        required: false
+        type: string
+        maxLength: 45
+        pattern: "[a-fA-F0-9:.]*"
+        description: "Required when Action is CREATE; secondary remote destination IP"
+
+      Record.CRF_ROUTINE_PROFILE_ID_REGISTER:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "Required when Action is CREATE; 0 = not configured"
+
+      Record.INSERT_SERVICE_ROUTE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_PATH:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_SERVICE_ROUTE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.THIG_2_REGISTER_CONTACT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.BYPASS_IBCF_DEFAULT_ENUM:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SIPI_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = not configured; 1..2048 = SIPI profile ID"
+
+      Record.POST_3XX_CRF_ROUTE_PROFILE_ID:
+        required: false
+        type: string
+        pattern: "^(None|([1-9][0-9]{0,2}|1[0-9]{3}|20[0-3][0-9]|204[0-8]))$"
+        description: "None = not configured; or 1..2048 route profile ID"
+
+      Record.DD_OPTIONS:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 50 }
+        allowedValuesWhen:
+        - column: Record.SIPI_PROFILE_ID
+          operator: equals
+          value: "0"
+          allowedValues: [0]
+
+      Record.IPSEC_REMOTE_SERVER_PORT:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1024, max: 65535 }
+        description: "Required when Action is CREATE; 0 or 1024..65535"
+
+      Record.TLS_PROFILE_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 64 }
+        description: "0 = no TLS profile; 1..64 = TLS profile ID"
+
+      Record.CA_LIST_ID:
+        required: false
+        type: integer
+        allowedRanges:
+          - { min: 0, max: 0 }
+          - { min: 1, max: 2048 }
+        description: "0 = not configured; 1..2048 = CA list ID"
+
+      Record.DETECT_FAREND_NAPT:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.SUPPORT_TLS_SYMMETRIC:
+        required: false
+        type: string
+        allowedValues: [No, Always, NAT]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+    rules:
+      - require: '"Record.REMOTEIPADDRESSList.REMOTEIPADDRESS"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: ActionKey
+              operator: equals
+              value: Record.REMOTEIPADDRESSList
+
+      - require: '"Record.REMOTEIPADDRESSList.REMOTEIPADDRESS"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: ActionKey
+              operator: equals
+              value: Record.REMOTEIPADDRESSList
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.VN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.TG_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFDATable
+  # ---------------------------------------------------------------------------
+  CRFDATable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.DIGIT_STRING:
+        required: false
+        type: string
+        maxLength: 20
+        pattern: '^\+?[0-9A-Fa-f*#x]*&?$'
+        description: "Required when Action is CREATE; 0-9, A-F, x, *, #, +, &; + only at start, & only at end"
+
+      Record.CRF_TREATMENT_ID:
+        required: false
+        type: string
+        pattern: '^([1-9][0-9]{0,4}|100000|None)$'
+        description: "Required when Action is CREATE or MODIFY; None or equal to CRFTreatment.TREATMENT_ID"
+
+      Record.AREA_CODE_FOR_CALL_BARRING:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.PASS_VISIT_AREA_CODE_FOR_CALL_BARRING:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Only when AREA_CODE_FOR_CALL_BARRING is Yes"
+
+      Record.NEGATION_FOR_CALL_BARRING:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.AREA_CODE:
+        required: false
+        type: string
+        maxLength: 10
+        pattern: "[+]?[0-9x]*[&]?"
+        description: "Only when AREA_CODE_FOR_CALL_BARRING is Yes"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.DIGIT_STRING]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.DIGIT_STRING]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.DIGIT_STRING"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFRoutePlan
+  # ---------------------------------------------------------------------------
+  CRFRoutePlan:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.RT_PLAN_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 1024
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.ROUTE_PLAN_TYPE:
+        required: false
+        type: string
+        allowedValues: ["Digit Analysis", "Trunk Group", "Host URI", "Programmable Routing"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.TYPE:
+        required: false
+        type: string
+        allowedValues: [Origination, Destination]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.ROUTE_PLAN_TYPE
+          operator: equals
+          value: "Programmable Routing"
+          allowedValues: [Origination]
+        description: "Required when Action is CREATE; must be Origination when ROUTE_PLAN_TYPE is Programmable Routing"
+
+      Record.RT_PLAN_DATA_TBL_ID:
+        required: false
+        type: string
+        pattern: '^([0-9]{1,4}|[1-5][0-9]{3}|6000|None)$'
+        description: "Required when Action is CREATE"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.RT_PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.RT_PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.RT_PLAN_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFRoutePriorityList
+  # ---------------------------------------------------------------------------
+  CRFRoutePriorityList:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.CRFRoutePriorityListEntry]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.PRIORITY_LIST_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 4096
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.CRF_PRIORITY_LIST_TYPE:
+        required: false
+        type: string
+        allowedValues: ["Routing Type", "Statistics Type"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CRFRoutePriorityListEntry.PLAN_TYPE:
+        required: false
+        type: string
+        allowedValues: [Route, Task]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.CRF_PRIORITY_LIST_TYPE
+          operator: equals
+          value: "Statistics Type"
+          allowedValues: [Task]
+        description: "Required when Action is CREATE; must be Task when CRF_PRIORITY_LIST_TYPE is Statistics Type"
+
+      Record.CRFRoutePriorityListEntry.PLAN_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 1024
+        description: "Required when Action is CREATE"
+
+    rules:
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PRIORITY_LIST_ID, Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.PRIORITY_LIST_ID, Record.CRFRoutePriorityListEntry.PLAN_TYPE, Record.CRFRoutePriorityListEntry.PLAN_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PRIORITY_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.PRIORITY_LIST_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      - require: '"Record.CRFRoutePriorityListEntry.PLAN_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.CRFRoutePriorityListEntry.PLAN_ID"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+      - require: '"Record.CRFRoutePriorityListEntry.PLAN_ID"'
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      - require: '"Record.CRFRoutePriorityListEntry.PLAN_TYPE"'
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.PRIORITY_LIST_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFRouteProfile
+  # ---------------------------------------------------------------------------
+  CRFRouteProfile:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.ROUTE_PROFILE_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2048
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.RT_PRIORITY_LIST_1:
+        required: false
+        type: string
+        minValue: 1
+        maxValue: 4096
+        pattern: '^(4096|409[0-5]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|None)$'
+        description: "Required when Action is CREATE"
+
+      Record.NO_MATCH_ACTION_FOR_RT_LIST1:
+        required: false
+        type: string
+        allowedValues: ["Return No Match", "Continue Next Route Priority List"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.RT_PRIORITY_LIST_2:
+        required: false
+        type: string
+        minValue: 1
+        maxValue: 4096
+        pattern: '^(4096|409[0-5]|40[0-8][0-9]|[1-3][0-9]{3}|[1-9][0-9]{0,2}|None)$'
+        description: "Optional; used when NO_MATCH_ACTION_FOR_RT_LIST1 is Continue Next Route Priority List"
+
+      Record.SPARE_ID:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 10000
+        description: "Required when Action is CREATE"
+
+      Record.CRF_PROG_ROUTE_PLAN:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CRF_MESSAGE_MANIPULATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.CRF_ENUM_TLD:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.TAC_MATCHING:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.GNB_ID_LENGTH:
+        required: false
+        type: integer
+        minValue: 22
+        maxValue: 32
+        description: "Required when Action is CREATE"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.ROUTE_PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.ROUTE_PROFILE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.ROUTE_PROFILE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFTreatment
+  # ---------------------------------------------------------------------------
+  CRFTreatment:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.TREATMENT_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 100000
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+        description: "Required when Action is CREATE"
+
+      Record.TREATMENT_TYPE:
+        required: false
+        type: string
+        allowedValues: ["Type 1 Target List", "Type 2 Target List", "Continue Re-Route", "SIP Error Response", "IBCF TG Target List", "Continue With"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.TREATMENT:
+        required: false
+        type: string
+        pattern: '^(100000|[1-9][0-9]{0,4}|None|403 Forbidden|404 Not Found|480 Temporarily Not Available|486 Busy Here|500 Internal Error|503 Service Unavailable|CM-Call-Disposition)$'
+        allowedValuesWhen:
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "SIP Error Response"
+          allowedValues: ["403 Forbidden", "404 Not Found", "480 Temporarily Not Available", "486 Busy Here", "500 Internal Error"]
+        - column: Record.TREATMENT_TYPE
+          operator: equals
+          value: "Continue With"
+          allowedValues: [CM-Call-Disposition]
+        description: "Required when Action is CREATE; value depends on TREATMENT_TYPE"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TREATMENT_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.TREATMENT_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - require: '"Record.TREATMENT_TYPE"'
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.TREATMENT_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: CRFHostURITable
+  # ---------------------------------------------------------------------------
+  CRFHostURITable:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+             
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD] 
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 6000
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.HOST_URI:
+        required: false
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[^`]+$'
+        description: "Required when Action is CREATE"
+
+      Record.HOST_URI_TYPE:
+        required: false
+        type: string
+        allowedValues: [IPv4, IPv6, Domain]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.NETMASK:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 128
+        description: "Required when Action is CREATE; valid for IPv4 and IPv6 only"
+
+      Record.CRF_TREATMENT_ID:
+        required: false
+        type: string
+        pattern: "^(None|100000|[1-9][0-9]{0,4})$"
+        description: "Required when Action is CREATE; equal to CRFTreatment.TREATMENT_ID"
+
+    rules:
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - require: '"Record.NETMASK"'
+        when:
+          column: Record.HOST_URI_TYPE
+          operator: equals
+          value: IPv4
+
+      - require: '"Record.NETMASK"'
+        when:
+          column: Record.HOST_URI_TYPE
+          operator: equals
+          value: IPv6
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.HOST_URI, Record.HOST_URI_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.HOST_URI, Record.HOST_URI_TYPE]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.HOST_URI"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.HOST_URI_TYPE"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IbcfIngressTrunkGroupMappingTable (Excel sheet name is truncated to 31 chars)
+  # ---------------------------------------------------------------------------
+  IbcfIngressTrunkGroupMappingTable:
+    aliases:
+      - IbcfIngressTrunkGroupMappingT01
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+        
+      
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 0
+        maxValue: 1628
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "(\\S|\\S[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*\\S)"
+
+      Record.POLICY_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 10000
+
+      Record.IBCF_VN_ID:
+        required: false
+        type: integer
+        minValue: -32768
+        maxValue: 32767
+        description: "Required when Action is CREATE; must match IbcfVirtualNetworkTable.VN_ID"
+
+      Record.IBCF_TG_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 32
+        description: "Required when Action is CREATE; must match IbcfTrunkGroupTable.TG_ID for given VN"
+
+      Record.ADDRESS:
+        required: false
+        type: string
+        pattern: "^(DEFAULT|.{1,256})$"
+        description: "Required when Action is CREATE; Via header address or DEFAULT"
+
+      Record.PORT:
+        required: false
+        type: string
+        pattern: '^(NOTPRESENT|DEFAULT|[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$'
+        allowedValuesWhen:
+        - column: Record.ADDRESS
+          operator: equals
+          value: "DEFAULT"
+          allowedValues: [DEFAULT]
+        description: "Must be 'DEFAULT' when Record.ADDRESS is 'DEFAULT'. Allowed values: NOTPRESENT, DEFAULT, or numeric range 1-65535"
+
+      Record.RFC4904_TGRP:
+        required: false
+        type: string
+        maxLength: 64
+        pattern: '^(NOTPRESENT|[a-zA-Z0-9\*#\.,\-+''~`!@$%^:;=(){}\[\]?"''&<>/_|\\ ]*)$'
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE; TGRP or NOTPRESENT"
+
+      Record.RFC4904_TRUNK_CONTEXT:
+        required: false
+        type: string
+        maxLength: 64
+        pattern: '^(NOTPRESENT|[a-zA-Z0-9\*#\.,\-+''~`!@$%^:;=(){}\[\]?"''&<>/_|\\ ]*)$'
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.CFED_PORT
+          operator: notEquals
+          value: "NOTPRESENT"
+          allowedValues: [NOTPRESENT]
+        - column: Record.RFC4904_TGRP
+          operator: equals
+          value: "NOTPRESENT"
+          allowedValues: [NOTPRESENT]
+        description: "Required when Action is CREATE; Trunk-Context or NOTPRESENT"
+
+      Record.CFED_PORT:
+        required: false
+        type: string
+        pattern: '^(NOTPRESENT|.{4})$'
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        allowedValuesWhen:
+        - column: Record.RFC4904_TGRP
+          operator: notEquals
+          value: "NOTPRESENT"
+          allowedValues: [NOTPRESENT]
+        description: "Required when Action is CREATE; CFED port name or NOTPRESENT"
+
+    rules:
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.POLICY_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.POLICY_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+ 
+  # Total number of announcement file rows
+  CR_COUNT:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct_count

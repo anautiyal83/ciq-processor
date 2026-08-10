@@ -202,7 +202,7 @@ ERROR=<reason>
 | `User_ID` | Header row from `userIdSheet` config (CRGROUP + EMAIL) |
 | `Column_Guide` | Reference — column name, type, required, allowed values, constraints, description |
 
-Columns with `allowedValues:` in the YAML get Excel **dropdown validation** on rows 2–101.
+Columns with `allowedValues:` or `type: enum` + `values:` in the YAML get Excel **dropdown validation** on rows 2–101. Set `dropdownDisabled: true` to suppress the dropdown for columns whose value list exceeds Excel's 255-character inline-list limit.
 
 ---
 
@@ -596,6 +596,17 @@ sheets:
         required: true
         sheetRef: true              # value must match an existing sheet name in the workbook
         sheetRefIgnoreCase: false
+      Record.IMMUTABLE_CODE:
+        allowedValuesWhen:
+          - column: Action          # must be blank when Action=MODIFY (non-modifiable field)
+            value: MODIFY
+            allowedValues: []
+      Record.STATUS:
+        allowedValuesWhen:
+          - column: Action
+            operator: notEquals     # must be ACTIVE when Action != DELETE
+            value: DELETE
+            allowedValues: [ACTIVE]
 
     rules:
       # require a column when a condition is met
@@ -644,6 +655,8 @@ sheets:
 | `requiredWhen: { column, value }` | object | Required only when named column equals given value |
 | `values: [...]` | list | Closed vocabulary for `type: enum`, `type: protocol`, `type: urlScheme` |
 | `allowedValues: [...]` | list | Allowed values for `type: string`; generates Excel dropdown |
+| `dropdownDisabled: true` | boolean | Suppresses the Excel dropdown for this column even when `allowedValues`/`values` is set. Use when the combined value list exceeds Excel's 255-character limit. Validation is **not** affected — only the UI dropdown is omitted. |
+| `allowedValuesWhen: [...]` | list | Conditional allowed/forbidden values. Each entry has `column`, optional `operator` (default `equals`), `value`, and `allowedValues`. When the trigger condition is met: empty list = cell must be blank; non-empty list = cell must match one of the values (case-insensitive). Supported operators: `equals`, `notEquals`, `contains`, `blank`, `notBlank`, `greaterThan`, `greaterThanOrEquals`, `lessThan`, `lessThanOrEquals` (and symbol aliases `==` `!=` `>` `>=` `<` `<=`). All entries evaluated independently. |
 | `allowedRanges: [{min, max}, ...]` | list | Numeric bands (OR logic); requires `type: integer` |
 | `minValue` / `maxValue` | number | Numeric bounds (inclusive); requires `type: integer` |
 | `minDecimal` / `maxDecimal` | number | Decimal bounds (inclusive); requires `type: decimal` |
@@ -879,6 +892,7 @@ ciq-processor/
 │       │   ├── SetMatchRule.java              # set_match rule model (source group set vs target row set)
 │       │   ├── UniqueRule.java                # unique rule model
 │       │   ├── ConditionalRequired.java       # requiredWhen model
+│       │   ├── ConditionalAllowedValues.java  # allowedValuesWhen condition entry model
 │       │   ├── CrossRef.java                  # crossRef model
 │       │   ├── IntRange.java                  # allowedRanges entry model
 │       │   └── ValidatorDefinition.java       # Custom validator registry entry model
@@ -905,6 +919,8 @@ ciq-processor/
 │           ├── PatternValidator.java          # mac, phone (built-in patterns), custom pattern
 │           ├── CrossRefValidator.java         # crossRef (cross-sheet column lookup)
 │           ├── SheetRefValidator.java         # sheetRef (value must match a sheet name)
+│           ├── ConditionalPatternValidator.java # conditionalPattern (lookup-driven pattern)
+│           ├── AllowedValuesWhenValidator.java  # allowedValuesWhen (conditional allowed/forbidden values)
 │           ├── CompareColumnsValidator.java   # compare row rule (ColA op ColB)
 │           ├── ConditionalRowRuleValidator.java # require/forbid with when condition + cross-sheet
 │           ├── WorkbookRuleValidator.java     # workbook_rules (subset/superset/unique/match)
