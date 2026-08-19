@@ -300,6 +300,7 @@ public class CiqValidationEngine {
                 }
                 // Composite key uniqueness — requires all rows; handled as a separate pass
                 checkCompositeKeys(sheet, sheetRules, sheetRules.getRules(), result);
+                checkPooledUnique(sheet, sheetRules, sheetRules.getRules(), result);
             }
 
             // Post-row aggregate checks: minOnePerGroup
@@ -455,6 +456,7 @@ public class CiqValidationEngine {
                 }
             }
             checkCompositeKeys(sheet, sheetRules, sheetRules.getRules(), result);
+            checkPooledUnique(sheet, sheetRules, sheetRules.getRules(), result);
         }
 
         // Post-row aggregate checks: minOnePerGroup
@@ -520,6 +522,52 @@ public class CiqValidationEngine {
                             + " (first seen at row " + seen.get(composite) + ")"));
                 } else {
                     seen.put(composite, row.getRowNumber());
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks pooled uniqueness for every {@code pooled_unique} rule in {@code rowRules}.
+     * Every non-blank value across all listed columns is tracked in one shared set — a
+     * value seen in any listed column (any row, including a different column in the same
+     * row) may not reappear in any listed column again. Rows are visited column-by-column
+     * in the order the columns are declared, so a same-row cross-column repeat is caught too.
+     */
+    private void checkPooledUnique(CiqSheet sheet, SheetRules sheetRules,
+                                   List<SheetRowRule> rowRules,
+                                   SheetValidationResult result) {
+        for (SheetRowRule rule : rowRules) {
+            List<String> cols = rule.getPooled_unique();
+            if (cols == null || cols.isEmpty()) continue;
+
+            RowCondition when = rule.getWhen();
+            Map<String, Integer> firstRow = new LinkedHashMap<>();
+            Map<String, String> firstCol = new LinkedHashMap<>();
+            for (CiqRow row : sheet.getRows()) {
+                if (when != null
+                        && !conditionalRowRuleValidator.evaluateCondition(when, row)) {
+                    continue;
+                }
+                for (String col : cols) {
+                    // skipValidationValues: a sentinel in a pooled column is an explicit
+                    // "no value" - it does not participate in the pooled uniqueness check.
+                    if (isBypassed(sheetRules, col, row)) continue;
+
+                    String val = row.get(col);
+                    String trimmed = val != null ? val.trim() : "";
+                    if (trimmed.isEmpty()) continue;
+
+                    if (firstRow.containsKey(trimmed)) {
+                        result.addError(new ValidationError(row.getRowNumber(), col, trimmed,
+                                "Duplicate value '" + trimmed + "' across pooled columns ["
+                                + String.join(", ", cols) + "]"
+                                + " (first seen in column '" + firstCol.get(trimmed)
+                                + "' at row " + firstRow.get(trimmed) + ")"));
+                    } else {
+                        firstRow.put(trimmed, row.getRowNumber());
+                        firstCol.put(trimmed, col);
+                    }
                 }
             }
         }
@@ -1097,8 +1145,15 @@ public class CiqValidationEngine {
     /**
      * Extracts all sheet names referenced by a {@link WorkbookRule} so the caller
      * can decide whether to skip the rule when any referenced sheet is absent.
+     *
+     * <p>Sheet-name resolution is delegated to {@link WorkbookCrossRefValidator#resolveSheetName}
+     * (rather than splitting each "Sheet.Column" reference on the first dot) because sheet
+     * names in this codebase may themselves contain dots (e.g. {@code System.MGCFPoolTbl}).
+     * A fixed-dot-position split would misread such a reference as sheet="System", which
+     * matches no real sheet and causes the entire workbook_rule to be skipped as if its
+     * dependency were absent — silently disabling the check instead of failing loudly.
      */
-    private static Set<String> extractReferencedSheets(WorkbookRule rule) {
+    private Set<String> extractReferencedSheets(WorkbookRule rule) {
         Set<String> sheets = new HashSet<>();
         addSheetFromRef(rule.getSubset(),    sheets);
         addSheetFromRef(rule.getSuperset(),  sheets);
@@ -1110,16 +1165,16 @@ public class CiqValidationEngine {
         return sheets;
     }
 
-    private static void addSheetFromRef(SubsetRule ref, Set<String> sheets) {
+    private void addSheetFromRef(SubsetRule ref, Set<String> sheets) {
         if (ref == null) return;
         addSheetFromString(ref.getFrom(), sheets);
         addSheetFromString(ref.getTo(),   sheets);
     }
 
-    private static void addSheetFromString(String ref, Set<String> sheets) {
+    private void addSheetFromString(String ref, Set<String> sheets) {
         if (ref == null || !ref.contains(".")) return;
-        String sheet = ref.substring(0, ref.indexOf('.')).trim();
-        if (!sheet.isEmpty()) sheets.add(sheet);
+        String sheet = workbookCrossRefValidator.resolveSheetName(ref, store);
+        if (sheet != null && !sheet.trim().isEmpty()) sheets.add(sheet.trim());
     }
 
     // -------------------------------------------------------------------------
@@ -1180,6 +1235,7 @@ public class CiqValidationEngine {
         if (rule.getAll_or_none() != null) return "All or none: " + rule.getAll_or_none();
         if (rule.getSum() != null)        return "Sum: " + rule.getSum() + " = " + rule.getEquals();
         if (rule.getUnique_key() != null) return "Unique key: [" + String.join(", ", rule.getUnique_key()) + "]";
+        if (rule.getPooled_unique() != null) return "Pooled unique: [" + String.join(", ", rule.getPooled_unique()) + "]";
         return "unknown rule";
     }
 

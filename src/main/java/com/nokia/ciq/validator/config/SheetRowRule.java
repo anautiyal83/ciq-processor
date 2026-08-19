@@ -71,6 +71,24 @@ public class SheetRowRule {
      */
     private List<String> unique_key;
 
+    /**
+     * Pooled uniqueness constraint: every non-blank value across ALL listed columns
+     * (pooled into one set, not per-column) must be unique — a value used in one of
+     * the columns cannot reappear in that column or any other listed column, in the
+     * same row or any other row.
+     *
+     * <p>Unlike {@code unique_key} (which checks the combined tuple per row),
+     * {@code pooled_unique} flattens the listed columns' values into a single set
+     * and flags any repeat.
+     *
+     * <p>YAML example:
+     * <pre>
+     * rules:
+     *   - pooled_unique: [CIF1_NIAM_NAME, CIF2_NIAM_NAME]
+     * </pre>
+     */
+    private List<String> pooled_unique;
+
     /** Columns whose numeric values are summed. Must be used together with {@code equals}. */
     private List<String> sum;
 
@@ -100,6 +118,9 @@ public class SheetRowRule {
 
     public List<String> getUnique_key() { return unique_key; }
     public void setUnique_key(List<String> unique_key) { this.unique_key = unique_key; }
+
+    public List<String> getPooled_unique() { return pooled_unique; }
+    public void setPooled_unique(List<String> pooled_unique) { this.pooled_unique = pooled_unique; }
 
     public List<String> getSum() { return sum; }
     public void setSum(List<String> sum) { this.sum = sum; }
