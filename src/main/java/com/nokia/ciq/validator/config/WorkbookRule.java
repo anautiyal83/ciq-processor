@@ -47,6 +47,15 @@ public class WorkbookRule {
     /** Each source group's value set must match exactly one target row's column set. */
     private SetMatchRule setMatch;
 
+    /** A column's values must form contiguous blocks within each partition. */
+    private ContiguousSequenceRule contiguousSequence;
+
+    /**
+     * Partition-scoped subset: values collected per (source) partition must appear
+     * in the (target) partition derived from the same key columns.
+     */
+    private SetRule set;
+
     public SubsetRule getSubset() { return subset; }
     public void setSubset(SubsetRule subset) { this.subset = subset; }
 
@@ -70,4 +79,12 @@ public class WorkbookRule {
 
     public SetMatchRule getSetMatch() { return setMatch; }
     public void setSetMatch(SetMatchRule setMatch) { this.setMatch = setMatch; }
+
+    public ContiguousSequenceRule getContiguousSequence() { return contiguousSequence; }
+    public void setContiguousSequence(ContiguousSequenceRule contiguousSequence) {
+        this.contiguousSequence = contiguousSequence;
+    }
+
+    public SetRule getSet() { return set; }
+    public void setSet(SetRule set) { this.set = set; }
 }

@@ -1,0 +1,42 @@
+output_mode: single
+data:
+ schemaVersion: "2"
+ meta:
+   nodeType: SBC
+   activity: 146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC
+   tableKeys:
+    _optional: true
+    PeeringSDPProfileTable:
+      recordPrimaryKeys: "PROFILEID"
+      subrecordKeys:
+        CodecBandwidth: "CODEC"
+        MsrpBandwidth:  "MSRP_MEDIA_TYPE"
+
+    IbcfTrunkGroupTable:
+      recordPrimaryKeys: "VN_ID,TG_ID"
+
+    IMSACRChargingProfileTable:
+      recordPrimaryKeys: "PROFILE_ID"
+
+    CdrServiceProfileTable:
+      recordPrimaryKeys: "CDR_POOL_ID"
+ nodeGroups:
+   _each: "DISTINCT INDEX.NODEGROUP AS $ng"
+   nodeGroup: $ng
+   crGroup:   "INDEX.CRGROUP WHERE INDEX.NODEGROUP = $ng"
+   email:     "INDEX.EMAIL WHERE INDEX.NODEGROUP = $ng"
+   nodes:
+     _each: "IP WHERE IP.NODEGROUP = $ng"
+     node:   IP.NODE
+     niamID: "IP.'NIAM NAME'"
+   configSequences:
+     _each: "DISTINCT INDEX.CONFIG_SEQ WHERE INDEX.NODEGROUP = $ng AS $seq"
+     configSeq: $seq
+     tables:
+       _each: "DISTINCT INDEX.TABLES WHERE INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq AS $table"
+       table:    $table
+       category: "INDEX.CATEGORY WHERE INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq AND INDEX.TABLES = $table"
+       records:
+         _each: "$table WHERE NODEGROUP = $ng AND CONFIG_SEQ = $seq"
+         data:
+           _row: "*"

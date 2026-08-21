@@ -106,6 +106,7 @@ public class HtmlTemplateReportWriter {
         template = expandConditional(template, "if_failed",  !passed);
 
         // Step 2: section loops
+        template = expandWorkbookChecks(template, report);
         template = expandSheets(template, report);
         template = expandGlobalErrors(template, report);
         template = expandParameters(template, report);
@@ -146,20 +147,79 @@ public class HtmlTemplateReportWriter {
         for (SheetValidationResult sheet : report.getSheets()) {
             boolean sheetPassed = "PASSED".equals(sheet.getStatus());
             String item = inner;
-            item = expandErrors(item, sheet);                                  // nested loop first
+            item = expandChecksApplied(item, sheet);                          // nested loops first
+            item = expandErrors(item, sheet);
             item = item.replace("{{sheetName}}",        esc(sheet.getSheetName()));
             item = item.replace("{{sheetStatus}}",      esc(sheet.getStatus()));
             item = item.replace("{{rowsChecked}}",      String.valueOf(sheet.getRowsChecked()));
             item = item.replace("{{errorCount}}",       String.valueOf(sheet.getErrors().size()));
             item = item.replace("{{sheetHeaderClass}}",    sheetPassed ? "pass-header"    : "fail-header");
             item = item.replace("{{sheetBadgeClass}}",     sheetPassed ? "badge-pass"     : "badge-fail");
-            item = item.replace("{{sheetPassMsg}}",
-                    sheetPassed ? "All rows passed validation." : "");
             item = item.replace("{{sheetErrorTableStyle}}",
                     sheet.getErrors().isEmpty() ? "display:none" : "");
             sb.append(item);
         }
         return replaceSection(template, "sheets", sb.toString());
+    }
+
+    private String expandChecksApplied(String sheetTemplate, SheetValidationResult sheet) {
+        String inner = extractSection(sheetTemplate, "checksApplied");
+        if (inner == null) return sheetTemplate;
+        // Only show validations summary on passed sheets
+        if (!"PASSED".equals(sheet.getStatus()) || sheet.getChecksApplied().isEmpty()) {
+            return replaceSection(sheetTemplate, "checksApplied", "");
+        }
+        String itemInner = extractSection(inner, "checkItem");
+        String expanded;
+        if (itemInner != null) {
+            StringBuilder sb = new StringBuilder();
+            for (String check : sheet.getChecksApplied()) {
+                sb.append(itemInner.replace("{{check}}", formatCheckHtml(check)));
+            }
+            expanded = replaceSection(inner, "checkItem", sb.toString());
+        } else {
+            expanded = inner;
+        }
+        return replaceSection(sheetTemplate, "checksApplied", expanded);
+    }
+
+    /**
+     * Renders a single check string as HTML.
+     * Strings with the pattern "Column — rule1 | rule2" are formatted with a bold
+     * column name and individual rule badges. Other strings (e.g. row rules) are
+     * rendered with the label bolded before the em-dash separator.
+     */
+    private String formatCheckHtml(String check) {
+        int sepIdx = check.indexOf(" \u2014 ");   // " — "
+        if (sepIdx < 0) return esc(check);
+        String label = check.substring(0, sepIdx);
+        String rules = check.substring(sepIdx + 3);
+        StringBuilder sb = new StringBuilder();
+        sb.append("<strong>").append(esc(label)).append("</strong>&ensp;");
+        for (String part : rules.split(" \\| ")) {
+            sb.append("<span class=\"check-badge\">").append(esc(part.trim())).append("</span>");
+        }
+        return sb.toString();
+    }
+
+    private String expandWorkbookChecks(String template, ValidationReport report) {
+        String inner = extractSection(template, "workbookChecks");
+        if (inner == null) return template;
+        if (report.getWorkbookChecks().isEmpty()) {
+            return replaceSection(template, "workbookChecks", "");
+        }
+        String itemInner = extractSection(inner, "checkItem");
+        String expanded;
+        if (itemInner != null) {
+            StringBuilder sb = new StringBuilder();
+            for (String check : report.getWorkbookChecks()) {
+                sb.append(itemInner.replace("{{check}}", esc(check)));
+            }
+            expanded = replaceSection(inner, "checkItem", sb.toString());
+        } else {
+            expanded = inner;
+        }
+        return replaceSection(template, "workbookChecks", expanded);
     }
 
     private String expandErrors(String sheetTemplate, SheetValidationResult sheet) {

@@ -85,10 +85,11 @@ public class ConditionalRowRuleValidator implements RowValidator {
                             "Value '" + colVal + "' not found in " + target));
                 }
             } else {
-                String val = row.get(target);
+                String colName = stripDoubleQuotes(target);
+                String val = row.get(colName);
                 if (isBlank(val)) {
-                    errors.add(new ValidationError(row.getRowNumber(), target, null,
-                            "Column '" + target + "' is required but is blank"));
+                    errors.add(new ValidationError(row.getRowNumber(), colName, null,
+                            "Column '" + colName + "' is required but is blank"));
                 }
             }
         }
@@ -104,10 +105,11 @@ public class ConditionalRowRuleValidator implements RowValidator {
                             "Value '" + colVal + "' is not allowed — found in " + target));
                 }
             } else {
-                String val = row.get(target);
+                String colName = stripDoubleQuotes(target);
+                String val = row.get(colName);
                 if (!isBlank(val)) {
-                    errors.add(new ValidationError(row.getRowNumber(), target, val,
-                            "Column '" + target + "' must be blank but contains: " + val));
+                    errors.add(new ValidationError(row.getRowNumber(), colName, val,
+                            "Column '" + colName + "' must be blank but contains: " + val));
                 }
             }
         }
@@ -119,7 +121,7 @@ public class ConditionalRowRuleValidator implements RowValidator {
      * Evaluates a {@link RowCondition} against the given row.
      * A {@code null} condition always returns {@code true} (no condition = always apply).
      */
-    boolean evaluateCondition(RowCondition cond, CiqRow row) {
+    public boolean evaluateCondition(RowCondition cond, CiqRow row) {
         if (cond == null) return true;
 
         // Compound conditions
@@ -204,8 +206,24 @@ public class ConditionalRowRuleValidator implements RowValidator {
         return values;
     }
 
+    /**
+     * Returns true only if {@code ref} is an unquoted {@code Sheet.Column} reference.
+     * Double-quoted strings (e.g. {@code "Record.PROFILEID"}) are treated as literal
+     * column names even when they contain dots, and are therefore NOT cross-sheet refs.
+     */
     private static boolean isCrossSheet(String ref) {
-        return ref != null && ref.contains(".");
+        if (ref == null) return false;
+        if (ref.length() >= 2 && ref.charAt(0) == '"' && ref.charAt(ref.length() - 1) == '"')
+            return false;
+        return ref.contains(".");
+    }
+
+    /** Strips surrounding double-quotes from a column-name reference. */
+    private static String stripDoubleQuotes(String ref) {
+        if (ref != null && ref.length() >= 2
+                && ref.charAt(0) == '"' && ref.charAt(ref.length() - 1) == '"')
+            return ref.substring(1, ref.length() - 1);
+        return ref;
     }
 
     private static String[] splitRef(String ref) {

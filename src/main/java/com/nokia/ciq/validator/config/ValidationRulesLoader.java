@@ -60,6 +60,8 @@ public class ValidationRulesLoader {
                 "getConstantWithin", "setConstantWithin");
         workbookRuleDesc.substituteProperty("set_match", SetMatchRule.class,
                 "getSetMatch", "setSetMatch");
+        workbookRuleDesc.substituteProperty("contiguous_sequence", ContiguousSequenceRule.class,
+                "getContiguousSequence", "setContiguousSequence");
         constructor.addTypeDescription(workbookRuleDesc);
 
         // ---- ValidationRulesConfig:

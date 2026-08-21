@@ -72,6 +72,20 @@ sheets:
         pattern: "<regex>"                     # full-match regex (java.util.regex syntax)
         patternMessage: "<human-readable description>"  # prefix prepended to pattern error message
         allowedValues: [<value>, <value>]      # allowed-values constraint (case-insensitive)
+        dropdownDisabled: false                # true = suppress Excel dropdown for this column even when
+                                               # allowedValues/values is set (use when list > 255 chars)
+                                               # validation is NOT affected — only the UI dropdown is omitted
+        allowedValuesWhen:                     # conditional allowed/forbidden values (all entries evaluated)
+          - column: <TriggerColumn>            # trigger column in the same row
+            operator: equals                   # equals(default)|notEquals|contains|blank|notBlank
+                                               # greaterThan|greaterThanOrEquals|lessThan|lessThanOrEquals
+                                               # symbol aliases: ==|!=|>|>=|<|<=  — omit for backward-compat default
+            value: <triggerValue>             # trigger value; not used for blank/notBlank
+            allowedValues: []                  # empty list = must be blank; non-empty = must match one of these
+          - column: <TriggerColumn>
+            operator: notEquals                # example: if ColumnA != X then this column must be Y
+            value: <triggerValue>
+            allowedValues: [<value>, <value>]
         crossRef:                              # value must exist in the target sheet+column
           sheet: <SheetName>                   # target sheet; use "_index" for INDEX node list
           column: <ColumnName>                 # column whose values form the valid set

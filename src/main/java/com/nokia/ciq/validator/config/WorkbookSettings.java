@@ -15,8 +15,18 @@ public class WorkbookSettings {
     /** 0-based index of the first data row. Default: 1. */
     private int dataStartRow = 1;
 
-    /** Strip leading/trailing whitespace from every cell value. Default: false. */
-    private boolean trimCellValues = false;
+    /**
+     * Strip leading/trailing whitespace from every data cell value. Default: {@code true}
+     * (the historical behaviour - the reader always trimmed).
+     *
+     * <p>Set {@code trimCellValues: false} to keep cell values exactly as typed, so a value
+     * like {@code "Update SPAM "} reaches both the validators and the generated JSON with its
+     * trailing space intact.
+     *
+     * <p>Nullable on purpose: {@code null} means "not declared", which lets a per-sheet
+     * {@code settings:} block override the global value in either direction.
+     */
+    private Boolean trimCellValues;
 
     /** Skip rows where all cells are blank. Default: true. */
     private boolean ignoreBlankRows = true;
@@ -33,8 +43,16 @@ public class WorkbookSettings {
     public int getDataStartRow() { return dataStartRow; }
     public void setDataStartRow(int dataStartRow) { this.dataStartRow = dataStartRow; }
 
-    public boolean isTrimCellValues() { return trimCellValues; }
-    public void setTrimCellValues(boolean trimCellValues) { this.trimCellValues = trimCellValues; }
+    // NOTE: getter and setter must both use Boolean - SnakeYAML resolves the bean property by
+    // matching their types, and a boolean/Boolean mismatch makes the property unwritable.
+
+    /** Raw declared value ({@code null} = not declared) - used when merging per-sheet overrides. */
+    public Boolean getTrimCellValues() { return trimCellValues; }
+
+    public void setTrimCellValues(Boolean trimCellValues) { this.trimCellValues = trimCellValues; }
+
+    /** Effective value: trimming is ON unless the YAML explicitly declares {@code false}. */
+    public boolean isTrimEnabled() { return trimCellValues == null || trimCellValues; }
 
     public boolean isIgnoreBlankRows() { return ignoreBlankRows; }
     public void setIgnoreBlankRows(boolean ignoreBlankRows) { this.ignoreBlankRows = ignoreBlankRows; }

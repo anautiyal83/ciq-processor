@@ -89,6 +89,7 @@ validators:
 sheets:
   <SheetName>:
     required: true              # validation fails if this sheet is missing from the workbook
+    required_if_listed_in: Index.TABLES   # dynamic presence — required only when sheet name appears in that column
     aliases: [AltName, OTHER]   # alternative sheet names accepted in place of <SheetName>
     settings:                   # overrides global settings for this sheet only
       headerRow: 0
@@ -100,6 +101,28 @@ sheets:
       ...                       # see Row Rules below
 ```
 
+#### Sheet presence rules
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `required` | boolean | `false` | Sheet must always be present in the workbook |
+| `required_if_listed_in` | string | — | Sheet is required only when its own name appears as a value in the specified `Sheet.Column`. Format: `SheetName.ColumnName`. Evaluated only when `required: false`. |
+
+`required_if_listed_in` is evaluated after `required`.  Priority order:
+1. `required: true` — always required.
+2. `required_if_listed_in: Sheet.Column` — required only when the sheet name is found in that column.
+3. Neither set — optional.
+
+```yaml
+# Example: sheet is required only when it is listed in Index.TABLES
+CRFTargetList:
+  required_if_listed_in: Index.TABLES
+  columns:
+    ...
+```
+
+Workbook-level cross-sheet rules that reference a sheet governed by `required_if_listed_in` are automatically skipped when that sheet is absent and not required.
+
 ### 3.1 Column Properties (common to all types)
 
 | Property | Type | Default | Description |
@@ -109,6 +132,7 @@ sheets:
 | `aliases` | list | `[]` | Alternative header names treated as equivalent |
 | `unique` | boolean | `false` | All values in this column must be distinct within the sheet |
 | `ignoreCase` | boolean | `false` | Case-insensitive comparison for `allowedValues` |
+| `dropdownDisabled` | boolean | `false` | Suppresses the Excel dropdown in the generated CIQ template even when `allowedValues`/`values` is set. Use when the value list exceeds Excel's 255-character inline-list limit. Validation is **not** affected. |
 | `description` | string | — | Plain-language description shown in the `Column_Guide` sheet |
 | `validator` | string | — | Name of a registered custom validator (see Section 2) |
 | `messages` | map | — | Override default error messages (see Section 3.3) |
@@ -131,6 +155,11 @@ ColumnName:
   pattern: "^[A-Z]{2}\\d{4}$"          # Java regex — full match required
   patternMessage: "Must be two uppercase letters followed by four digits"
   allowedValues: [CREATE, DELETE, MODIFY]
+  allowedValuesWhen:                    # conditional constraints — all entries evaluated
+    - column: OtherCol                  # trigger column in the same row
+      operator: notEquals               # equals(default)|notEquals|contains|blank|notBlank|>|>=|<|<=
+      value: X                          # comparison value (not used for blank/notBlank)
+      allowedValues: [Y, Z]             # empty list = must be blank; non-empty = must match one
   ref: OtherSheet.OtherColumn           # value must exist in OtherSheet.OtherColumn
   validator: cidrV4                     # custom validator name
   messages:
@@ -262,6 +291,95 @@ correspond to the check that failed:
 
 ---
 
+### 3.4 `allowedValuesWhen`
+
+Conditional allowed-values constraints applied after `required`/`requiredWhen`.  Each entry is
+evaluated independently — a column can have multiple conditions, all of which are checked.
+
+Each entry has the following fields:
+
+| Field | Required | Description |
+|---|---|---|
+| `column` | Yes | The trigger column in the same row |
+| `operator` | No | Comparison operator — default `equals` when omitted (backward-compatible) |
+| `value` | Conditional | The value to compare against. Not used for `blank` / `notBlank`. |
+| `allowedValues` | Yes | Allowed values when condition is met. **Empty list = must be blank.** |
+
+**Supported operators:**
+
+| Operator | Aliases | Description |
+|---|---|---|
+| `equals` | `==` | Trigger column equals `value` (case-insensitive) — **default** |
+| `notEquals` | `!=` | Trigger column does not equal `value` |
+| `contains` | — | Trigger column contains `value` (case-insensitive) |
+| `blank` | — | Trigger column is null or empty (`value` not used) |
+| `notBlank` | — | Trigger column has any non-empty value (`value` not used) |
+| `greaterThan` | `>` | Numeric, then lexicographic comparison |
+| `greaterThanOrEquals` | `>=` | |
+| `lessThan` | `<` | |
+| `lessThanOrEquals` | `<=` | |
+
+**Use case 1 — Non-modifiable field (must be blank when Action=MODIFY):**
+
+```yaml
+Record.IMMUTABLE_FIELD:
+  allowedValuesWhen:
+    - column: Action
+      value: MODIFY
+      allowedValues: []     # empty list → must be blank when Action=MODIFY
+```
+
+**Use case 2 — Must be Y when Column A is not X:**
+
+```yaml
+ColumnB:
+  allowedValuesWhen:
+    - column: ColumnA
+      operator: notEquals
+      value: X
+      allowedValues: [Y]
+```
+
+**Use case 3 — Column value depends on another column:**
+
+```yaml
+ColumnY:
+  allowedValuesWhen:
+    - column: ColumnX
+      value: A
+      allowedValues: [B]
+    - column: ColumnX
+      value: C
+      allowedValues: [D, E]
+```
+
+**Use case 4 — Numeric / blank / notBlank operators:**
+
+```yaml
+STATUS:
+  allowedValuesWhen:
+    - column: COUNT
+      operator: greaterThan
+      value: "0"
+      allowedValues: [ACTIVE]
+
+OVERRIDE_REASON:
+  allowedValuesWhen:
+    - column: AUTO_MODE
+      operator: notBlank
+      allowedValues: []     # must be blank when AUTO_MODE has any value
+```
+
+> **Notes:**
+> - Omitting `operator` is equivalent to `operator: equals` — fully backward-compatible.
+> - A blank cell always passes the non-empty `allowedValues` check (combine with `required` or
+>   `requiredWhen` to also enforce presence).
+> - For the empty-list (must-be-blank) case, a blank cell passes — the rule only fires when the
+>   field has a value.
+> - Multiple conditions in the same list are all evaluated independently.
+
+---
+
 ## 4. Row Rules (`rules:`)
 
 Defined under `sheets.<SheetName>.rules:`.  Applied to every data row in the sheet.
@@ -274,7 +392,29 @@ Applies to **all** rule types — `require`, `forbid`, `when.column`, `compare`,
 | Syntax | Meaning |
 |---|---|
 | `ColumnName` | Column in the **current** sheet |
-| `SheetName.ColumnName` | Column in the **named** sheet |
+| `SheetName.ColumnName` | Column in the **named** sheet (cross-sheet reference) |
+| `'"Column.With.Dots"'` | Literal column name — bypasses Sheet.Column parsing; required in rules for columns whose names contain dots (e.g. `Record.PROFILEID`) |
+
+> **Columns with dots in their names** (common in SBC CIQ sheets where column headers follow
+> the `Record.FIELDNAME` convention):
+>
+> - In the **`columns:`** map, dot-columns are always safe without quoting — map keys are
+>   never interpreted as Sheet.Column references.
+> - In **row `rules:`** (`require`, `forbid`, `when.column`), a bare `Record.PROFILEID`
+>   would be parsed as sheet=`Record`, col=`PROFILEID`.  Wrap it in double quotes to force
+>   a literal column lookup:
+>
+> ```yaml
+> rules:
+>   - require: '"Record.PROFILEID"'    # YAML: single-quoted string containing double quotes
+>     when:
+>       column: Action
+>       operator: equals
+>       value: CREATE
+> ```
+>
+> The double-quote wrapping is a YAML quoting trick: the outer single quotes are YAML syntax;
+> the inner double quotes signal to the engine "treat this as a column name, not Sheet.Column".
 
 ### 4.1 `require`
 
@@ -594,9 +734,12 @@ json_output:
 
 | Syntax | Meaning |
 |---|---|
-| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One array element per distinct column value |
-| `_each: <SheetName>` | One array element per row of the sheet |
-| `_each: "<Sheet> WHERE <Col> = <value>"` | One array element per matching row |
+| `_each: "DISTINCT <Sheet>.<Column> AS $var"` | One array element per distinct column value; sets `$var` in child context |
+| `_each: <SheetName>` | One array element per row of the named sheet |
+| `_each: $var` | One array element per row of the sheet whose name is held in `$var` |
+| `_each: "<Sheet> WHERE <Col> = <value>"` | One element per row where `Col` equals `value` (equality filter) |
+| `_each: "<Sheet> WHERE <Col> IN <Sheet2>.<Col2>"` | One element per row where `Col` is found among values in `Sheet2.Col2` (membership filter) |
+| `_each: "$var WHERE <Col> IN <Sheet2>.<Col2>"` | Same membership filter, but sheet name resolved from variable `$var` |
 
 ### Scalar value expressions
 
@@ -606,7 +749,33 @@ json_output:
 | `key: <Sheet>.<Column>` | First non-blank value from that sheet+column in the current scope |
 | `key: "<Sheet>.<Col> WHERE <Sheet>.<Filter> = $var"` | First value where filter matches |
 
-### Example
+### `_row` directive — emit current row as a map
+
+`_row` emits all (or a subset of) columns from the current data row as a nested map.
+It is only valid inside a `_each` block where a current row is in scope.
+
+| Syntax | Meaning |
+|---|---|
+| `_row: "*"` | All columns from the current row |
+| `_row: "exclude [COL1, COL2, ...]"` | All columns except the named ones |
+| `_row:` `  exclude: [COL1, COL2, ...]` | Same, YAML map form |
+
+Column exclusion matching is case- and underscore-insensitive.
+
+```yaml
+records:
+  _each: "$sheet_name WHERE GROUP IN INDEX.GROUP"
+  data:
+    _row: "*"              # all columns (Group, Node, Action, SubAction, ActionKey, ID, NAME, Record.*, …)
+```
+
+```yaml
+# Exclude housekeeping columns; keep only payload fields
+data:
+  _row: "exclude [GROUP, ACTION, SUBACTION]"
+```
+
+### Example — fixed-column schema (MRF)
 
 ```yaml
 json_output:
@@ -624,6 +793,69 @@ json_output:
         _each: "ANNOUNCEMENT_FILES WHERE GROUP = Index.GROUP"
         INPUT_FILE:           INPUT_FILE
         MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+```
+
+### Example — dynamic table schema (SBC)
+
+When the sheet names themselves are stored in the Index (e.g. `Index.TABLES`), use
+`DISTINCT ... AS $var` to iterate table names and `$var WHERE ... IN ...` to filter rows.
+
+```yaml
+output_mode: single
+data:
+  nodeType: SBC
+  activity: FIXED_LINE_CONFIGURATION
+  nodes:
+    _each: "DISTINCT INDEX.NODE AS $node"
+    node:    $node
+    niamID:  "IP.'NIAM NAME' WHERE IP.NODE = $node"
+    crGroup: INDEX.CRGROUP
+    Group:
+      _join: "INDEX.GROUP"
+    email:   INDEX.EMAIL
+    tables:
+      _each: "DISTINCT INDEX.TABLES AS $sheet_name"    # iterate over table names stored in Index
+      tableName: $sheet_name
+      records:
+        _each: "$sheet_name WHERE GROUP IN INDEX.GROUP" # $sheet_name resolved to actual sheet
+        data:
+          _row: "*"    # emit all columns of each record row
+```
+
+**Output JSON** (one node, one table):
+
+```json
+{
+  "nodeType": "SBC",
+  "activity": "FIXED_LINE_CONFIGURATION",
+  "nodes": [
+    {
+      "node": "SBC01",
+      "niamID": "RJ-SBC-RJJVSBC01-CLI",
+      "crGroup": "CR-12345",
+      "Group": "G1",
+      "email": "engineer@nokia.com",
+      "tables": [
+        {
+          "tableName": "CRFTargetList",
+          "records": [
+            {
+              "data": {
+                "Group": "G1",
+                "Node": "SBC01",
+                "Action": "CREATE",
+                "SubAction": "RECORD",
+                "ID": "1",
+                "NAME": "Target1",
+                "Record.CRFTargetListEntry.ADDRESS": "10.0.0.1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
 ```
 
 **Output:**
@@ -884,6 +1116,7 @@ columns:
 | Sheet name matching | Case-insensitive by default (`caseSensitiveHeaders: false`) |
 | Blank cells | Always skip type/pattern/length checks; only `required: true` fires |
 | Cross-sheet references | `SheetName.ColumnName` syntax everywhere — columns, rules, outputs |
+| Column names with dots | Safe in `columns:` map keys (never parsed as Sheet.Column). In row `rules:` wrap in double quotes: `'"Record.FIELDNAME"'` to prevent dot-splitting |
 | Pattern validation | Full regex match (anchored) — same as `Pattern.matches()` in Java |
 | Invalid regex | Treated as a configuration error and reported on every row rather than silently passing |
 | Outputs | Computed only after all validation passes; none are emitted on FAILED |

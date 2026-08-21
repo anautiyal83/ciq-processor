@@ -1,0 +1,1296 @@
+# =============================================================================
+# Validation Rules: SBC - SIP_FILTER_CONFIGURATION
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+#   Validate SBC SIP Filter (Addition / Deletion / Modification) CIQ sheets.
+#   Covers Index, IP, and 6 record-based SIP-filter configuration tables.
+# =============================================================================
+
+version: "1.0"
+skipValidationValues: [MANO_EMPTY] 
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  ignoreBlankRows: true
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+  trimCellValues: false
+
+# -----------------------------------------------------------------------------
+# Workbook-level cross-sheet rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  - contiguous_sequence:
+      sheet: Index
+      partitionBy: [NodeGroup, CRGROUP]
+      column: CONFIG_SEQ
+
+  # Index.NodeGroup must exist in IP.NodeGroup
+  - subset:
+      from: Index.NodeGroup
+      to: IP.NodeGroup
+
+  # GROUP validation scoped by TABLES column.
+  # Each match only checks Index.NodeGroup values where Index.TABLES = the target sheet.
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = SipFilter"
+      to: SipFilter.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = SipFilterHeaderRule"
+      to: SipFilterHeaderRule.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = SipFilterBodyRule"
+      to: SipFilterBodyRule.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = SipFilterRefRule"
+      to: SipFilterRefRule.NodeGroup
+  - superset:
+      from: Index.NodeGroup
+      where: "TABLES = SipFilterSet"
+      to: SipFilterSet.NodeGroup
+
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = SipFilter"
+      to:
+        sheet: SipFilter
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = SipFilterHeaderRule"
+      to:
+        sheet: SipFilterHeaderRule
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = SipFilterBodyRule"
+      to:
+        sheet: SipFilterBodyRule
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = SipFilterRefRule"
+      to:
+        sheet: SipFilterRefRule
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup, CRGROUP]
+        where: "TABLES = SipFilterSet"
+      to:
+        sheet: SipFilterSet
+        column: CONFIG_SEQ
+        partitionBy: [NodeGroup]
+
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Index
+  # ---------------------------------------------------------------------------
+  Index:
+    required: true
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CRGROUP:
+        required: true
+        description: "CR Number"
+        type: string
+        pattern: "^CR[0-9]+$"
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      TABLES:
+        required: true
+        type: string
+        description: "Table Name of Configuration"
+
+      CATEGORY:
+        required: true
+        type: string
+        allowedValues: [RecordBased, Global]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Category - RecordBased or Global level configuration"
+
+      EMAIL:
+        type: email
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        consolidate_separator: ";"
+        minOnePerGroup:
+            groupByColumn: CRGroup
+
+    rules:
+      - unique_key: [NodeGroup, CRGROUP, CONFIG_SEQ, TABLES]
+
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IP
+  # ---------------------------------------------------------------------------
+  IP:
+    required: true
+    columns:
+
+      NODE:
+        required: true
+        type: string
+
+      NIAM NAME:
+        required: true
+        type: string
+        description: "NIAM ID for the hostname - must be unique to each node"
+
+      NodeGroup:
+        required: true
+        type: string
+
+    rules:
+      - unique_key: [NODE, NIAM NAME, NodeGroup]
+
+
+  # ---------------------------------------------------------------------------
+  # Sheet: SipFilter
+  # ---------------------------------------------------------------------------
+  SipFilter:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.HBR_RULE_EXECUTION_ORDER]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when SubAction is SUBRECORD"
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 1115
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "([\\S]|[\\S][a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*[\\S])"
+
+      Record.FILTER_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2000
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+
+      Record.ENABLE_FILTER:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        allowedValuesWhen:
+        - when: "Action == 'CREATE' && SubAction == 'RECORD'"
+          allowedValues: ["No"]
+        dropdownDisabled: true         # validates allowed values but skips dropdown in generated CIQ
+
+      Record.DIRECTION:
+        required: false
+        type: string
+        allowedValues: [Inbound, Outbound, Both]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SIP_METHODS:
+        required: false
+        type: string
+        allowedValues: [ACK, ALL, BYE, CANCEL, INFO, INVITE, MESSAGE, NOTIFY, OPTIONS, OTHER, PRACK, PUBLISH, REFER, REGISTER, SUBSCRIBE, UPDATE, VERSION]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.OTHER_METHOD_STRING:
+        required: false
+        type: string
+        maxLength: 16
+
+      Record.METHOD_NEGATION:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.MESSAGE_TYPE:
+        required: false
+        type: string
+        allowedValues: [Request, Response, Both]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.RESPONSE_CODE:
+        required: false
+        type: string
+        maxLength: 3
+        description: "Length must be 0 or exactly 3"
+
+      Record.ACTION:
+        required: false
+        type: string
+        allowedValues: ["No Action", Discard, Reject, Modify]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.NEW_RESPONSE_CODE:
+        required: false
+        type: string
+        maxLength: 3
+
+      Record.REASON_PHRASE:
+        required: false
+        type: string
+        maxLength: 64
+
+      Record.HBR_RULE_EXECUTION_ORDER.RULE_TYPE:
+        required: false
+        type: string
+        allowedValues: [Header, Body, Reference]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+        description: "Required when Action is CREATE"
+
+      Record.HBR_RULE_EXECUTION_ORDER.RULE_ID:
+        required: false
+        type: string
+        pattern: '^([1-9]|10)$'
+        patternMessage: "RULE_ID must be an integer 1-10"
+        description: "Required when Action is CREATE"
+
+      Record.SIP_MESSAGE_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 25000000
+
+    rules:
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+          
+      - require: '"Record.SIP_METHODS"'
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: CREATE
+          - column: SubAction
+            operator: equals
+            value: Record
+      
+      - require: '"Record.HBR_RULE_EXECUTION_ORDER.RULE_TYPE"'
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: CREATE
+          - column: SubAction
+            operator: equals
+            value: SUBRECORD
+      
+      - require: '"Record.HBR_RULE_EXECUTION_ORDER.RULE_ID"'
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: CREATE
+          - column: SubAction
+            operator: equals
+            value: SUBRECORD
+
+      
+      # - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID, Record.HBR_RULE_EXECUTION_ORDER.RULE_TYPE, Record.HBR_RULE_EXECUTION_ORDER.RULE_ID]
+      #   when:
+      #     all:
+      #       - column: Action
+      #         operator: equals
+      #         value: CREATE
+      #       - column: SubAction
+      #         operator: equals
+      #         value: SUBRECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      # - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID, Record.HBR_RULE_EXECUTION_ORDER.RULE_TYPE, Record.HBR_RULE_EXECUTION_ORDER.RULE_ID]
+      #   when:
+      #     all:
+      #       - column: Action
+      #         operator: equals
+      #         value: DELETE
+      #       - column: SubAction
+      #         operator: equals
+      #         value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.FILTER_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: SipFilterHeaderRule
+  # ---------------------------------------------------------------------------
+  SipFilterHeaderRule:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 1115
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "([\\S]|[\\S][a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*[\\S])"
+
+      Record.FILTER_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2000
+        description: "must equal FILTER_ID in SipFilter table"
+
+      Record.HEADER_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 5
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+
+      Record.FORM:
+        required: false
+        type: string
+        allowedValues: ["Request URI", Header, "Response Code"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.HEADER_NAME_CONTENT_TYPE:
+        required: false
+        type: string
+        maxLength: 50
+
+      Record.REGULAR_EXPRESSION:
+        required: false
+        type: string
+        maxLength: 256
+
+      Record.BOOLEAN_CONDITION:
+        required: false
+        type: string
+        maxLength: 60
+
+      Record.OCCURRENCE:
+        required: false
+        type: string
+        allowedValues: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", All]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.ACTION:
+        required: false
+        type: string
+        allowedValues: ["No Action", Discard, Reject, Modify, Add, Remove, Save]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.NEW_HEADER_NAME:
+        required: false
+        type: string
+        maxLength: 30
+
+      Record.UPDATE_STRING:
+        required: false
+        type: string
+        maxLength: 192
+
+      Record.ACTION_REGULAR_EXPRESSION:
+        required: false
+        type: string
+        maxLength: 256
+
+      Record.RESPONSE_CODE:
+        required: false
+        type: string
+        maxLength: 3
+        description: "Length must be 0 or exactly 3"
+
+      Record.REASON_PHRASE:
+        required: false
+        type: string
+        maxLength: 64
+
+      Record.COMPARE1:
+        required: false
+        type: string
+        maxLength: 40
+
+      Record.COMPARE_OPERATION:
+        required: false
+        type: string
+        allowedValues: [Equal, Subset, Superset]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.COMPARE2:
+        required: false
+        type: string
+        maxLength: 40
+
+      Record.REG_EX_SOURCE_BUFFER:
+        required: false
+        type: string
+        maxLength: 7
+        pattern: "[\\\\$A-Za-z0-9]*"
+
+      Record.CASE_SENSITIVE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.SIP_MESSAGE_SIZE:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 25000000
+
+    rules:
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_ID, Record.HEADER_ID]
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: CREATE
+          - column: SubAction
+            operator: equals
+            value: SUBRECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_ID, Record.HEADER_ID]
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: DELETE
+          - column: SubAction
+            operator: equals
+            value: SUBRECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_ID, Record.HEADER_ID]
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: CREATE
+          - column: SubAction
+            operator: equals
+            value: RECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_ID, Record.HEADER_ID]
+        when:
+          all:
+          - column: Action
+            operator: equals
+            value: DELETE
+          - column: SubAction
+            operator: equals
+            value: RECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.FILTER_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.HEADER_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: SipFilterBodyRule
+  # ---------------------------------------------------------------------------
+  SipFilterBodyRule:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 1115
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "([\\S]|[\\S][a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*[\\S])"
+
+      Record.FILTER_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2000
+        description: "must equal FILTER_ID in SipFilter table"
+
+      Record.BODY_RULE_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 10
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+
+      Record.CASE_SENSITIVE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.FORM:
+        required: false
+        type: string
+        allowedValues: ["Body Content", Body]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.CONTENT_TYPE:
+        required: false
+        type: string
+        maxLength: 50
+
+      Record.REGULAR_EXPRESSION:
+        required: false
+        type: string
+        maxLength: 256
+
+      Record.BOOLEAN_CONDITION:
+        required: false
+        type: string
+        maxLength: 60
+
+      Record.LENGTH:
+        required: false
+        type: integer
+        minValue: 0
+        maxValue: 25000000
+        description: "spec type is union; treated as integer range"
+
+      Record.COMPARE1:
+        required: false
+        type: string
+        maxLength: 40
+
+      Record.COMPARE_OPERATION:
+        required: false
+        type: string
+        allowedValues: [Equal, Subset, Superset]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.COMPARE2:
+        required: false
+        type: string
+        maxLength: 40
+
+      Record.ACTION:
+        required: false
+        type: string
+        allowedValues: ["No Action", Modify, Replace, Save, Discard, Reject, Remove, Add]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.NEW_HEADER_NAME:
+        required: false
+        type: string
+        maxLength: 50
+
+      Record.UPDATE_STRING:
+        required: false
+        type: string
+        maxLength: 592
+        allowedValuesWhen:
+        - column: Record.ACTION
+          operator: equals
+          value: "No Action"
+          allowedValues: [""]
+        description: "must be blank when ACTION is 'No Action'"
+
+      Record.REG_EX_SOURCE_BUFFER:
+        required: false
+        type: string
+        maxLength: 7
+        pattern: "[\\\\$A-Za-z0-9]*"
+
+      Record.ACTION_REGULAR_EXPRESSION:
+        required: false
+        type: string
+        maxLength: 256
+
+      Record.RESPONSE_CODE:
+        required: false
+        type: string
+        maxLength: 3
+        description: "Length must be 0 or exactly 3"
+
+      Record.REASON_PHRASE:
+        required: false
+        type: string
+        maxLength: 64
+
+      Record.OCCURRENCE:
+        required: false
+        type: string
+        allowedValues: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", All]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+    rules:
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID, Record.BODY_RULE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID, Record.BODY_RULE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.FILTER_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.BODY_RULE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: SipFilterRefRule
+  # ---------------------------------------------------------------------------
+  SipFilterRefRule:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 1115
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "([\\S]|[\\S][a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*[\\S])"
+
+      Record.FILTER_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2000
+        description: "must equal FILTER_ID in SipFilter table"
+
+      Record.REF_RULE_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 10
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+
+      Record.CASE_SENSITIVE:
+        required: false
+        type: string
+        allowedValues: [Yes, No]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.REFERENCE_NAME:
+        required: false
+        type: string
+        maxLength: 3
+        pattern: "[HhBbRrPp0-9]*"
+
+      Record.REGULAR_EXPRESSION:
+        required: false
+        type: string
+        maxLength: 256
+
+      Record.BOOLEAN_CONDITION:
+        required: false
+        type: string
+        maxLength: 60
+
+      Record.COMPARE1:
+        required: false
+        type: string
+        maxLength: 40
+
+      Record.COMPARE_OPERATION:
+        required: false
+        type: string
+        allowedValues: [Equal, Subset, Superset]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.COMPARE2:
+        required: false
+        type: string
+        maxLength: 40
+
+      Record.OCCURRENCE:
+        required: false
+        type: string
+        allowedValues: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", All]
+        allowedValuesWhen:
+        - column: Record.REFERENCE_NAME
+          operator: equals
+          value: " "
+          allowedValues: ["1"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.ACTION:
+        required: false
+        type: string
+        allowedValues: ["No Action", Modify, Save]
+        allowedValuesWhen:
+        - column: Record.REFERENCE_NAME
+          operator: equals
+          value: " "
+          allowedValues: ["Save"]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      Record.UPDATE_STRING:
+        required: false
+        type: string
+        maxLength: 592
+
+      Record.REG_EX_SOURCE_BUFFER:
+        required: false
+        type: string
+        maxLength: 7
+        pattern: "[\\\\$A-Za-z0-9]*"
+
+      Record.ACTION_REGULAR_EXPRESSION:
+        required: false
+        type: string
+        maxLength: 256
+
+    rules:
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID, Record.REF_RULE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, Record.FILTER_ID, Record.REF_RULE_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: notEquals
+              value: TABLE
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.FILTER_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - require: '"Record.REF_RULE_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+  # ---------------------------------------------------------------------------
+  # Sheet: SipFilterSet
+  # ---------------------------------------------------------------------------
+  SipFilterSet:
+    required: false
+    required_if_listed_in: Index.TABLES
+    columns:
+
+      NodeGroup:
+        required: true
+        type: string
+
+      CONFIG_SEQ:
+        required: true
+        type: string
+        pattern: '^Step\d+$'
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, MODIFY, DELETE]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD, TABLE]
+        allowedValuesWhen:
+        - column: Action
+          operator: equals
+          value: MODIFY
+          allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true        # validates allowed values but skips dropdown in generated CIQ
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [Record.SIP_FILTER_LIST]
+
+      ID:
+        required: true
+        type: integer
+        minValue: 1
+        maxValue: 1115
+
+      NAME:
+        required: true
+        type: string
+        maxLength: 19
+        pattern: "([\\S]|[\\S][a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*[\\S])"
+
+      Record.FILTER_SET_ID:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 600
+
+      Record.DESCRIPTION:
+        required: false
+        type: string
+        maxLength: 32
+        pattern: "[a-zA-Z0-9\\*#\\.,\\-+'~`!@$%^:;=(){}\\[\\]?\"'&<>/_|\\\\ ]*"
+
+      Record.SIP_FILTER_LIST:
+        required: false
+        type: integer
+        minValue: 1
+        maxValue: 2000
+        description: "Must equal FILTER_ID in SipFilter table"
+
+    rules:
+      - require: ActionKey
+        when:
+          column: SubAction
+          operator: equals
+          value: SUBRECORD
+
+      - forbid: ActionKey
+        when:
+          column: SubAction
+          operator: notEquals
+          value: SUBRECORD
+      
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_SET_ID, Record.SIP_FILTER_LIST]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: SUBRECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_SET_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_SET_ID]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: RECORD
+
+      - unique_key: [NodeGroup, CONFIG_SEQ, SubAction, Record.FILTER_SET_ID, Record.SIP_FILTER_LIST]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: SUBRECORD
+
+      # --- TABLE handling: record keys required only for non-TABLE rows; table uniqueness ---
+      - require: '"Record.FILTER_SET_ID"'
+        when:
+          column: SubAction
+          operator: notEquals
+          value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: CREATE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+      - unique_key: [NodeGroup, CONFIG_SEQ, ID, NAME]
+        when:
+          all:
+            - column: Action
+              operator: equals
+              value: DELETE
+            - column: SubAction
+              operator: equals
+              value: TABLE
+
+
+outputs:
+  # Distinct CR group identifiers from the Index sheet
+  CR_LIST:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+
+  # Count of unique CRGroup values
+  CR_COUNT:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct_count

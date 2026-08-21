@@ -86,6 +86,17 @@ public class HtmlReportWriter {
             sb.append("</ul></div>");
         }
 
+        // ── Workbook-level checks ─────────────────────────────────────────────
+        if (!report.getWorkbookChecks().isEmpty()) {
+            sb.append("<div class='section'>");
+            sb.append("<div class='section-header checks-header'>Cross-Sheet Checks</div>");
+            sb.append("<ul class='checks-list'>");
+            for (String check : report.getWorkbookChecks()) {
+                sb.append("<li>").append(esc(check)).append("</li>");
+            }
+            sb.append("</ul></div>");
+        }
+
         // ── Per-sheet results ─────────────────────────────────────────────────
         for (SheetValidationResult sheet : report.getSheets()) {
             boolean sheetPassed = "PASSED".equals(sheet.getStatus());
@@ -100,9 +111,17 @@ public class HtmlReportWriter {
             }
             sb.append("</span></div>");
 
-            if (sheetPassed) {
-                sb.append("<div class='pass-msg'>All rows passed validation.</div>");
-            } else {
+            if (!sheet.getChecksApplied().isEmpty()) {
+                sb.append("<div class='checks-applied'>");
+                sb.append("<div class='checks-applied-title'>Validations applied:</div>");
+                sb.append("<ul class='checks-list'>");
+                for (String check : sheet.getChecksApplied()) {
+                    sb.append("<li>").append(esc(check)).append("</li>");
+                }
+                sb.append("</ul></div>");
+            }
+
+            if (!sheetPassed) {
                 renderErrorTable(sb, sheet.getErrors());
             }
             sb.append("</div>");
@@ -168,6 +187,12 @@ public class HtmlReportWriter {
             ".sheet-stats { font-size: 12px; color: #666; font-weight: 400; }" +
 
             ".pass-msg { padding: 10px 18px; color: #27ae60; font-style: italic; font-size: 13px; }" +
+
+            ".checks-header { background: #eef4fb; color: #1a3a5c; }" +
+            ".checks-applied { padding: 10px 18px 12px; background: #fafcfe; border-top: 1px solid #eef0f3; }" +
+            ".checks-applied-title { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px; }" +
+            ".checks-list { padding-left: 20px; margin: 0; }" +
+            ".checks-list li { font-size: 12px; color: #2c3e50; font-family: monospace; padding: 2px 0; }" +
 
             "table { width: 100%; border-collapse: collapse; font-size: 13px; }" +
             "thead tr { background: #f0f4f8; }" +

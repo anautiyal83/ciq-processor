@@ -14,6 +14,17 @@ public class CiqRow {
     private int rowNumber;
     private Map<String, String> data;
 
+    /**
+     * Untrimmed cell text, populated only when the sheet is read with
+     * {@code settings.trimCellValues: false}.
+     *
+     * <p>{@link #data} always holds the trimmed value so every validator keeps comparing
+     * against clean text (patterns, allowedValues, maxLength, unique, ...). JSON generation
+     * reads this map instead, so the emitted document preserves the spacing exactly as it
+     * was typed in the CIQ. {@code null} when raw capture is off - the normal case.
+     */
+    private Map<String, String> rawData;
+
     public CiqRow() {
         this.data = new LinkedHashMap<>();
     }
@@ -23,11 +34,28 @@ public class CiqRow {
         this.data = data;
     }
 
+    public CiqRow(int rowNumber, Map<String, String> data, Map<String, String> rawData) {
+        this.rowNumber = rowNumber;
+        this.data = data;
+        this.rawData = rawData;
+    }
+
     public int getRowNumber() { return rowNumber; }
     public void setRowNumber(int rowNumber) { this.rowNumber = rowNumber; }
 
     public Map<String, String> getData() { return data; }
     public void setData(Map<String, String> data) { this.data = data; }
+
+    public Map<String, String> getRawData() { return rawData; }
+    public void setRawData(Map<String, String> rawData) { this.rawData = rawData; }
+
+    /**
+     * Values to emit to JSON: the untrimmed map when raw capture is enabled, otherwise
+     * the normal (trimmed) map.
+     */
+    public Map<String, String> getOutputData() {
+        return rawData != null ? rawData : data;
+    }
 
     /**
      * Get a column value by name. Matching is case-insensitive, underscore-insensitive,

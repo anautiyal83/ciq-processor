@@ -115,11 +115,12 @@ public class CiqTemplateGenerator {
             cell.setCellStyle(headerStyle);
         }
 
-        // Dropdown validation for enum-type and allowedValues columns
+        // Dropdown validation for enum-type and allowedValues columns.
+        // Skipped when dropdownDisabled=true (list too long for Excel's 255-char inline limit).
         if (sheetRules != null && sheetRules.getColumns() != null) {
             for (int i = 0; i < columns.size(); i++) {
                 ColumnRule rule = sheetRules.getColumns().get(columns.get(i));
-                if (rule == null) continue;
+                if (rule == null || rule.isDropdownDisabled()) continue;
                 if (rule.isEnum() && rule.getValues() != null && !rule.getValues().isEmpty()) {
                     addDropdown(sheet, i, rule.getValues());
                 } else if (rule.getAllowedValues() != null && !rule.getAllowedValues().isEmpty()) {
