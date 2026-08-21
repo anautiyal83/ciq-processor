@@ -1,9 +1,8 @@
-
 # ---------------------------------------------------------------------------
-# JSON output template - SBC 146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC
+# JSON output template SBC 37_DRA_LINK_SHIFTING_GUI
 # ---------------------------------------------------------------------------
 # This file is referenced from SBC_146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC_validation-rules.yaml
-# via:  json_output_file: "SBC_146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC_json-output.yaml"
+# via:  json_output_file: "SBC_37_DRA_LINK_SHIFTING_GUI_json-output.yaml"
 # ---------------------------------------------------------------------------
 # It is also consumed directly by:
 #   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
@@ -13,23 +12,15 @@ data:
  schemaVersion: "2"
  meta:
    nodeType: SBC
-   activity: 146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC
+   activity: SBC_37_DRA_LINK_SHIFTING_GUI
    tableKeys:
     _optional: true
-    PeeringSDPProfileTable:
-      recordPrimaryKeys: "PROFILEID"
-      subrecordKeys:
-        CodecBandwidth: "CODEC"
-        MsrpBandwidth:  "MSRP_MEDIA_TYPE"
-
-    IbcfTrunkGroupTable:
-      recordPrimaryKeys: "VN_ID,TG_ID"
-
-    IMSACRChargingProfileTable:
+    DiameterMultipleDestinationsProfileTable:
+      recordPrimaryKeys: "FQDN_INDEX"
+    
+    SblpProfileTable:
       recordPrimaryKeys: "PROFILE_ID"
 
-    CdrServiceProfileTable:
-      recordPrimaryKeys: "CDR_POOL_ID"
  nodeGroups:
    _each: "DISTINCT INDEX.NODEGROUP AS $ng"
    nodeGroup: $ng
@@ -50,3 +41,4 @@ data:
          _each: "$table WHERE NODEGROUP = $ng AND CONFIG_SEQ = $seq"
          data:
            _row: "*"
+  

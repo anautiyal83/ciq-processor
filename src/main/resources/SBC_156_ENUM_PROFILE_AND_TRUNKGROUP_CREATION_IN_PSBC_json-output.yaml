@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# JSON output template - SBC FIXED_LINE_CONFIGURATION
+# JSON output template — SBC ENUM_PROFILE_TRUNKGROUP_CREATION (Case-4)
 # ---------------------------------------------------------------------------
-# This file is referenced from SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
-# via:  json_output_file: "SBC_FIXED_LINE_CONFIGURATION_json-output.yaml"
+# This file is referenced from SBC_ENUM_PROFILE_TRUNKGROUP_CREATION_validation-rules.yaml
+# via:  json_output_file: "SBC_ENUM_PROFILE_TRUNKGROUP_CREATION_json-output.yaml"
 # ---------------------------------------------------------------------------
 # It is also consumed directly by:
 #   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
@@ -12,54 +12,29 @@ data:
  schemaVersion: "2"
  meta:
    nodeType: SBC
-   activity: FIXED_LINE_CONFIGURATION
+   activity: 156_ENUM_PROFILE_AND_TRUNKGROUP_CREATION_IN_PSBC
    tableKeys:
-      CRFTargetList:
-        recordPrimaryKeys: "TARGET_LIST_ID"
-        subrecordKeys:
-          CRFTargetListEntry: "TARGET_ID,VN_ID,TG_ID"
-        immutableFields:
-          record:
-            - LOCATION
-            - TARGET_TYPE
-
-      PeeringSDPProfileTable:
-        recordPrimaryKeys: "PROFILEID"
-        subrecordKeys:
-          CodecBandwidth: "CODEC"
-          MsrpBandwidth:  "MSRP_MEDIA_TYPE"
-
-      BorderGatewayPublishedRealmTable:
-        recordPrimaryKeys: "BORDER_GATEWAY"
-        subrecordKeys:
-          PUBLISHED_REALM_ENTRY: "PUBLISHED_REALM_ID"
-
-      IbcfVirtualNetworkTable:
-        recordPrimaryKeys: "VN_ID"
-        immutableFields:
-          record:
-            - IPSEC_SA_PROFILE_ID
-            - VN_TYPE
-            - REMOTE_IPSEC_TUNNEL_GW_ADDR
-            - IKE_REMOTE_SERVER_PORT
-
-      ServiceProfileTable:
-        recordPrimaryKeys: "POLICY_ID"
-
-      PFEDPortTable:
-        recordPrimaryKeys: "PFED_ID,PORT_NAME"
-
-      PublishedRealmTable:
-        recordPrimaryKeys: "PUBLISHED_REALM_ID"
-
-      IbcfSipProfileTable:
+      _optional: true
+      ENUMProfileTable:
         recordPrimaryKeys: "PROFILE_ID"
 
       IbcfTrunkGroupTable:
         recordPrimaryKeys: "VN_ID,TG_ID"
 
-      CRFDATable:
-        recordPrimaryKeys: "DIGIT_STRING"
+      CRFTargetList:
+        recordPrimaryKeys: "TARGET_LIST_ID"
+        subrecordKeys:
+          CRFTargetListEntry: "TARGET_ID,VN_ID,TG_ID"
+        immutableFields:
+        record:
+          - LOCATION
+          - TARGET_TYPE
+
+      CRFTreatment:
+        recordPrimaryKeys: "TREATMENT_ID"
+
+      CRFHostURITable:
+        recordPrimaryKeys: "HOST_URI,HOST_URI_TYPE"
 
       CRFRoutePlan:
         recordPrimaryKeys: "RT_PLAN_ID"
@@ -72,20 +47,18 @@ data:
       CRFRouteProfile:
         recordPrimaryKeys: "ROUTE_PROFILE_ID"
 
-      CRFTreatment:
-        recordPrimaryKeys: "TREATMENT_ID"
-
-      CRFHostURITable:
-        recordPrimaryKeys: "HOST_URI,HOST_URI_TYPE"
-
-      IbcfIngressTrunkGroupMappingTable:
-        recordPrimaryKeys: "POLICY_ID"
+      CRFTask:
+        recordPrimaryKeys: "TASK_ID"
         immutableFields:
           record:
-            - ADDRESS
-            - PORT
-            - RFC4904_TGRP
-            - RFC4904_TRUNK_CONTEXT
+            - TASK_TYPE     
+
+      CRFTaskResult:
+        recordPrimaryKeys: "RECORD_ID"
+        immutableFields:
+          record:
+            - TASK_TYPE
+            - TASK_RESULT
 
  nodeGroups:
    _each: "DISTINCT INDEX.NODEGROUP AS $ng"
