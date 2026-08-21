@@ -1,0 +1,36 @@
+output_mode: single
+data:
+  schemaVersion: "2"
+  meta:
+    nodeType: SBC
+    activity: 33_LIC_LOADING_IN_SBC
+  nodeGroups:
+    _each: "DISTINCT LICENSE_FILE.Node AS $node"
+    nodeGroup: $node
+    crGroup: "Index.CRGroup WHERE Index.Node = $node"
+    email:   "Index.Email WHERE Index.Node = $node"
+    licenseFile: "LICENSE_FILE.LICENSE_FILE WHERE LICENSE_FILE.Node = $node"
+    nodes:
+      _each: "IP WHERE IP.Node = $node"
+      node:   IP.Node
+      niamID: "IP.'NIAM NAME'"
+    configSequences:
+      - configSeq: Step1
+        tables:
+          - table: CapacityLicenseKey
+            category: Global
+            records:
+              - data:
+                  Action: MODIFY
+                  SubAction: TABLE
+                  DIGITAL_SIGNATURE: "<DIGITAL_SIGNATURE>"
+                  CLEAR_TEXT: "<CapacityLicenseText>"
+                  
+          - table: FeatureLicenseParameters
+            category: Global
+            records:
+              - data:
+                  Action: MODIFY
+                  SubAction: TABLE
+                  FEATURE_LICENSE_KEY: <FEATURE_LICENSE_KEY>
+                  FEATURE_LICENSE_PARA_STRING: "<FeatureLicenseParametersText>"

@@ -172,6 +172,10 @@ public class JsonTemplateEvaluator {
         // blank still resolves to null, exactly as before.
         if (ctx.currentRow != null && hasColumn(ctx.currentRow, value))
             return ctx.currentRow.get(value);
+        if (ctx.currentRow != null) {
+            String fromRow = ctx.currentRow.get(value);
+            if (fromRow != null) return fromRow;
+        }
         return value;
     }
 
