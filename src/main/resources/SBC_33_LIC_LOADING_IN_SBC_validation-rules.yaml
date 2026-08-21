@@ -1,0 +1,131 @@
+# =============================================================================
+# Validation Rules: SBC - LICENSE_LOADING
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+#   Validate SBC License Loading CIQ sheets.
+#   Covers 3 sheets: Index, IP, and LICENSE_FILE.
+# =============================================================================
+
+version: "1.0"
+skipValidationValues: [MANO_EMPTY]
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: false
+  ignoreBlankRows: true
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# -----------------------------------------------------------------------------
+# Workbook-level cross-sheet rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  - subset:
+        from: Index.Node
+        to: IP.Node
+
+  - set:
+      bidirectional: true
+      from:
+        sheet: Index
+        column: Node
+        partitionBy: [Node]
+      to:
+        sheet: LICENSE_FILE
+        column: Node
+        partitionBy: [Node]
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+  # --------------------------------------------------++-----*-+*****************************
+  # Sheet: Index
+  # ---------------------------------------------------------------------------
+  Index:
+    required: true
+    columns:
+
+      Node:
+        required: true
+        type: string
+
+      CRGROUP:
+        required: true
+        description: "CR Number"
+        type: string
+        pattern: "^CR[0-9]+$"
+
+      EMAIL:
+        type: email
+        multi: true
+        description: "Email ID"
+        consolidate: true
+        consolidate_separator: ";"
+        minOnePerGroup:
+          groupByColumn: CRGROUP
+
+    rules:
+      - unique_key: [Node, CRGROUP]
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IP
+  # ---------------------------------------------------------------------------
+  IP:
+    required: true
+    columns:
+
+      Node:
+        required: true
+        type: string
+
+      NIAM NAME:
+        required: true
+        type: string
+        description: "NIAM ID for the hostname - must be unique to each node"
+
+     
+
+    rules:
+      - unique_key: [Node, NIAM NAME]
+
+  # ---------------------------------------------------------------------------
+  # Sheet: LICENSE_FILE
+  # ---------------------------------------------------------------------------
+  LICENSE_FILE:
+    required: true
+    columns:
+
+      Node:
+        required: true
+        type: string
+
+      LICENSE_FILE:
+        required: true
+        type: string
+        unique: true
+        description: "Name of the license file to be loaded"
+
+    rules:
+      - unique_key: [Node, LICENSE_FILES]
+
+# -----------------------------------------------------------------------------
+# Workbook-level outputs
+# -----------------------------------------------------------------------------
+outputs:
+  CR_LIST:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct
+    separator: ","
+
+  CR_COUNT:
+    sheet: Index
+    column: CRGROUP
+    aggregate: distinct_count
+

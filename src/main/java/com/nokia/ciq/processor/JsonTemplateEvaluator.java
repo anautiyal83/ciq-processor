@@ -124,7 +124,10 @@ public class JsonTemplateEvaluator {
             }
             return firstNonBlank(sheetName, colName, ctx);
         }
-        if (ctx.currentRow != null) return ctx.currentRow.get(value);
+        if (ctx.currentRow != null) {
+            String fromRow = ctx.currentRow.get(value);
+            if (fromRow != null) return fromRow;
+        }
         return value;
     }
 
