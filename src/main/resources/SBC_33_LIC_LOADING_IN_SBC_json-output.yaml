@@ -9,7 +9,7 @@ data:
     nodeGroup: $node
     crGroup: "Index.CRGroup WHERE Index.Node = $node"
     email:   "Index.Email WHERE Index.Node = $node"
-    licenseFile: "LICENSE_FILE.LICENSE_FILES WHERE LICENSE_FILE.Node = $node"
+    licenseFile: "LICENSE_FILE.LICENSE_FILE WHERE LICENSE_FILE.Node = $node"
     nodes:
       _each: "IP WHERE IP.Node = $node"
       node:   IP.Node
