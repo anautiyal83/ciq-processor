@@ -259,7 +259,7 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
         // We need a sheet context — derive it from the first column reference
         // (assumed to be "SheetName.ColumnName"; if plain name, treat whole store)
         String firstRef = uniqueRule.getColumns().get(0);
-        String sheetName = parseSheetName(firstRef);
+        String sheetName = parseSheetName(firstRef, store);
         if (sheetName == null) return errors;
 
         CiqSheet sheet;
@@ -273,7 +273,7 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
 
         List<String> colNames = new ArrayList<>();
         for (String ref : uniqueRule.getColumns()) {
-            colNames.add(parseColumnName(ref));
+            colNames.add(parseColumnName(ref, store));
         }
 
         Set<String> seen = new LinkedHashSet<>();
@@ -524,8 +524,8 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
      */
     private Set<String> resolveColumn(String ref, CiqDataStore store) {
         Set<String> values = new LinkedHashSet<>();
-        String sheetName = parseSheetName(ref);
-        String colName   = parseColumnName(ref);
+        String sheetName = parseSheetName(ref, store);
+        String colName   = parseColumnName(ref, store);
         if (sheetName == null || colName == null) return values;
 
         CiqSheet sheet;
@@ -554,8 +554,8 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
      */
     private Set<String> resolveColumnWhere(String ref, String where, CiqDataStore store) {
         Set<String> values = new LinkedHashSet<>();
-        String sheetName = parseSheetName(ref);
-        String colName   = parseColumnName(ref);
+        String sheetName = parseSheetName(ref, store);
+        String colName   = parseColumnName(ref, store);
         if (sheetName == null || colName == null || where == null) return values;
 
         int eqIdx = where.indexOf('=');
@@ -657,17 +657,67 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
         }
     }
 
+    /**
+     * Resolves a {@code "Sheet.Column"} reference against sheets that actually exist in
+     * {@code store}. Sheet names in this codebase may themselves contain dots (e.g.
+     * {@code System.MGCFPoolTbl}), and so may column names (e.g.
+     * {@code Record.GoldenCodecSet.GOLDEN_CODEC}), so the reference cannot be split on a
+     * fixed dot position. Each dot is tried as a candidate split point, starting from the
+     * rightmost (longest possible sheet name) and working left; the first candidate whose
+     * left-hand side resolves to a real sheet via {@link CiqDataStore#getSheet} wins.
+     * If no candidate resolves, falls back to splitting on the first dot, so a genuinely
+     * unresolvable reference still fails the same way it did before this fix (a
+     * "sheet/value not found" error downstream) instead of being silently misrouted.
+     *
+     * @return a 2-element array {@code {sheetName, columnName}}, or {@code null} if
+     *         {@code ref} has no dot at all
+     */
+    private static String[] resolveRef(String ref, CiqDataStore store) {
+        if (ref == null || !ref.contains(".")) return null;
+
+        List<Integer> dots = new ArrayList<>();
+        for (int i = 0; i < ref.length(); i++) {
+            if (ref.charAt(i) == '.') dots.add(i);
+        }
+        for (int i = dots.size() - 1; i >= 0; i--) {
+            int dot = dots.get(i);
+            String candidateSheet = ref.substring(0, dot);
+            if (candidateSheet.isEmpty()) continue;
+            CiqSheet s;
+            try {
+                s = store.getSheet(candidateSheet);
+            } catch (IOException e) {
+                continue;
+            }
+            if (s != null) {
+                return new String[]{candidateSheet, ref.substring(dot + 1)};
+            }
+        }
+        // No candidate prefix matched an existing sheet — preserve the original
+        // first-dot behavior so an unresolvable reference fails downstream as before.
+        int firstDot = ref.indexOf('.');
+        return new String[]{ref.substring(0, firstDot), ref.substring(firstDot + 1)};
+    }
+
+    /**
+     * Resolves the sheet-name portion of a {@code "Sheet.Column"} reference. Exposed
+     * (not just used internally) so {@link com.nokia.ciq.validator.CiqValidationEngine}
+     * can resolve the same references consistently when deciding whether to skip a
+     * {@code workbook_rule} for a missing dependent sheet.
+     */
+    public static String resolveSheetName(String ref, CiqDataStore store) {
+        String[] r = resolveRef(ref, store);
+        return r != null ? r[0] : null;
+    }
+
     /** Returns the sheet part of a "Sheet.Column" reference, or {@code null} if absent. */
-    private static String parseSheetName(String ref) {
-        if (ref == null) return null;
-        int dot = ref.indexOf('.');
-        return dot > 0 ? ref.substring(0, dot) : null;
+    private static String parseSheetName(String ref, CiqDataStore store) {
+        return resolveSheetName(ref, store);
     }
 
     /** Returns the column part of a "Sheet.Column" reference, or the whole string if no dot. */
-    private static String parseColumnName(String ref) {
-        if (ref == null) return null;
-        int dot = ref.indexOf('.');
-        return dot >= 0 ? ref.substring(dot + 1) : ref;
+    private static String parseColumnName(String ref, CiqDataStore store) {
+        String[] r = resolveRef(ref, store);
+        return r != null ? r[1] : ref;
     }
 }

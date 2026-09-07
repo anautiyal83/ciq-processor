@@ -67,10 +67,46 @@ import java.util.Set;
  *                            string containing double-quoted content)
  * plain string            — column name when inside a row block; static literal otherwise
  * </pre>
+ *
+ * <h3>_ref directive (template self-reference)</h3>
+ * <pre>
+ * pk:
+ *   _ref: "meta.tableKeys.$table.recordPrimaryKeys"
+ *
+ *     Reads a literal declared elsewhere in this same template, so static maps such as
+ *     meta.tableKeys stay the single source of truth.  The path is split on '.' before
+ *     $variables are substituted, so a variable holding a dotted value (e.g.
+ *     $table = "System.TrunkGroupTable") resolves correctly.  The referenced value is
+ *     returned verbatim — never re-evaluated as an expression.
+ * </pre>
+ *
+ * <h3>_col directive (indirect column reference)</h3>
+ * <pre>
+ * primaryKey:
+ *   _col: {_ref: "meta.tableKeys.$table.recordPrimaryKeys"}
+ *
+ *     The operand resolves to a column NAME, which is then read from the current row.
+ *     Use it when the column to read is itself data-driven.  A comma-separated operand
+ *     (composite key, e.g. "VN_ID,TG_ID") returns the matching values joined by ','.
+ * </pre>
+ *
+ * <h3>_row_join directive (row as a single string)</h3>
+ * <pre>
+ * value:
+ *   _row_join: {exclude: [NodeGroup, Action], format: "{col}={val}", separator: " "}
+ *
+ *     Serialises the current row to one string.  Shares _row's column order, blank-cell
+ *     skipping and exclusion matching.  format defaults to "{col}={val}", separator to a
+ *     single space; both may also be given as siblings of _row_join.
+ * </pre>
  */
 public class JsonTemplateEvaluator {
 
     /**
+     * The template passed to {@link #evaluate}, retained so {@code _ref} can read literals
+     * declared elsewhere in the same document (e.g. {@code meta.tableKeys}).
+     */
+    private Map<String, Object> rootTemplate;
      * When non-null, dots in column-name keys emitted by {@code _row} are replaced
      * with this string.  Configured via {@code key_dot_replacement} in the json-output
      * YAML.  This prevents flat dotted column names (e.g. {@code conditions.destRealm.operator})
@@ -83,6 +119,7 @@ public class JsonTemplateEvaluator {
     }
 
     public Object evaluate(Map<String, Object> template, TemplateContext ctx) {
+        this.rootTemplate = template;
         return buildObject(template, ctx);
     }
 
@@ -95,9 +132,12 @@ public class JsonTemplateEvaluator {
         if (value instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = (Map<String, Object>) value;
-            if (map.containsKey("_each"))  return buildArray(map, ctx);
-            if (map.containsKey("_join"))  return buildJoin(map, ctx);
-            if (map.containsKey("_row"))   return buildRowMap(map, ctx);
+            if (map.containsKey("_each"))     return buildArray(map, ctx);
+            if (map.containsKey("_join"))     return buildJoin(map, ctx);
+            if (map.containsKey("_ref"))      return resolveRef(map.get("_ref"), ctx);
+            if (map.containsKey("_col"))      return resolveCol(map, ctx);
+            if (map.containsKey("_row_join")) return buildRowJoin(map, ctx);
+            if (map.containsKey("_row"))      return buildRowMap(map, ctx);
             return buildObject(map, ctx);
         }
         if (value instanceof List) {
@@ -136,11 +176,32 @@ public class JsonTemplateEvaluator {
             }
             return firstNonBlank(sheetName, colName, ctx);
         }
+        // A bare string names a column of the current row when the row actually has such a
+        // column (e.g. "GROUP" in "PHONESDAT_FILES.GROUP = GROUP"); otherwise it is a static
+        // literal (e.g. "configSeq: Step1", "Action: MODIFY").  A column that exists but is
+        // blank still resolves to null, exactly as before.
+        if (ctx.currentRow != null && hasColumn(ctx.currentRow, value))
+            return ctx.currentRow.get(value);
         if (ctx.currentRow != null) {
             String fromRow = ctx.currentRow.get(value);
             if (fromRow != null) return fromRow;
         }
         return value;
+    }
+
+    /**
+     * Returns {@code true} when the row actually carries this column, matched
+     * case-, underscore- and space-insensitively.  Blank cells still count as present,
+     * so an existing-but-empty column keeps resolving to {@code null}.
+     */
+    private static boolean hasColumn(CiqRow row, String column) {
+        Map<String, String> data = row.getData();
+        if (data.containsKey(column)) return true;
+        String target = normalizeLookup(column);
+        for (String key : data.keySet()) {
+            if (normalizeLookup(key).equals(target)) return true;
+        }
+        return false;
     }
 
     /**
@@ -224,36 +285,7 @@ public class JsonTemplateEvaluator {
     private Map<String, Object> buildRowMap(Map<String, Object> map, TemplateContext ctx) {
         if (ctx.currentRow == null) return Collections.emptyMap();
 
-        // Collect excluded column names (normalised)
-        Set<String> excluded = new HashSet<>();
-        Object directive = map.get("_row");
-
-        if (directive instanceof String) {
-            String s = ((String) directive).trim();
-            if ("*".equals(s)) {
-                // _row: "*"  →  include all columns, no exclusions
-            } else if (s.toUpperCase().startsWith("EXCLUDE")) {
-                // e.g. "exclude [GROUP, ACTION, SUBACTION]"
-                String rest = s.substring(7).trim();
-                if (rest.startsWith("[") && rest.endsWith("]"))
-                    rest = rest.substring(1, rest.length() - 1);
-                for (String col : rest.split(","))
-                    excluded.add(normalizeColName(col.trim()));
-            }
-        } else if (directive instanceof Map) {
-            // e.g. {exclude: [GROUP, ACTION, SUBACTION]}
-            @SuppressWarnings("unchecked")
-            Map<String, Object> dMap = (Map<String, Object>) directive;
-            Object exList = dMap.get("exclude");
-            if (exList instanceof List) {
-                for (Object col : (List<?>) exList)
-                    excluded.add(normalizeColName(String.valueOf(col).trim()));
-            }
-        } else if (directive instanceof List) {
-            // e.g. _row: [GROUP, ACTION, SUBACTION]  (treat as exclusion list directly)
-            for (Object col : (List<?>) directive)
-                excluded.add(normalizeColName(String.valueOf(col).trim()));
-        }
+        Set<String> excluded = collectExcluded(map.get("_row"));
 
         // Build result map from current row's data, skipping excluded columns.
         // getOutputData() returns the untrimmed values when the sheet was read with
@@ -273,7 +305,193 @@ public class JsonTemplateEvaluator {
                 }
             }
         }
+
+        // Keys declared alongside _row are appended after the row's own columns, so a
+        // record can carry computed fields (e.g. primaryKey, value) next to its raw data.
+        for (Map.Entry<String, Object> e : map.entrySet()) {
+            if ("_row".equals(e.getKey())) continue;
+            result.put(e.getKey(), resolveValue(e.getValue(), ctx));
+        }
         return result;
+    }
+
+    /**
+     * Parses the exclusion list of a {@code _row} / {@code _row_join} directive.
+     * Accepted forms: {@code "*"} (no exclusions), {@code "exclude [A, B]"},
+     * {@code {exclude: [A, B]}} and a bare list {@code [A, B]}.
+     */
+    private static Set<String> collectExcluded(Object directive) {
+        Set<String> excluded = new HashSet<>();
+        if (directive instanceof String) {
+            String s = ((String) directive).trim();
+            if ("*".equals(s)) {
+                // "*"  →  include all columns, no exclusions
+            } else if (s.toUpperCase().startsWith("EXCLUDE")) {
+                // e.g. "exclude [GROUP, ACTION, SUBACTION]"
+                String rest = s.substring(7).trim();
+                if (rest.startsWith("[") && rest.endsWith("]"))
+                    rest = rest.substring(1, rest.length() - 1);
+                for (String col : rest.split(","))
+                    excluded.add(normalizeColName(col.trim()));
+            }
+        } else if (directive instanceof Map) {
+            // e.g. {exclude: [GROUP, ACTION, SUBACTION]}
+            Object exList = ((Map<?, ?>) directive).get("exclude");
+            if (exList instanceof List) {
+                for (Object col : (List<?>) exList)
+                    excluded.add(normalizeColName(String.valueOf(col).trim()));
+            }
+        } else if (directive instanceof List) {
+            // e.g. _row: [GROUP, ACTION, SUBACTION]  (treat as exclusion list directly)
+            for (Object col : (List<?>) directive)
+                excluded.add(normalizeColName(String.valueOf(col).trim()));
+        }
+        return excluded;
+    }
+
+    /**
+     * Serialises the current row to a single string of formatted column/value pairs.
+     * Column order, blank-cell skipping and exclusion matching are identical to
+     * {@link #buildRowMap}.
+     *
+     * <pre>
+     * value:
+     *   _row_join: {exclude: [NodeGroup, Action], format: "{col}={val}", separator: " "}
+     * </pre>
+     */
+    private String buildRowJoin(Map<String, Object> map, TemplateContext ctx) {
+        if (ctx.currentRow == null) return "";
+        Object directive = map.get("_row_join");
+        Set<String> excluded = collectExcluded(directive);
+        String format    = option(directive, map, "format",    "{col}={val}");
+        String separator = option(directive, map, "separator", " ");
+
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> e : ctx.currentRow.getOutputData().entrySet()) {
+            if (excluded.contains(normalizeColName(e.getKey()))) continue;
+            String val = e.getValue();
+            if (val == null || val.trim().isEmpty()) continue;
+            if (sb.length() > 0) sb.append(separator);
+            sb.append(format.replace("{col}", e.getKey()).replace("{val}", val));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Reads an option from inside the directive map first, then from the enclosing map,
+     * so both {@code _row_join: {separator: " "}} and a sibling {@code separator: " "} work.
+     */
+    private static String option(Object directive, Map<String, Object> parent,
+                                 String key, String defaultValue) {
+        if (directive instanceof Map) {
+            Object v = ((Map<?, ?>) directive).get(key);
+            if (v != null) return String.valueOf(v);
+        }
+        Object v = parent.get(key);
+        return v != null ? String.valueOf(v) : defaultValue;
+    }
+
+    /**
+     * Resolves a dotted path into the template itself, e.g.
+     * {@code _ref: "meta.tableKeys.$table.recordPrimaryKeys"}.
+     *
+     * <p>The path is split on {@code '.'} <em>before</em> {@code $variables} are substituted,
+     * so a variable whose value contains dots (e.g. {@code $table = "System.TrunkGroupTable"})
+     * still resolves to a single map key.  The referenced value is returned verbatim and is
+     * never re-evaluated as an expression.
+     *
+     * @return the referenced value, or {@code null} when any path segment is absent
+     */
+    private Object resolveRef(Object pathExpr, TemplateContext ctx) {
+        if (pathExpr == null || rootTemplate == null) return null;
+        Object node = rootTemplate;
+        for (String rawSegment : String.valueOf(pathExpr).trim().split("\\.")) {
+            String segment = rawSegment.trim();
+            if (segment.isEmpty()) continue;
+            if (segment.startsWith("$")) {
+                Object value = ctx.vars.get(segment.substring(1));
+                if (value == null) return null;
+                segment = value.toString();
+            }
+            if (!(node instanceof Map)) return null;
+            node = mapValue((Map<?, ?>) node, segment);
+            if (node == null) return null;
+        }
+        return node;
+    }
+
+    /** Map lookup: exact key first, then case-insensitive. */
+    private static Object mapValue(Map<?, ?> map, String key) {
+        Object exact = map.get(key);
+        if (exact != null) return exact;
+        for (Map.Entry<?, ?> e : map.entrySet()) {
+            if (e.getKey() != null && String.valueOf(e.getKey()).equalsIgnoreCase(key))
+                return e.getValue();
+        }
+        return null;
+    }
+
+    /**
+     * Indirect column reference: the operand resolves to a column <em>name</em>, which is
+     * then read from the current row.
+     *
+     * <pre>
+     * primaryKey: {_col: $pk}                                      # name from a variable
+     * primaryKey: {_col: {_ref: "meta.tableKeys.$table.recordPrimaryKeys"}}
+     * </pre>
+     *
+     * <p>A comma-separated operand declares a composite key (e.g. {@code "VN_ID,TG_ID"});
+     * the matching values are joined by {@code separator} (default {@code ","}).  Blank
+     * values are skipped, and {@code null} is returned when no column resolves — matching
+     * how absent scalars are emitted elsewhere.
+     *
+     * <p>A plain-string operand is taken as a literal column name; only {@code $var} and
+     * nested directives are resolved, so the name is never dereferenced twice.
+     */
+    private Object resolveCol(Map<String, Object> map, TemplateContext ctx) {
+        if (ctx.currentRow == null) return null;
+
+        Object operand = map.get("_col");
+        Object names;
+        if (operand instanceof String) {
+            String s = ((String) operand).trim();
+            names = s.startsWith("$") ? ctx.vars.get(s.substring(1)) : s;
+        } else {
+            names = resolveValue(operand, ctx);
+        }
+        if (names == null) return null;
+
+        String separator = option(null, map, "separator", ",");
+        StringBuilder sb = new StringBuilder();
+        int found = 0;
+        for (String rawName : String.valueOf(names).split(",")) {
+            String column = rawName.trim();
+            if (column.isEmpty()) continue;
+            String value = outputValue(ctx.currentRow, column);
+            if (value == null || value.trim().isEmpty()) continue;
+            if (found++ > 0) sb.append(separator);
+            sb.append(value);
+        }
+        return found == 0 ? null : sb.toString();
+    }
+
+    /**
+     * Column lookup against the row's JSON-output values (untrimmed when raw capture is on).
+     * Matching is case-, underscore- and space-insensitive, mirroring {@link CiqRow#get}.
+     */
+    private static String outputValue(CiqRow row, String column) {
+        Map<String, String> data = row.getOutputData();
+        String direct = data.get(column);
+        if (direct != null) return direct;
+        String target = normalizeLookup(column);
+        for (Map.Entry<String, String> e : data.entrySet()) {
+            if (normalizeLookup(e.getKey()).equals(target)) return e.getValue();
+        }
+        return null;
+    }
+
+    private static String normalizeLookup(String s) {
+        return s == null ? "" : s.replace("_", "").replace(" ", "").toLowerCase();
     }
 
     private static String normalizeColName(String s) {
