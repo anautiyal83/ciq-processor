@@ -1,0 +1,34 @@
+# ---------------------------------------------------------------------------
+# JSON output template — DSR 10005 SAPC CCPC Preference Change
+# ---------------------------------------------------------------------------
+# Referenced from DSR_10005_SAPC_CCPC_PREFERENCE_CHANGE_validation-rules.yaml
+# via:  json_output_file: "DSR_10005_SAPC_CCPC_PREFERENCE_CHANGE_json-output.yaml"
+# ---------------------------------------------------------------------------
+# Consumed by:
+#   - ciq-processor  (CIQ validation + JSON generation)
+#   - JAVA_NOKIA_CLICR_AUTOMATION  (execution engine + MOP generation)
+# ---------------------------------------------------------------------------
+
+output_mode: single
+data:
+  schemaVersion: "2"
+  meta:
+    nodeType: DSR
+    activity: DSR_10005_SAPC_CCPC_PREFERENCE_CHANGE
+
+  nodeGroups:
+    _each: "DISTINCT INDEX.Node AS $node"
+    nodeGroup: $node
+    crGroup: "INDEX.CRGroup WHERE INDEX.Node = $node"
+    nodes:
+      _each: "IP WHERE IP.Node = $node"
+      node: IP.Node
+      ipAddr: IP.IP_ADDR
+    tables:
+      _each: "DISTINCT INDEX.Tables WHERE INDEX.Node = $node AS $table"
+      table: $table
+      category: "INDEX.Category WHERE INDEX.Node = $node AND INDEX.Tables = $table"
+      records:
+        _each: "$table WHERE Group = $node"
+        data:
+          _row: "*"
