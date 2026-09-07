@@ -70,6 +70,18 @@ import java.util.Set;
  */
 public class JsonTemplateEvaluator {
 
+    /**
+     * When non-null, dots in column-name keys emitted by {@code _row} are replaced
+     * with this string.  Configured via {@code key_dot_replacement} in the json-output
+     * YAML.  This prevents flat dotted column names (e.g. {@code conditions.destRealm.operator})
+     * from clashing with the dot-path navigation used by the execution engine.
+     */
+    private String keyDotReplacement;
+
+    public void setKeyDotReplacement(String keyDotReplacement) {
+        this.keyDotReplacement = keyDotReplacement;
+    }
+
     public Object evaluate(Map<String, Object> template, TemplateContext ctx) {
         return buildObject(template, ctx);
     }
@@ -246,12 +258,19 @@ public class JsonTemplateEvaluator {
         // Build result map from current row's data, skipping excluded columns.
         // getOutputData() returns the untrimmed values when the sheet was read with
         // settings.trimCellValues: false, so the JSON mirrors the CIQ exactly.
+        // When key_dot_replacement is configured, dots in column names are replaced
+        // so the execution engine's dot-path navigation doesn't misinterpret them.
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : ctx.currentRow.getOutputData().entrySet()) {
             if (!excluded.contains(normalizeColName(e.getKey()))) {
                 String val = e.getValue();
-                if (val != null && !val.trim().isEmpty())
-                    result.put(e.getKey(), val);
+                if (val != null && !val.trim().isEmpty()) {
+                    String key = e.getKey();
+                    if (keyDotReplacement != null && key.contains(".")) {
+                        key = key.replace(".", keyDotReplacement);
+                    }
+                    result.put(key, val);
+                }
             }
         }
         return result;
