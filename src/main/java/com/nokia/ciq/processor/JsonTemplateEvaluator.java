@@ -107,6 +107,8 @@ public class JsonTemplateEvaluator {
      * declared elsewhere in the same document (e.g. {@code meta.tableKeys}).
      */
     private Map<String, Object> rootTemplate;
+
+    /**
      * When non-null, dots in column-name keys emitted by {@code _row} are replaced
      * with this string.  Configured via {@code key_dot_replacement} in the json-output
      * YAML.  This prevents flat dotted column names (e.g. {@code conditions.destRealm.operator})
