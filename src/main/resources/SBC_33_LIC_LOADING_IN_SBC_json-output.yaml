@@ -10,6 +10,7 @@ data:
     crGroup: "Index.CRGroup WHERE Index.Node = $node"
     email:   "Index.Email WHERE Index.Node = $node"
     licenseFile: "LICENSE_FILE.LICENSE_FILE WHERE LICENSE_FILE.Node = $node"
+    rollbackLicenseFile: "LICENSE_FILE.ROLLBACK_LICENSE_FILE WHERE LICENSE_FILE.Node = $node"
     nodes:
       _each: "IP WHERE IP.Node = $node"
       node:   IP.Node
@@ -25,12 +26,22 @@ data:
                   SubAction: TABLE
                   DIGITAL_SIGNATURE: "<DIGITAL_SIGNATURE>"
                   CLEAR_TEXT: "<CapacityLicenseText>"
-                  
+                rollbackData:
+                  Action: MODIFY
+                  SubAction: TABLE
+                  DIGITAL_SIGNATURE: "<OLD_DIGITAL_SIGNATURE>"
+                  CLEAR_TEXT: "<OLD_CapacityLicenseText>"
+
           - table: FeatureLicenseParameters
             category: Global
             records:
               - data:
                   Action: MODIFY
                   SubAction: TABLE
-                  FEATURE_LICENSE_KEY: <FEATURE_LICENSE_KEY>
+                  FEATURE_LICENSE_KEY: "<FEATURE_LICENSE_KEY>"
                   FEATURE_LICENSE_PARA_STRING: "<FeatureLicenseParametersText>"
+                rollbackData:
+                  Action: MODIFY
+                  SubAction: TABLE
+                  FEATURE_LICENSE_KEY: "<OLD_FEATURE_LICENSE_KEY>"
+                  FEATURE_LICENSE_PARA_STRING: "<OLD_FeatureLicenseParametersText>"
