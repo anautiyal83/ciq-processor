@@ -36,6 +36,33 @@ workbook_rules:
       from: <SheetName>.<ColumnName>
       to:   <SheetName>.<ColumnName>
 
+  # join two sheets on a composite key, then compare one column on each side.
+  # Use for relations between paired cells, e.g. two services that must never
+  # both be enabled for the same subscriber. Repeat the block with different
+  # sheet names to cover another pair - nothing here is node-type specific.
+  - cross_sheet_compare:
+      driver:                            # optional: restricts the keys checked
+        sheet:  <SheetName>              #   usually Index
+        keys:   [<ColumnName>, ...]      #   canonical key names, also used in {placeholders}
+        where:  "<ColumnName> = <value>" #   optional single-equality row filter
+      left:
+        sheet:  <SheetName>
+        column: <ColumnName>
+        keys:   [<ColumnName>, ...]      # optional: only when this sheet names the
+                                         # key columns differently; must align with driver.keys
+      right:
+        sheet:  <SheetName>
+        column: <ColumnName>
+      relation: not_both                 # equals | not_equals | opposite (default) | not_both
+      active_values:                     # required for relation: not_both
+        - <value>                        #   fails only when BOTH sides hold an active value;
+                                         #   all-inactive and one-of-each pass
+      value_pairs:                       # required for relation: opposite (strict: the two
+        - [<value>, <value>]             #   values must differ and share one pair, so
+                                         #   DISABLE/DISABLE would fail)
+      on_missing: skip                   # skip (default) | error - key present on one side only
+      message: "..."                     # optional; {KeyColumn}, {left}, {right} are substituted
+
 
 # ---------------------------------------------------------------------------
 # Custom validator registry

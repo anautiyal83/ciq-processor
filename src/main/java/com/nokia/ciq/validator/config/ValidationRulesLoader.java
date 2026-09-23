@@ -62,7 +62,19 @@ public class ValidationRulesLoader {
                 "getSetMatch", "setSetMatch");
         workbookRuleDesc.substituteProperty("contiguous_sequence", ContiguousSequenceRule.class,
                 "getContiguousSequence", "setContiguousSequence");
+        workbookRuleDesc.substituteProperty("cross_sheet_compare", CrossSheetCompareRule.class,
+                "getCrossSheetCompare", "setCrossSheetCompare");
         constructor.addTypeDescription(workbookRuleDesc);
+
+        // ---- CrossSheetCompareRule: snake_case YAML keys → camelCase Java properties ----
+        TypeDescription crossSheetCompareDesc = new TypeDescription(CrossSheetCompareRule.class);
+        crossSheetCompareDesc.substituteProperty("value_pairs", List.class,
+                "getValuePairs", "setValuePairs");
+        crossSheetCompareDesc.substituteProperty("active_values", List.class,
+                "getActiveValues", "setActiveValues");
+        crossSheetCompareDesc.substituteProperty("on_missing", String.class,
+                "getOnMissing", "setOnMissing");
+        constructor.addTypeDescription(crossSheetCompareDesc);
 
         // ---- ValidationRulesConfig:
         //      YAML key "workbook_rules" → Java property "workbookRules"

@@ -56,6 +56,9 @@ public class WorkbookRule {
      */
     private SetRule set;
 
+    /** Paired-value comparison between a column on one sheet and a column on another. */
+    private CrossSheetCompareRule crossSheetCompare;
+
     public SubsetRule getSubset() { return subset; }
     public void setSubset(SubsetRule subset) { this.subset = subset; }
 
@@ -87,4 +90,9 @@ public class WorkbookRule {
 
     public SetRule getSet() { return set; }
     public void setSet(SetRule set) { this.set = set; }
+
+    public CrossSheetCompareRule getCrossSheetCompare() { return crossSheetCompare; }
+    public void setCrossSheetCompare(CrossSheetCompareRule crossSheetCompare) {
+        this.crossSheetCompare = crossSheetCompare;
+    }
 }
