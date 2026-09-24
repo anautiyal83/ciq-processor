@@ -7,6 +7,8 @@ import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
 import com.nokia.ciq.validator.config.ContiguousSequenceRule;
+import com.nokia.ciq.validator.config.CrossCheckRule;
+import com.nokia.ciq.validator.config.CrossSheetCompareRule;
 import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
 import com.nokia.ciq.validator.config.RowCondition;
@@ -1162,7 +1164,20 @@ public class CiqValidationEngine {
             for (String ref : rule.getSubsetAny().getTo()) addSheetFromString(ref, sheets);
             addSheetFromString(rule.getSubsetAny().getFrom(), sheets);
         }
+        if (rule.getCrossSheetCompare() != null) {
+            // Both compared sheets are plain names, not "Sheet.Column" references. The driver
+            // sheet is deliberately left out: it is typically the Index, which is not a regular
+            // store sheet and so would always look "absent" and disable the rule.
+            CrossSheetCompareRule r = rule.getCrossSheetCompare();
+            if (r.getLeft()  != null) addSheetName(r.getLeft().getSheet(),  sheets);
+            if (r.getRight() != null) addSheetName(r.getRight().getSheet(), sheets);
+        }
         return sheets;
+    }
+
+    /** Adds a plain sheet name (no "Sheet.Column" resolution) when it is usable. */
+    private void addSheetName(String sheet, Set<String> sheets) {
+        if (sheet != null && !sheet.trim().isEmpty()) sheets.add(sheet.trim());
     }
 
     private void addSheetFromRef(SubsetRule ref, Set<String> sheets) {
@@ -1288,6 +1303,32 @@ public class CiqValidationEngine {
             String arrow = r.isBidirectional() ? " \u2194 " : " \u2192 ";
             return "set: " + fromCol + whereDesc + partDesc + arrow + toCol
                     + (r.isBidirectional() ? " (bidirectional)" : "");
+        }
+        if (rule.getCrossSheetCompare() != null) {
+            CrossSheetCompareRule r = rule.getCrossSheetCompare();
+            String leftRef  = r.getLeft()  != null ? r.getLeft().getSheet()  + "." + r.getLeft().getColumn()  : "?";
+            String rightRef = r.getRight() != null ? r.getRight().getSheet() + "." + r.getRight().getColumn() : "?";
+            String keyDesc = "";
+            if (r.getDriver() != null && r.getDriver().getKeys() != null) {
+                keyDesc = " on " + r.getDriver().getKeys();
+            } else if (r.getLeft() != null && r.getLeft().getKeys() != null) {
+                keyDesc = " on " + r.getLeft().getKeys();
+            }
+            return "cross_sheet_compare (" + r.resolveRelation().name().toLowerCase(java.util.Locale.ROOT)
+                    + "): " + leftRef + " \u2194 " + rightRef + keyDesc;
+        }
+        if (rule.getCrossCheck() != null) {
+            CrossCheckRule r = rule.getCrossCheck();
+            StringBuilder cols = new StringBuilder();
+            if (r.getColumns() != null) {
+                for (List<String> c : r.getColumns()) {
+                    if (cols.length() > 0) cols.append(" \u2194 ");
+                    cols.append(c.get(0)).append('.').append(c.get(1));
+                }
+            }
+            String keyDesc = r.getOn() != null ? " on " + r.getOn() : "";
+            return "cross_check (" + r.resolveRelation().name().toLowerCase(java.util.Locale.ROOT)
+                    + "): " + cols + keyDesc;
         }
         return "unknown workbook rule";
     }

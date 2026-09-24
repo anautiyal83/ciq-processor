@@ -36,6 +36,48 @@ workbook_rules:
       from: <SheetName>.<ColumnName>
       to:   <SheetName>.<ColumnName>
 
+  # Streamlined cross-sheet comparison (preferred over cross_sheet_compare).
+  # Compare columns across two or more sheets for rows sharing the same key.
+  - cross_check:
+      on: [<ColumnName>, ...]              # composite key columns used to join rows
+      columns:                             # [sheet, column] pairs to compare (2+ required)
+        - [<SheetName>, <ColumnName>]
+        - [<SheetName>, <ColumnName>]
+      relation: not_both                   # equals | not_equals | opposite | not_both (default)
+      values:                              # active values for not_both (defaults to [ENABLE])
+        - <value>
+      pairs:                               # required for relation: opposite
+        - [<value>, <value>]
+      from: <SheetName>                    # optional: driver sheet scoping which keys to check
+      filter: "<ColumnName> = <value>"     # optional: row filter on the driver sheet
+      missing: skip                        # skip (default) | error
+      message: "..."                       # optional: {KeyCol} and {SheetName} are substituted
+
+  # Legacy cross-sheet comparison (cross_check is preferred for new rules).
+  # Join two sheets on a composite key, then compare one column on each side.
+  - cross_sheet_compare:
+      driver:                            # optional: restricts the keys checked
+        sheet:  <SheetName>              #   usually Index
+        keys:   [<ColumnName>, ...]      #   canonical key names, also used in {placeholders}
+        where:  "<ColumnName> = <value>" #   optional single-equality row filter
+      left:
+        sheet:  <SheetName>
+        column: <ColumnName>
+        keys:   [<ColumnName>, ...]      # optional: only when this sheet names the
+                                         # key columns differently; must align with driver.keys
+      right:
+        sheet:  <SheetName>
+        column: <ColumnName>
+      relation: not_both                 # equals | not_equals | opposite (default) | not_both
+      active_values:                     # required for relation: not_both
+        - <value>                        #   fails only when BOTH sides hold an active value;
+                                         #   all-inactive and one-of-each pass
+      value_pairs:                       # required for relation: opposite (strict: the two
+        - [<value>, <value>]             #   values must differ and share one pair, so
+                                         #   DISABLE/DISABLE would fail)
+      on_missing: skip                   # skip (default) | error - key present on one side only
+      message: "..."                     # optional; {KeyColumn}, {left}, {right} are substituted
+
 
 # ---------------------------------------------------------------------------
 # Custom validator registry

@@ -4,6 +4,8 @@ import com.nokia.ciq.reader.model.CiqRow;
 import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ConstantWithinRule;
+import com.nokia.ciq.validator.config.CrossCheckRule;
+import com.nokia.ciq.validator.config.CrossSheetCompareRule;
 import com.nokia.ciq.validator.config.ContiguousSequenceRule;
 import com.nokia.ciq.validator.config.CountPerRule;
 import com.nokia.ciq.validator.config.SetMatchRule;
@@ -26,7 +28,7 @@ import java.util.Set;
 
 /**
  * Handles workbook-level cross-sheet rules: {@code subset}, {@code superset},
- * {@code match}, and {@code unique}.
+ * {@code match}, {@code unique}, and {@code cross_sheet_compare}.
  *
  * <p>References use the {@code "SheetName.ColumnName"} format.
  */
@@ -81,6 +83,14 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
 
         if (rule.getSet() != null) {
             errors.addAll(checkSet(rule.getSet(), store));
+        }
+
+        if (rule.getCrossSheetCompare() != null) {
+            errors.addAll(checkCrossSheetCompare(rule.getCrossSheetCompare(), store));
+        }
+
+        if (rule.getCrossCheck() != null) {
+            errors.addAll(checkCrossCheck(rule.getCrossCheck(), store));
         }
 
         return errors;
@@ -504,6 +514,284 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
         return errors;
     }
 
+    // -------------------------------------------------------------------------
+    // Cross-sheet paired-value comparison
+    // -------------------------------------------------------------------------
+
+    /**
+     * Joins two sheets on a composite key and checks a relation between one column on
+     * each side. Unlike {@link #checkSet} — which compares value <em>sets</em> per
+     * partition — this compares the paired cell values themselves, so it can express
+     * "these two services must never both be enabled for the same subscriber".
+     *
+     * <p>Key values are matched case-insensitively after trimming, consistent with the
+     * rest of the framework. When a key maps to several rows on a side, every left
+     * value is checked against every right value.
+     */
+    private List<ValidationError> checkCrossSheetCompare(CrossSheetCompareRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+
+        CrossSheetCompareRule.Side left  = rule.getLeft();
+        CrossSheetCompareRule.Side right = rule.getRight();
+        if (left == null || right == null) {
+            log.warn("cross_sheet_compare: both 'left' and 'right' are required - skipping rule");
+            return errors;
+        }
+        if (left.getSheet() == null || left.getColumn() == null
+                || right.getSheet() == null || right.getColumn() == null) {
+            log.warn("cross_sheet_compare: each side needs 'sheet' and 'column' - skipping rule");
+            return errors;
+        }
+
+        CrossSheetCompareRule.Driver driver = rule.getDriver();
+
+        // Canonical key names — used for matching when a side declares none, and for
+        // the {ColumnName} placeholders in messages.
+        List<String> keyNames = (driver != null && driver.getKeys() != null && !driver.getKeys().isEmpty())
+                ? driver.getKeys()
+                : (left.getKeys() != null && !left.getKeys().isEmpty() ? left.getKeys() : null);
+        if (keyNames == null) {
+            log.warn("cross_sheet_compare: no key columns declared (driver.keys or left.keys) - skipping rule");
+            return errors;
+        }
+
+        List<String> leftKeys  = (left.getKeys()  != null && !left.getKeys().isEmpty())  ? left.getKeys()  : keyNames;
+        List<String> rightKeys = (right.getKeys() != null && !right.getKeys().isEmpty()) ? right.getKeys() : keyNames;
+        if (leftKeys.size() != keyNames.size() || rightKeys.size() != keyNames.size()) {
+            log.warn("cross_sheet_compare: key column lists must be the same length "
+                    + "(keys={}, left={}, right={}) - skipping rule", keyNames, leftKeys, rightKeys);
+            return errors;
+        }
+
+        CrossSheetCompareRule.Relation relation = rule.resolveRelation();
+        List<List<String>> pairs = rule.getValuePairs();
+        List<String> activeValues = rule.getActiveValues();
+        if (relation == CrossSheetCompareRule.Relation.OPPOSITE && (pairs == null || pairs.isEmpty())) {
+            log.warn("cross_sheet_compare: relation 'opposite' requires value_pairs - skipping rule");
+            return errors;
+        }
+        if (relation == CrossSheetCompareRule.Relation.NOT_BOTH
+                && (activeValues == null || activeValues.isEmpty())) {
+            log.warn("cross_sheet_compare: relation 'not_both' requires active_values - skipping rule");
+            return errors;
+        }
+
+        CiqSheet leftSheet  = getSheet(store, left.getSheet());
+        CiqSheet rightSheet = getSheet(store, right.getSheet());
+        if (leftSheet == null) {
+            log.warn("cross_sheet_compare: sheet '{}' not found - skipping rule", left.getSheet());
+            return errors;
+        }
+        if (rightSheet == null) {
+            log.warn("cross_sheet_compare: sheet '{}' not found - skipping rule", right.getSheet());
+            return errors;
+        }
+
+        Map<List<String>, KeyGroup> leftGroups  = collectKeyGroups(leftSheet,  leftKeys,  left.getColumn());
+        Map<List<String>, KeyGroup> rightGroups = collectKeyGroups(rightSheet, rightKeys, right.getColumn());
+
+        // Which keys to check: those enumerated by the driver sheet, or - with no driver -
+        // every key seen on either side.
+        Map<List<String>, List<String>> keysToCheck = new LinkedHashMap<>();
+        if (driver != null && driver.getSheet() != null) {
+            CiqSheet driverSheet = getSheet(store, driver.getSheet());
+            if (driverSheet == null) {
+                log.warn("cross_sheet_compare: driver sheet '{}' not found - skipping rule", driver.getSheet());
+                return errors;
+            }
+            String whereCol = null;
+            String whereVal = null;
+            if (driver.getWhere() != null) {
+                int eq = driver.getWhere().indexOf('=');
+                if (eq < 0) {
+                    log.warn("cross_sheet_compare: invalid where clause (no '='): {}", driver.getWhere());
+                } else {
+                    whereCol = driver.getWhere().substring(0, eq).trim();
+                    whereVal = driver.getWhere().substring(eq + 1).trim();
+                }
+            }
+            for (CiqRow row : driverSheet.getRows()) {
+                if (whereCol != null) {
+                    String rv = row.get(whereCol);
+                    if (!whereVal.equalsIgnoreCase(rv != null ? rv.trim() : "")) continue;
+                }
+                List<String> display = keyValues(row, keyNames);
+                if (display == null) continue;
+                keysToCheck.put(normaliseKey(display), display);
+            }
+        } else {
+            for (Map.Entry<List<String>, KeyGroup> e : leftGroups.entrySet()) {
+                keysToCheck.put(e.getKey(), e.getValue().display);
+            }
+            for (Map.Entry<List<String>, KeyGroup> e : rightGroups.entrySet()) {
+                if (!keysToCheck.containsKey(e.getKey())) keysToCheck.put(e.getKey(), e.getValue().display);
+            }
+        }
+
+        String leftRef  = left.getSheet()  + "." + left.getColumn();
+        String rightRef = right.getSheet() + "." + right.getColumn();
+
+        for (Map.Entry<List<String>, List<String>> ke : keysToCheck.entrySet()) {
+            List<String> key     = ke.getKey();
+            List<String> display = ke.getValue();
+            String keyDesc = describeKey(keyNames, display);
+
+            KeyGroup lg = leftGroups.get(key);
+            KeyGroup rg = rightGroups.get(key);
+
+            if (lg == null || rg == null) {
+                if (rule.resolveOnMissing() == CrossSheetCompareRule.OnMissing.ERROR) {
+                    String missingRef = lg == null ? leftRef : rightRef;
+                    if (lg == null && rg == null) missingRef = leftRef + " and " + rightRef;
+                    int rowNum = lg != null ? lg.rowNumber : (rg != null ? rg.rowNumber : 0);
+                    errors.add(new ValidationError(rowNum, keyNames.toString(), keyDesc,
+                            "(" + keyDesc + ") has no row in " + missingRef
+                            + "; both sides are required (on_missing: error)"));
+                }
+                continue;
+            }
+
+            for (String lv : lg.values) {
+                for (String rv : rg.values) {
+                    String problem = relationProblem(relation, pairs, activeValues, lv, rv);
+                    if (problem == null) continue;
+                    String msg = rule.getMessage() != null
+                            ? renderMessage(rule.getMessage(), keyNames, display, lv, rv)
+                            : "(" + keyDesc + ") " + leftRef + " = '" + lv + "' and "
+                              + rightRef + " = '" + rv + "' " + problem;
+                    errors.add(new ValidationError(lg.rowNumber, left.getColumn(), lv, msg));
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * Checks one value pair against the relation.
+     *
+     * @return {@code null} when the pair is acceptable, otherwise a phrase describing
+     *         the violation, ready to append to a generated message
+     */
+    private String relationProblem(CrossSheetCompareRule.Relation relation,
+                                   List<List<String>> pairs, List<String> activeValues,
+                                   String lv, String rv) {
+        switch (relation) {
+            case EQUALS:
+                return lv.equalsIgnoreCase(rv) ? null : "must be equal";
+            case NOT_EQUALS:
+                return lv.equalsIgnoreCase(rv) ? "must not be equal" : null;
+            case NOT_BOTH:
+                // Mutual exclusion: only both-active is a violation. Both inactive, and
+                // one of each, are legitimate.
+                return isActive(activeValues, lv) && isActive(activeValues, rv)
+                        ? "must not both be active (active values: " + activeValues + ")"
+                        : null;
+            case OPPOSITE:
+            default:
+                int li = pairIndexOf(pairs, lv);
+                int ri = pairIndexOf(pairs, rv);
+                if (li < 0 || ri < 0) {
+                    String unknown = li < 0 ? lv : rv;
+                    return "must be opposite, but '" + unknown
+                           + "' is not one of the declared value_pairs " + pairs;
+                }
+                if (li != ri) {
+                    return "must be opposite, but they come from different value_pairs " + pairs;
+                }
+                return lv.equalsIgnoreCase(rv) ? "must be opposite (allowed: " + pairs.get(li) + ")" : null;
+        }
+    }
+
+    /** Whether {@code value} counts as active for {@code relation: not_both}. */
+    private boolean isActive(List<String> activeValues, String value) {
+        for (String a : activeValues) {
+            if (a != null && a.trim().equalsIgnoreCase(value)) return true;
+        }
+        return false;
+    }
+
+    /** Index of the declared pair containing {@code value}, or -1 when no pair holds it. */
+    private int pairIndexOf(List<List<String>> pairs, String value) {
+        for (int i = 0; i < pairs.size(); i++) {
+            List<String> pair = pairs.get(i);
+            if (pair == null) continue;
+            for (String v : pair) {
+                if (v != null && v.trim().equalsIgnoreCase(value)) return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Substitutes {@code {KeyColumn}}, {@code {left}} and {@code {right}} in a
+     * user-supplied message template.
+     */
+    private String renderMessage(String template, List<String> keyNames,
+                                 List<String> keyValues, String lv, String rv) {
+        String out = template;
+        for (int i = 0; i < keyNames.size(); i++) {
+            out = out.replace("{" + keyNames.get(i) + "}", keyValues.get(i));
+        }
+        return out.replace("{left}", lv).replace("{right}", rv);
+    }
+
+    /**
+     * Groups a sheet's rows by composite key, collecting the distinct non-blank values
+     * of {@code valueColumn} for each. Rows whose key is entirely blank are ignored.
+     */
+    private Map<List<String>, KeyGroup> collectKeyGroups(CiqSheet sheet, List<String> keyCols,
+                                                         String valueColumn) {
+        Map<List<String>, KeyGroup> groups = new LinkedHashMap<>();
+        for (CiqRow row : sheet.getRows()) {
+            List<String> display = keyValues(row, keyCols);
+            if (display == null) continue;
+            String val = row.get(valueColumn);
+            if (val == null || val.trim().isEmpty()) continue;
+
+            List<String> key = normaliseKey(display);
+            KeyGroup g = groups.get(key);
+            if (g == null) {
+                g = new KeyGroup(display, row.getRowNumber());
+                groups.put(key, g);
+            }
+            g.values.add(val.trim());
+        }
+        return groups;
+    }
+
+    /** Trimmed key cell values for a row, or {@code null} when every component is blank. */
+    private List<String> keyValues(CiqRow row, List<String> keyCols) {
+        List<String> vals = new ArrayList<>(keyCols.size());
+        boolean allBlank = true;
+        for (String kc : keyCols) {
+            String v = row.get(kc);
+            v = v != null ? v.trim() : "";
+            if (!v.isEmpty()) allBlank = false;
+            vals.add(v);
+        }
+        return allBlank ? null : vals;
+    }
+
+    /** Lower-cased copy of a key, so joins match case-insensitively. */
+    private List<String> normaliseKey(List<String> display) {
+        List<String> key = new ArrayList<>(display.size());
+        for (String v : display) key.add(v.toLowerCase(java.util.Locale.ROOT));
+        return key;
+    }
+
+    /** Distinct values of the compared column for one key, plus a row number for reporting. */
+    private static class KeyGroup {
+        final List<String> display;
+        final int rowNumber;
+        final Set<String> values = new LinkedHashSet<>();
+
+        KeyGroup(List<String> display, int rowNumber) {
+            this.display = display;
+            this.rowNumber = rowNumber;
+        }
+    }
+
     /** Builds "col1=val1, col2=val2" for a partition key. */
     private String describeKey(List<String> cols, List<String> vals) {
         StringBuilder sb = new StringBuilder();
@@ -512,6 +800,215 @@ public class WorkbookCrossRefValidator implements WorkbookRuleValidator {
             sb.append(cols.get(i)).append('=').append(vals.get(i));
         }
         return sb.toString();
+    }
+
+    // -------------------------------------------------------------------------
+    // cross_check (streamlined)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Validates a {@link CrossCheckRule} — the streamlined cross-sheet comparison.
+     *
+     * <p>Converts the compact {@code columns: [[Sheet, Col], ...]} format into the
+     * same key-group + relation-check logic used by {@code cross_sheet_compare}, but
+     * supports N-way comparisons and defaults {@code values} to {@code [ENABLE]}.
+     */
+    private List<ValidationError> checkCrossCheck(CrossCheckRule rule, CiqDataStore store) {
+        List<ValidationError> errors = new ArrayList<>();
+
+        List<String> keyNames = rule.getOn();
+        if (keyNames == null || keyNames.isEmpty()) {
+            log.warn("cross_check: 'on' (key columns) is required - skipping rule");
+            return errors;
+        }
+
+        List<List<String>> columns = rule.getColumns();
+        if (columns == null || columns.size() < 2) {
+            log.warn("cross_check: 'columns' must list at least two [sheet, column] pairs - skipping rule");
+            return errors;
+        }
+        // Validate each column entry is a [sheet, column] pair
+        for (int i = 0; i < columns.size(); i++) {
+            List<String> entry = columns.get(i);
+            if (entry == null || entry.size() < 2) {
+                log.warn("cross_check: columns[{}] must be [sheet, column] - skipping rule", i);
+                return errors;
+            }
+        }
+
+        CrossSheetCompareRule.Relation relation = rule.resolveRelation();
+        List<List<String>> pairs = rule.getPairs();
+        List<String> activeValues = rule.resolveValues();
+        if (relation == CrossSheetCompareRule.Relation.OPPOSITE && (pairs == null || pairs.isEmpty())) {
+            log.warn("cross_check: relation 'opposite' requires 'pairs' - skipping rule");
+            return errors;
+        }
+
+        // Collect key groups for each column entry
+        List<String> sheetNames = new ArrayList<>();
+        List<String> colNames   = new ArrayList<>();
+        List<Map<List<String>, KeyGroup>> allGroups = new ArrayList<>();
+        for (List<String> entry : columns) {
+            String sheetName = entry.get(0);
+            String colName   = entry.get(1);
+            sheetNames.add(sheetName);
+            colNames.add(colName);
+
+            CiqSheet sheet = getSheet(store, sheetName);
+            if (sheet == null) {
+                log.warn("cross_check: sheet '{}' not found - skipping rule", sheetName);
+                return errors;
+            }
+            allGroups.add(collectKeyGroups(sheet, keyNames, colName));
+        }
+
+        // Determine which keys to check
+        Map<List<String>, List<String>> keysToCheck = new LinkedHashMap<>();
+        if (rule.getFrom() != null && !rule.getFrom().trim().isEmpty()) {
+            CiqSheet driverSheet = getSheet(store, rule.getFrom().trim());
+            if (driverSheet == null) {
+                log.warn("cross_check: driver sheet '{}' not found - skipping rule", rule.getFrom());
+                return errors;
+            }
+            String whereCol = null;
+            String whereVal = null;
+            if (rule.getFilter() != null) {
+                int eq = rule.getFilter().indexOf('=');
+                if (eq < 0) {
+                    log.warn("cross_check: invalid filter (no '='): {}", rule.getFilter());
+                } else {
+                    whereCol = rule.getFilter().substring(0, eq).trim();
+                    whereVal = rule.getFilter().substring(eq + 1).trim();
+                }
+            }
+            for (CiqRow row : driverSheet.getRows()) {
+                if (whereCol != null) {
+                    String rv = row.get(whereCol);
+                    if (!whereVal.equalsIgnoreCase(rv != null ? rv.trim() : "")) continue;
+                }
+                List<String> display = keyValues(row, keyNames);
+                if (display == null) continue;
+                keysToCheck.put(normaliseKey(display), display);
+            }
+        } else {
+            // Union of all keys seen across all column sheets
+            for (Map<List<String>, KeyGroup> groups : allGroups) {
+                for (Map.Entry<List<String>, KeyGroup> e : groups.entrySet()) {
+                    if (!keysToCheck.containsKey(e.getKey())) {
+                        keysToCheck.put(e.getKey(), e.getValue().display);
+                    }
+                }
+            }
+        }
+
+        CrossSheetCompareRule.OnMissing onMissing = rule.resolveMissing();
+
+        // For not_both: short-circuit — check if more than one side is active per key
+        if (relation == CrossSheetCompareRule.Relation.NOT_BOTH) {
+            for (Map.Entry<List<String>, List<String>> ke : keysToCheck.entrySet()) {
+                List<String> key     = ke.getKey();
+                List<String> display = ke.getValue();
+                String keyDesc = describeKey(keyNames, display);
+
+                List<String> activeSheets = new ArrayList<>();
+                int firstRow = 0;
+                for (int i = 0; i < allGroups.size(); i++) {
+                    KeyGroup g = allGroups.get(i).get(key);
+                    if (g == null) {
+                        if (onMissing == CrossSheetCompareRule.OnMissing.ERROR) {
+                            errors.add(new ValidationError(0, keyNames.toString(), keyDesc,
+                                    "(" + keyDesc + ") has no row in " + sheetNames.get(i)
+                                    + "." + colNames.get(i) + " (missing: error)"));
+                        }
+                        continue;
+                    }
+                    if (firstRow == 0) firstRow = g.rowNumber;
+                    for (String v : g.values) {
+                        if (isActive(activeValues, v)) {
+                            activeSheets.add(sheetNames.get(i));
+                            break;
+                        }
+                    }
+                }
+                if (activeSheets.size() > 1) {
+                    String msg = rule.getMessage() != null
+                            ? renderCrossCheckMessage(rule.getMessage(), keyNames, display,
+                                    sheetNames, colNames, allGroups, key)
+                            : "(" + keyDesc + ") " + activeSheets
+                              + " all have active values (values: " + activeValues
+                              + ") - at most one may be active";
+                    errors.add(new ValidationError(firstRow, colNames.get(0), "", msg));
+                }
+            }
+            return errors;
+        }
+
+        // For other relations: pairwise comparison across all column combinations
+        for (Map.Entry<List<String>, List<String>> ke : keysToCheck.entrySet()) {
+            List<String> key     = ke.getKey();
+            List<String> display = ke.getValue();
+            String keyDesc = describeKey(keyNames, display);
+
+            for (int i = 0; i < allGroups.size(); i++) {
+                for (int j = i + 1; j < allGroups.size(); j++) {
+                    KeyGroup gi = allGroups.get(i).get(key);
+                    KeyGroup gj = allGroups.get(j).get(key);
+
+                    if (gi == null || gj == null) {
+                        if (onMissing == CrossSheetCompareRule.OnMissing.ERROR) {
+                            String missingRef = gi == null
+                                    ? sheetNames.get(i) + "." + colNames.get(i)
+                                    : sheetNames.get(j) + "." + colNames.get(j);
+                            errors.add(new ValidationError(0, keyNames.toString(), keyDesc,
+                                    "(" + keyDesc + ") has no row in " + missingRef
+                                    + " (missing: error)"));
+                        }
+                        continue;
+                    }
+
+                    for (String lv : gi.values) {
+                        for (String rv : gj.values) {
+                            String problem = relationProblem(relation, pairs, activeValues, lv, rv);
+                            if (problem == null) continue;
+                            String leftRef  = sheetNames.get(i) + "." + colNames.get(i);
+                            String rightRef = sheetNames.get(j) + "." + colNames.get(j);
+                            String msg = rule.getMessage() != null
+                                    ? renderCrossCheckMessage(rule.getMessage(), keyNames, display,
+                                            sheetNames, colNames, allGroups, key)
+                                    : "(" + keyDesc + ") " + leftRef + " = '" + lv + "' and "
+                                      + rightRef + " = '" + rv + "' " + problem;
+                            errors.add(new ValidationError(gi.rowNumber, colNames.get(i), lv, msg));
+                        }
+                    }
+                }
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * Renders a cross_check message template.  Substitutes:
+     * <ul>
+     *   <li>{@code {KeyCol}} — the value of that key column for this row</li>
+     *   <li>{@code {SheetName}} — the compared column's value from that sheet</li>
+     * </ul>
+     */
+    private String renderCrossCheckMessage(String template, List<String> keyNames,
+                                           List<String> keyValues,
+                                           List<String> sheetNames, List<String> colNames,
+                                           List<Map<List<String>, KeyGroup>> allGroups,
+                                           List<String> key) {
+        String out = template;
+        for (int i = 0; i < keyNames.size(); i++) {
+            out = out.replace("{" + keyNames.get(i) + "}", keyValues.get(i));
+        }
+        for (int i = 0; i < sheetNames.size(); i++) {
+            KeyGroup g = allGroups.get(i).get(key);
+            String val = g != null && !g.values.isEmpty() ? g.values.iterator().next() : "";
+            out = out.replace("{" + sheetNames.get(i) + "}", val);
+        }
+        return out;
     }
 
     // -------------------------------------------------------------------------
