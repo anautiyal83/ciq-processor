@@ -64,6 +64,8 @@ public class ValidationRulesLoader {
                 "getContiguousSequence", "setContiguousSequence");
         workbookRuleDesc.substituteProperty("cross_sheet_compare", CrossSheetCompareRule.class,
                 "getCrossSheetCompare", "setCrossSheetCompare");
+        workbookRuleDesc.substituteProperty("cross_check", CrossCheckRule.class,
+                "getCrossCheck", "setCrossCheck");
         constructor.addTypeDescription(workbookRuleDesc);
 
         // ---- CrossSheetCompareRule: snake_case YAML keys → camelCase Java properties ----

@@ -36,10 +36,25 @@ workbook_rules:
       from: <SheetName>.<ColumnName>
       to:   <SheetName>.<ColumnName>
 
-  # join two sheets on a composite key, then compare one column on each side.
-  # Use for relations between paired cells, e.g. two services that must never
-  # both be enabled for the same subscriber. Repeat the block with different
-  # sheet names to cover another pair - nothing here is node-type specific.
+  # Streamlined cross-sheet comparison (preferred over cross_sheet_compare).
+  # Compare columns across two or more sheets for rows sharing the same key.
+  - cross_check:
+      on: [<ColumnName>, ...]              # composite key columns used to join rows
+      columns:                             # [sheet, column] pairs to compare (2+ required)
+        - [<SheetName>, <ColumnName>]
+        - [<SheetName>, <ColumnName>]
+      relation: not_both                   # equals | not_equals | opposite | not_both (default)
+      values:                              # active values for not_both (defaults to [ENABLE])
+        - <value>
+      pairs:                               # required for relation: opposite
+        - [<value>, <value>]
+      from: <SheetName>                    # optional: driver sheet scoping which keys to check
+      filter: "<ColumnName> = <value>"     # optional: row filter on the driver sheet
+      missing: skip                        # skip (default) | error
+      message: "..."                       # optional: {KeyCol} and {SheetName} are substituted
+
+  # Legacy cross-sheet comparison (cross_check is preferred for new rules).
+  # Join two sheets on a composite key, then compare one column on each side.
   - cross_sheet_compare:
       driver:                            # optional: restricts the keys checked
         sheet:  <SheetName>              #   usually Index

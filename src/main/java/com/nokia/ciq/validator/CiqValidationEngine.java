@@ -7,6 +7,7 @@ import com.nokia.ciq.reader.model.CiqSheet;
 import com.nokia.ciq.reader.store.CiqDataStore;
 import com.nokia.ciq.validator.config.ColumnRule;
 import com.nokia.ciq.validator.config.ContiguousSequenceRule;
+import com.nokia.ciq.validator.config.CrossCheckRule;
 import com.nokia.ciq.validator.config.CrossSheetCompareRule;
 import com.nokia.ciq.validator.config.MinOnePerGroup;
 import com.nokia.ciq.validator.config.OutputRule;
@@ -1315,6 +1316,19 @@ public class CiqValidationEngine {
             }
             return "cross_sheet_compare (" + r.resolveRelation().name().toLowerCase(java.util.Locale.ROOT)
                     + "): " + leftRef + " \u2194 " + rightRef + keyDesc;
+        }
+        if (rule.getCrossCheck() != null) {
+            CrossCheckRule r = rule.getCrossCheck();
+            StringBuilder cols = new StringBuilder();
+            if (r.getColumns() != null) {
+                for (List<String> c : r.getColumns()) {
+                    if (cols.length() > 0) cols.append(" \u2194 ");
+                    cols.append(c.get(0)).append('.').append(c.get(1));
+                }
+            }
+            String keyDesc = r.getOn() != null ? " on " + r.getOn() : "";
+            return "cross_check (" + r.resolveRelation().name().toLowerCase(java.util.Locale.ROOT)
+                    + "): " + cols + keyDesc;
         }
         return "unknown workbook rule";
     }
