@@ -1,12 +1,10 @@
 # ---------------------------------------------------------------------------
-# JSON output template — SBC FIXED_LINE_CONFIGURATION
+# JSON output template — DLU INSTALLATION
 # ---------------------------------------------------------------------------
-# This file is referenced from SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
-# via:  json_output_file: "SBC_FIXED_LINE_CONFIGURATION_json-output.yaml"
+# This file is referenced from DLU_INSTALLATION_validation-rules.yaml
+# via:  json_output_file: "DLU_INSTALLATION_json-output.yaml"
 # ---------------------------------------------------------------------------
-# It is also consumed directly by:
-#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
-# ---------------------------------------------------------------------------
+
 output_mode: single
 data:
     nodeType: DPA
@@ -18,7 +16,7 @@ data:
         _join: "INDEX.NODE WHERE INDEX.REGION = $region"
         separator: ","
       crGroup:  CRGROUP
-      group:    GROUP
+      Group:    GROUP
       email:    EMAIL
       NODE1_NAME:      "Node_Details.NODE1 WHERE Node_Details.NODE1 = NODE"
       NODE1_NIAM_NAME: "Node_Details.NIAM1_NAME WHERE Node_Details.NODE1 = NODE"

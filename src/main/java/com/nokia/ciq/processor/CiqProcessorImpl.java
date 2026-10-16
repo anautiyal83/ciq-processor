@@ -259,10 +259,11 @@ public class CiqProcessorImpl implements CiqProcessor {
 
             OutputMode outputMode = resolveOutputMode(jsonOutputConfig);
             Map<String, Object> template = resolveTemplate(jsonOutputConfig);
+            String keyDotReplacement = resolveKeyDotReplacement(jsonOutputConfig);
 
             if (outputMode == OutputMode.SINGLE) {
                 log.info("output_mode=single -> {}", jsonOutputDir);
-                String jsonFileName = segregateSingle(store, nodeType, activity, jsonOutputDir, template);
+                String jsonFileName = segregateSingle(store, nodeType, activity, jsonOutputDir, template, keyDotReplacement);
                 if (jsonFileName != null) {
                     report.getParameters().put("JSON_FILE_NAME", jsonFileName);
                 }
@@ -274,7 +275,7 @@ public class CiqProcessorImpl implements CiqProcessor {
                 } else {
                     log.info("output_mode=individual - segregating by {}.{} (${}) -> {}",
                             seg.sheet, seg.column, seg.varName, jsonOutputDir);
-                    String jsonFileName = segregateIndividual(store, nodeType, activity, jsonOutputDir, template, seg);
+                    String jsonFileName = segregateIndividual(store, nodeType, activity, jsonOutputDir, template, seg, keyDotReplacement);
                     if (jsonFileName != null) {
                         report.getParameters().put("JSON_FILE_NAME", jsonFileName);
                     }
@@ -334,14 +335,17 @@ public class CiqProcessorImpl implements CiqProcessor {
                                    String nodeType,
                                    String activity,
                                    String outputDir,
-                                   Map<String, Object> template) throws IOException {
+                                   Map<String, Object> template,
+                                   String keyDotReplacement) throws IOException {
         if (template == null || template.isEmpty()) {
             log.warn("output_mode=single: no 'data' template in json_output - skipping");
             return null;
         }
         JsonTemplateEvaluator.TemplateContext ctx =
                 new JsonTemplateEvaluator.TemplateContext(store, buildAllRows(store));
-        Object json = new JsonTemplateEvaluator().evaluate(template, ctx);
+        JsonTemplateEvaluator evaluator = new JsonTemplateEvaluator();
+        evaluator.setKeyDotReplacement(keyDotReplacement);
+        Object json = evaluator.evaluate(template, ctx);
         String fileName = nodeType.toUpperCase() + "_" + activity.toUpperCase() + ".json";
         mapper.writeValue(new File(outputDir, fileName), json);
         log.info("Single JSON -> {}", fileName);
@@ -357,7 +361,8 @@ public class CiqProcessorImpl implements CiqProcessor {
                                        String activity,
                                        String outputDir,
                                        Map<String, Object> template,
-                                       SegregateByConfig seg) throws IOException {
+                                       SegregateByConfig seg,
+                                       String keyDotReplacement) throws IOException {
         List<String> values = distinctValues(store, seg.sheet, seg.column);
         if (values.isEmpty()) {
             log.warn("segregate_by: no distinct values found in {}.{} - skipping", seg.sheet, seg.column);
@@ -376,7 +381,9 @@ public class CiqProcessorImpl implements CiqProcessor {
                 JsonTemplateEvaluator.TemplateContext ctx =
                         new JsonTemplateEvaluator.TemplateContext(store, scopedRows)
                                 .withVar(seg.varName, value, scopedRows);
-                json = new JsonTemplateEvaluator().evaluate(template, ctx);
+                JsonTemplateEvaluator evaluator = new JsonTemplateEvaluator();
+                evaluator.setKeyDotReplacement(keyDotReplacement);
+                json = evaluator.evaluate(template, ctx);
             } else {
                 // No template: produce a minimal generic JSON of all sheets with full row data
                 json = buildDefaultJson(store, nodeType, activity, seg.column, value);
@@ -394,6 +401,24 @@ public class CiqProcessorImpl implements CiqProcessor {
     // =========================================================================
     // YAML config resolution
     // =========================================================================
+
+    /**
+     * Reads the optional {@code key_dot_replacement} setting from the json-output config.
+     * When set, dots in column-name keys emitted by {@code _row} directives are replaced
+     * with this string in the generated JSON, preventing conflicts with the execution
+     * engine's dot-path variable navigation.
+     *
+     * <pre>
+     * key_dot_replacement: "->"
+     * </pre>
+     */
+    private String resolveKeyDotReplacement(Map<String, Object> jsonOutputConfig) {
+        if (jsonOutputConfig == null) return null;
+        Object val = jsonOutputConfig.get("key_dot_replacement");
+        if (val == null) return null;
+        String s = val.toString().trim();
+        return s.isEmpty() ? null : s;
+    }
 
     private OutputMode resolveOutputMode(Map<String, Object> jsonOutputConfig) {
         if (jsonOutputConfig == null) return OutputMode.INDIVIDUAL;

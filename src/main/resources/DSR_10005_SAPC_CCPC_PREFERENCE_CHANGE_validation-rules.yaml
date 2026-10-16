@@ -1,0 +1,196 @@
+# =============================================================================
+# Validation Rules: DSR - 10005 SAPC CCPC Preference Change
+# File naming convention: {NODE_TYPE}_{ACTIVITY}_validation-rules.yaml
+#
+# Use-case:
+#   Validate DSR CCPC Preference Change CIQ.
+#   Covers sheets: IP, Index, routelists (DSR diameter table).
+# =============================================================================
+
+version: "1.0"
+
+# -----------------------------------------------------------------------------
+# Global settings
+# -----------------------------------------------------------------------------
+settings:
+  headerRow: 0
+  dataStartRow: 1
+  trimCellValues: true
+  ignoreBlankRows: true
+  caseSensitiveHeaders: false
+  caseSensitiveValues: true
+
+# -----------------------------------------------------------------------------
+# Workbook-level cross-sheet rules
+# -----------------------------------------------------------------------------
+workbook_rules:
+
+  # Index.Node must exist in IP.Node
+  - subset:
+      from: Index.Node
+      to: IP.Node
+
+  # Every table referenced in Index.Tables must have a corresponding sheet
+  - superset:
+      from: Index.Node
+      where: "TABLES = routelists"
+      to: routelists.Group
+
+# -----------------------------------------------------------------------------
+# Sheet-wise validation rules
+# -----------------------------------------------------------------------------
+sheets:
+
+  # ---------------------------------------------------------------------------
+  # Sheet: IP
+  # ---------------------------------------------------------------------------
+  IP:
+    required: true
+    columns:
+
+      Node:
+        required: true
+        type: string
+        description: "DSR SOAM node identifier"
+
+      IP_ADDR:
+        required: true
+        type: string
+        description: "DSR SOAM IP address (IPv4 or IPv6)"
+
+    rules:
+      - unique_key: [Node]
+
+  # ---------------------------------------------------------------------------
+  # Sheet: Index
+  # ---------------------------------------------------------------------------
+  Index:
+    required: true
+    columns:
+
+      Node:
+        required: true
+        type: string
+        description: "DSR SOAM node name - must match IP sheet"
+
+      CRGroup:
+        required: true
+        type: string
+        description: "CR group identifier"
+
+      Tables:
+        required: true
+        type: string
+        description: "DSR table name (must match a sheet name)"
+
+      Category:
+        required: true
+        type: string
+        allowedValues: [diameter]
+        dropdownDisabled: true
+        description: "DSR API category (e.g. diameter, comagent, rbar)"
+
+    rules:
+      - unique_key: [Node, CRGroup, Tables]
+
+  # ---------------------------------------------------------------------------
+  # Sheet: routelists
+  # ---------------------------------------------------------------------------
+  routelists:
+    required: false
+    required_if_listed_in: Index.Tables
+    columns:
+
+      Group:
+        required: true
+        type: string
+        description: "Node group - must match Index.Node"
+
+      Action:
+        required: true
+        type: string
+        allowedValues: [CREATE, DELETE, MODIFY]
+        dropdownDisabled: true
+        description: "Action to perform on this entry"
+
+      SubAction:
+        required: true
+        type: string
+        allowedValues: [RECORD, SUBRECORD]
+        dropdownDisabled: true
+        description: "RECORD = top-level entry, SUBRECORD = nested array element"
+
+      ActionKey:
+        required: false
+        type: string
+        allowedValues: [None, routeListRouteGroup, "routeListRouteGroup.routeListRouteGroupTtg"]
+        dropdownDisabled: true
+        description: "Dot-path of the nested array to target for SUBRECORD actions"
+
+      name:
+        required: true
+        type: string
+        maxLength: 32
+        pattern: "^(([A-Za-z][A-Za-z0-9_]*)|(_[A-Za-z0-9_]*[A-Za-z][A-Za-z0-9_]*))$"
+        description: "Route List name - primary key"
+
+      isDynamic:
+        required: false
+        type: string
+        allowedValues: [Yes, No, None]
+        dropdownDisabled: true
+        description: "Whether the Route List is dynamic"
+
+      minCapacity:
+        required: false
+        type: string
+        description: "Minimum Route Group Availability Weight (1-1024000)"
+
+      rarg:
+        required: false
+        type: string
+        allowedValues: [Enabled, Disabled, None]
+        dropdownDisabled: true
+        description: "Route Across Route Groups setting"
+
+      "routeListRouteGroup.routeGroupName":
+        required: false
+        type: string
+        maxLength: 32
+        description: "Route Group name within the Route List"
+
+      "routeListRouteGroup.priority":
+        required: false
+        type: string
+        description: "Priority of Route Group within Route List (1-3)"
+
+      "routeListRouteGroup.routeListRouteGroupTtg.ttgName":
+        required: false
+        type: string
+        maxLength: 32
+        description: "Traffic Throttle Group name"
+
+      "routeListRouteGroup.routeListRouteGroupTtg.siteName":
+        required: false
+        type: string
+        maxLength: 32
+        description: "SOAM Server Group site name for the TTG"
+
+      "routeListRouteGroup.routeListRouteGroupTtg.lossPercentThreshold":
+        required: false
+        type: string
+        description: "Loss percent threshold (0-100)"
+
+    rules:
+      - unique_key: [Group, Action, SubAction, ActionKey, name]
+
+# -----------------------------------------------------------------------------
+# Report output settings
+# -----------------------------------------------------------------------------
+report_output:
+  filename: "{nodeType}_{activity}_validation_report"
+
+# -----------------------------------------------------------------------------
+# JSON output template reference
+# -----------------------------------------------------------------------------
+json_output_file: "DSR_10005_SAPC_CCPC_PREFERENCE_CHANGE_json-output.yaml"

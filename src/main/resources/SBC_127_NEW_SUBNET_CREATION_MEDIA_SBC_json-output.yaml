@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# JSON output template — 127_New_MGW_IPSubnet_Creation (SBC)
+# ---------------------------------------------------------------------------
+# This file is referenced from 127_New_MGW_IPSubnet_Creation_SBC_validation-rules.yaml
+# via:  json_output_file: "127_New_MGW_IPSubnet_Creation_SBC_json-output.yaml"
+#
+# It is also consumed directly by:
+#   - mop-generator-utility  (MOP generation + approval summary)
+#   - network-command-executor-utility  (execution reporting)
+#
+# Load it independently using JsonOutputLoader:
+#   Map<String, Object> template = new JsonOutputLoader().load("...path.../127_New_MGW_IPSubnet_Creation_SBC_json-output.yaml");
+# ---------------------------------------------------------------------------
+# CIQ sheets used:
+#   INDEX      -> Node, CRGroup, Email          (node-to-CR-group / notification mapping)
+#   IP         -> Node, NIAM_ID1                (NIAM identifier per node)
+#   IP_SUBNET  -> Node, MGW, IP_TYPE, PORT, IP_ADDRESS, IPV6_PREFIX_LENGTH,
+#                 IPV4_SUBNET_MASK, VLANID, IP_REALM, NH_SESSION,
+#                 GATEWAY_ADDRESS, COST        (per-node MGW IP subnet records)
+#
+# configData is grouped per distinct MGW value under each node: one
+# entry per MGW, holding that MGW's records under "mediaGWData".
+#
+# ---------------------------------------------------------------------------
+
+output_mode: single
+data:
+  nodeType: SBC
+  activity: "127_NEW_SUBNET_CREATION_MEDIA_SBC"
+  nodes:
+    _each: "DISTINCT INDEX.Node AS $node"
+    node:         $node
+    node_details: $node
+    crGroup:      INDEX.CRGroup
+    Group:        $node
+    email:        "INDEX.'Email '"
+    niamID:       "IP.NIAM_ID1 WHERE IP.Node = $node"
+    configData:
+      _each: "DISTINCT IP_SUBNET.MGW WHERE IP_SUBNET.Node = $node AS $mgw"
+      MGW: $mgw
+      mediaGWData:
+        _each: "IP_SUBNET WHERE IP_SUBNET.Node = $node AND IP_SUBNET.MGW = $mgw"
+        MGW:                  MGW
+        IP_TYPE:              IP_TYPE
+        PORT:                 PORT
+        IP_ADDRESS:           IP_ADDRESS
+        IPV6_PREFIX_LENGTH:   IPV6_PREFIX_LENGTH
+        IPV4_SUBNET_MASK:     IPV4_SUBNET_MASK
+        VLANID:               VLANID
+        IP_REALM:             IP_REALM
+        NH_SESSION:           NH_SESSION
+        GATEWAY_ADDRESS:      GATEWAY_ADDRESS
+        COST:                 COST

@@ -1,35 +1,55 @@
 # ---------------------------------------------------------------------------
-# JSON output template — MRF ANNOUNCEMENT_LOADING
+# JSON output template â€” MRF ANNOUNCEMENT_LOADING
 # ---------------------------------------------------------------------------
 # This file is referenced from MRF_ANNOUNCEMENT_LOADING_validation-rules.yaml
 # via:  json_output_file: "MRF_ANNOUNCEMENT_LOADING_json-output.yaml"
 #
 # It is also consumed directly by:
-#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
+#   - mop-generator-utility  (MOP generation + approval summary)
+#   - network-command-executor-utility  (execution reporting)
+#
+# Load it independently using JsonOutputLoader:
+#   Map<String, Object> template = new JsonOutputLoader().load("...path.../MRF_ANNOUNCEMENT_LOADING_json-output.yaml");
 # ---------------------------------------------------------------------------
+
+#output_mode: single
+#data:
+#  nodeType: MRF
+#  activity: ANNOUNCEMENT_LOADING
+#  nodes:
+#    _each: "DISTINCT INDEX.NODE AS $node"
+#    node:    $node
+#    version: "Node_Details.VER WHERE Node_Details.Node_Name = $node"
+#    crGroup: INDEX.CRGROUP
+#    Group: INDEX.GROUP
+#    email:   INDEX.EMAIL
+#    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+#    configData:
+#      _each: "ANNOUNCEMENT_FILES WHERE GROUP = INDEX.GROUP"
+#      INPUT_FILE: INPUT_FILE
+#      MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
+
 
 output_mode: single
 data:
-  schemaVersion: "1"
   nodeType: MRF
   activity: ANNOUNCEMENT_LOADING
   nodes:
     _each: "DISTINCT INDEX.NODE AS $node"
     node:    $node
-    node_details: $node
     version: "Node_Details.VER WHERE Node_Details.Node_Name = $node"
     crGroup: INDEX.CRGROUP
     Group:
       _join: "INDEX.GROUP"
       separator: ","
     email:   INDEX.EMAIL
-    niamID:  "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
+    niamID: "Node_Details.'NIAM NAME' WHERE Node_Details.Node_Name = $node"
     configData:
       _each: "ANNOUNCEMENT_FILES WHERE GROUP IN INDEX.GROUP"
       INPUT_FILE: INPUT_FILE
       MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
-      
-# ── CR-wise single file (alternate template) ────────────────────────────────
+
+# â”€â”€ CR-wise single file (alternate template) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 # output_mode: single
 # data:
@@ -48,7 +68,7 @@ data:
 #          INPUT_FILE:           INPUT_FILE
 #          MRF_DESTINATION_PATH: MRF_DESTINATION_PATH
 
-# ── CR-wise individual files (alternate template) ────────────────────────────
+# â”€â”€ CR-wise individual files (alternate template) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # output_mode: individual
 # segregate_by:
 #    sheet:  Index

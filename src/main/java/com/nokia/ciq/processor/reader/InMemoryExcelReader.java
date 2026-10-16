@@ -8,6 +8,7 @@ import com.nokia.ciq.validator.config.SheetRules;
 import com.nokia.ciq.validator.config.ValidationRulesConfig;
 import com.nokia.ciq.validator.config.WorkbookSettings;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -559,8 +560,21 @@ public class InMemoryExcelReader {
         CiqSheet ciqSheet = new CiqSheet();
         ciqSheet.setSheetName(tableName);
 
+        // settings.headerRow / dataStartRow are honoured only when they differ from the defaults
+        // (0 / 1). With the defaults the header row is auto-detected exactly as before - every
+        // existing config declares 0 / 1 and relies on that detection.
+        boolean explicitHeader = settings != null
+                && (settings.getHeaderRow() != 0 || settings.getDataStartRow() != 1);
+
         int headerRowIdx;
-        if (columnsToRead != null && !columnsToRead.isEmpty()) {
+        if (explicitHeader) {
+            headerRowIdx = settings.getHeaderRow();
+            if (headerRowIdx < 0 || sheet.getRow(headerRowIdx) == null) {
+                log.warn("Configured headerRow {} is empty in sheet '{}' - sheet will have no rows",
+                        headerRowIdx, sheet.getSheetName());
+                return ciqSheet;
+            }
+        } else if (columnsToRead != null && !columnsToRead.isEmpty()) {
             // Strict: all configured columns present in the same header row
             headerRowIdx = findHeaderRow(sheet, columnsToRead.toArray(new String[0]));
             // Lenient fallback: at least one configured column present - lets us read
@@ -582,7 +596,24 @@ public class InMemoryExcelReader {
             return ciqSheet;
         }
 
-        Row headerRow = sheet.getRow(headerRowIdx);
+        // A configured header row may sit under a merged group row (e.g. "ZONE" merged A1:A2
+        // above "CB Action" in B2), so its blank cells take the value of the merged region
+        // covering them.
+        List<String> header = explicitHeader
+                ? mergedHeaderNames(sheet, headerRowIdx)
+                : headerNames(sheet.getRow(headerRowIdx));
+
+        int firstDataRow = headerRowIdx + 1;
+        if (explicitHeader) {
+            if (settings.getDataStartRow() > headerRowIdx) {
+                firstDataRow = settings.getDataStartRow();
+            } else {
+                log.warn("Sheet '{}': dataStartRow {} is not below headerRow {} - reading data from row {}",
+                        sheet.getSheetName(), settings.getDataStartRow(), headerRowIdx, firstDataRow);
+            }
+            log.info("Sheet '{}': header row {} and data from row {} (from settings)",
+                    sheet.getSheetName(), headerRowIdx, firstDataRow);
+        }
 
         List<int[]>  colMap   = new ArrayList<>();
         List<String> colNames = new ArrayList<>();
@@ -593,7 +624,7 @@ public class InMemoryExcelReader {
             // 1) Declared columns first; use YAML (canonical) names as keys so validation and
             //    JSON-template references resolve regardless of minor header spelling differences.
             for (String colName : columnsToRead) {
-                int idx = findColumnIndex(headerRow, colName);
+                int idx = findColumnIndex(header, colName);
                 if (idx >= 0) {
                     colMap.add(new int[]{idx});
                     colNames.add(colName);
@@ -611,8 +642,8 @@ public class InMemoryExcelReader {
             //    validation engine simply has nothing to check for them.
             if (emitAllColumns) {
                 int extra = 0;
-                for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
-                    String name = getCellString(headerRow.getCell(c));
+                for (int c = 0; c < header.size(); c++) {
+                    String name = header.get(c);
                     if (isBlank(name)) continue;
                     if (usedIdx.contains(c)) continue;
                     String norm = normalize(name);
@@ -627,8 +658,8 @@ public class InMemoryExcelReader {
                     log.info("Sheet '{}': included {} undeclared column(s) in output", tableName, extra);
             }
         } else {
-            for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
-                String name = getCellString(headerRow.getCell(c));
+            for (int c = 0; c < header.size(); c++) {
+                String name = header.get(c);
                 if (!isBlank(name)) {
                     colMap.add(new int[]{c});
                     colNames.add(name);
@@ -645,7 +676,7 @@ public class InMemoryExcelReader {
         // would start breaking pattern/maxLength/allowedValues/unique checks.
         // Header names are always trimmed; padding there is never meaningful.
         boolean keepRaw = (settings != null) && !settings.isTrimEnabled();
-        for (int r = headerRowIdx + 1; r <= sheet.getLastRowNum(); r++) {
+        for (int r = firstDataRow; r <= sheet.getLastRowNum(); r++) {
             Row row = sheet.getRow(r);
             if (row == null) {
                 if (!ignoreBlank) ciqSheet.getRows().add(new CiqRow(r + 1, emptyData(colNames)));
@@ -885,6 +916,58 @@ public class InMemoryExcelReader {
             for (String header : candidateHeaders) {
                 if (normalizedCells.contains(normalize(header))) return r;
             }
+        }
+        return -1;
+    }
+
+    /** Header cell values of a single header row, indexed by column. */
+    private List<String> headerNames(Row headerRow) {
+        List<String> names = new ArrayList<>();
+        for (int c = 0; c <= headerRow.getLastCellNum(); c++) {
+            names.add(getCellString(headerRow.getCell(c)));
+        }
+        return names;
+    }
+
+    /**
+     * Like {@link #headerNames} for a header row fixed by {@code settings.headerRow}: a blank cell
+     * inside a merged region takes the region's value, because POI stores a merged value only in
+     * the region's first cell. For a sub-header row under a group row this gives
+     * {@code ZONE} (merged A1:A2) next to {@code CB Action} (B2).
+     */
+    private List<String> mergedHeaderNames(Sheet sheet, int headerRowIdx) {
+        Row headerRow = sheet.getRow(headerRowIdx);
+        int width = headerRow.getLastCellNum() + 1;
+        List<CellRangeAddress> regions = new ArrayList<>();
+        for (CellRangeAddress region : sheet.getMergedRegions()) {
+            if (region.getFirstRow() <= headerRowIdx && headerRowIdx <= region.getLastRow()) {
+                regions.add(region);
+                width = Math.max(width, region.getLastColumn() + 1);
+            }
+        }
+        List<String> names = new ArrayList<>();
+        for (int c = 0; c < width; c++) {
+            String name = getCellString(headerRow.getCell(c));
+            if (isBlank(name)) {
+                for (CellRangeAddress region : regions) {
+                    if (region.getFirstColumn() <= c && c <= region.getLastColumn()) {
+                        Row top = sheet.getRow(region.getFirstRow());
+                        name = top == null ? null : getCellString(top.getCell(region.getFirstColumn()));
+                        break;
+                    }
+                }
+            }
+            names.add(name);
+        }
+        return names;
+    }
+
+    /** {@link #findColumnIndex(Row, String)} over an already-resolved header name list. */
+    private int findColumnIndex(List<String> header, String columnName) {
+        String target = normalize(columnName);
+        for (int c = 0; c < header.size(); c++) {
+            String v = header.get(c);
+            if (v != null && normalize(v).equals(target)) return c;
         }
         return -1;
     }

@@ -1,3 +1,13 @@
+
+# ---------------------------------------------------------------------------
+# JSON output template - SBC 146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC
+# ---------------------------------------------------------------------------
+# This file is referenced from SBC_146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC_validation-rules.yaml
+# via:  json_output_file: "SBC_146_SDP_PROFILE_MODIFICATION_&_TG_MODIFICATION_IN_ISBC_json-output.yaml"
+# ---------------------------------------------------------------------------
+# It is also consumed directly by:
+#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
+# ---------------------------------------------------------------------------
 output_mode: single
 data:
  schemaVersion: "2"

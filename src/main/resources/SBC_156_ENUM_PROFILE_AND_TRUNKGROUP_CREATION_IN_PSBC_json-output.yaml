@@ -1,0 +1,82 @@
+# ---------------------------------------------------------------------------
+# JSON output template — SBC ENUM_PROFILE_TRUNKGROUP_CREATION (Case-4)
+# ---------------------------------------------------------------------------
+# This file is referenced from SBC_ENUM_PROFILE_TRUNKGROUP_CREATION_validation-rules.yaml
+# via:  json_output_file: "SBC_ENUM_PROFILE_TRUNKGROUP_CREATION_json-output.yaml"
+# ---------------------------------------------------------------------------
+# It is also consumed directly by:
+#   - JAVA_NOKIA_CLICR_AUTOMATION  (MOP generation + approval summary + execution reporting)
+# ---------------------------------------------------------------------------
+output_mode: single
+data:
+ schemaVersion: "2"
+ meta:
+   nodeType: SBC
+   activity: 156_ENUM_PROFILE_AND_TRUNKGROUP_CREATION_IN_PSBC
+   tableKeys:
+      _optional: true
+      ENUMProfileTable:
+        recordPrimaryKeys: "PROFILE_ID"
+
+      IbcfTrunkGroupTable:
+        recordPrimaryKeys: "VN_ID,TG_ID"
+
+      CRFTargetList:
+        recordPrimaryKeys: "TARGET_LIST_ID"
+        subrecordKeys:
+          CRFTargetListEntry: "TARGET_ID,VN_ID,TG_ID"
+        immutableFields:
+        record:
+          - LOCATION
+          - TARGET_TYPE
+
+      CRFTreatment:
+        recordPrimaryKeys: "TREATMENT_ID"
+
+      CRFHostURITable:
+        recordPrimaryKeys: "HOST_URI,HOST_URI_TYPE"
+
+      CRFRoutePlan:
+        recordPrimaryKeys: "RT_PLAN_ID"
+
+      CRFRoutePriorityList:
+        recordPrimaryKeys: "PRIORITY_LIST_ID"
+        subrecordKeys:
+          CRFRoutePriorityListEntry: "PLAN_TYPE,PLAN_ID"
+
+      CRFRouteProfile:
+        recordPrimaryKeys: "ROUTE_PROFILE_ID"
+
+      CRFTask:
+        recordPrimaryKeys: "TASK_ID"
+        immutableFields:
+          record:
+            - TASK_TYPE     
+
+      CRFTaskResult:
+        recordPrimaryKeys: "RECORD_ID"
+        immutableFields:
+          record:
+            - TASK_TYPE
+            - TASK_RESULT
+
+ nodeGroups:
+   _each: "DISTINCT INDEX.NODEGROUP AS $ng"
+   nodeGroup: $ng
+   crGroup:   "INDEX.CRGROUP WHERE INDEX.NODEGROUP = $ng"
+   email:     "INDEX.EMAIL WHERE INDEX.NODEGROUP = $ng"
+   nodes:
+     _each: "IP WHERE IP.NODEGROUP = $ng"
+     node:   IP.NODE
+     niamID: "IP.'NIAM NAME'"
+   configSequences:
+     _each: "DISTINCT INDEX.CONFIG_SEQ WHERE INDEX.NODEGROUP = $ng AS $seq"
+     configSeq: $seq
+     tables:
+       _each: "DISTINCT INDEX.TABLES WHERE INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq AS $table"
+       table:    $table
+       category: "INDEX.CATEGORY WHERE INDEX.NODEGROUP = $ng AND INDEX.CONFIG_SEQ = $seq AND INDEX.TABLES = $table"
+       records:
+         _each: "$table WHERE NODEGROUP = $ng AND CONFIG_SEQ = $seq"
+         data:
+           _row: "*"

@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# JSON output template — SBC FIXED_LINE_CONFIGURATION
+# JSON output template - SBC FIXED_LINE_CONFIGURATION
 # ---------------------------------------------------------------------------
 # This file is referenced from SBC_FIXED_LINE_CONFIGURATION_validation-rules.yaml
 # via:  json_output_file: "SBC_FIXED_LINE_CONFIGURATION_json-output.yaml"
